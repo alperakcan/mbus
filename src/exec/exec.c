@@ -56,6 +56,10 @@ pid_t mbus_exec (char * const *args, int *io)
 	pid_t pid;
 	pid_t gpid;
 
+	n = -1;
+	p[0] = -1;
+	p[1] = -1;
+
 	if (io != NULL) {
 		if (pipe(p) < 0) {
 			return -1;
