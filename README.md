@@ -52,6 +52,8 @@ namespaces.
 
 ## 7. contact ##
 
+if you are using the software and/or have any questions, suggestions, etc. please contact with me at alper.akcan@gmail.com
+
 ## 8. license ##
 
 ### mBus Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com> ###
