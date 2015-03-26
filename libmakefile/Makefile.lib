@@ -26,6 +26,8 @@
 #   20130325 - added missing targets for host
 #   20140721 - cflags per file support
 #   20140908 - distribution support
+#   20150211 - fix depends
+#   20150319 - use Wl,-rpath
 
 #
 # Example
@@ -163,7 +165,7 @@ TOPDIR ?= $(CURDIR)
 
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 
-override CFLAGS += -Wall -Wextra -Werror -pipe -g3 -O0 -fPIC -fsigned-char -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
+override CFLAGS += -Wall -Wextra -Werror -pipe -g3 -O2 -fPIC -fsigned-char -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 # -fvisibility=hidden
 
 #override CFLAGS += -fno-math-errno -fno-trapping-math
@@ -608,10 +610,10 @@ define target-defaults_base
     $($1_depends_cpp): $($1_headers_cxx)
     $($1_depends_m):   $($1_headers_m)
 
-    $($1_objects_c):   $($1_depends_c)   $(MAKEFILE_LIST)
-    $($1_objects_cc):  $($1_depends_cc)  $(MAKEFILE_LIST)
-    $($1_objects_cpp): $($1_depends_cpp) $(MAKEFILE_LIST)
-    $($1_objects_m):   $($1_depends_m)   $(MAKEFILE_LIST)
+    $($1_objects_c):   $(MAKEFILE_LIST)
+    $($1_objects_cc):  $(MAKEFILE_LIST)
+    $($1_objects_cpp): $(MAKEFILE_LIST)
+    $($1_objects_m):   $(MAKEFILE_LIST)
     $($1_objects_e):   $(MAKEFILE_LIST)
     
     $1: .$1/$1 $(MAKEFILE_LIST)
