@@ -42,11 +42,19 @@
 
 static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, cJSON *payload, void *data)
 {
+	char *string;
 	(void) client;
 	(void) source;
 	(void) event;
 	(void) payload;
 	(void) data;
+	string = cJSON_Print(payload);
+	if (string == NULL) {
+		mbus_errorf("can not allocate memory");
+	} else {
+		fprintf(stdout, "%s.%s: %s\n", source, event, string);
+		free(string);
+	}
 }
 
 static void listener_status_server_connected (struct mbus_client *client, const char *source, const char *status, cJSON *payload, void *data)
@@ -92,17 +100,17 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not create client");
 		goto bail;
 	}
+	rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
+	if (rc != 0) {
+		mbus_errorf("can not subscribe to events");
+		goto bail;
+	}
 	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, listener_status_server_connected, NULL);
 	if (rc != 0) {
 		mbus_errorf("can not subscribe to events");
 		goto bail;
 	}
 	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, listener_status_server_subscribed, NULL);
-	if (rc != 0) {
-		mbus_errorf("can not subscribe to events");
-		goto bail;
-	}
-	rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
 	if (rc != 0) {
 		mbus_errorf("can not subscribe to events");
 		goto bail;
