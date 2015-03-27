@@ -1,6 +1,7 @@
 # mBus #
 
-mBus is a lightweight messaging system.
+mBus is a lightweight messaging system providing communication between daemons
+and applications. enabling development of component based distributed applications.
 
 1. <a href="#1-overview">overview</a>
 2. <a href="#2-download">download</a>
