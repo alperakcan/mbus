@@ -216,3 +216,4 @@ struct mbus_server * mbus_server_create (int argc, char *argv[]);
 void mbus_server_destroy (struct mbus_server *server);
 
 int mbus_server_run (struct mbus_server *server);
+int mbus_server_run_timeout (struct mbus_server *server, int milliseconds);

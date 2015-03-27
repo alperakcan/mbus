@@ -41,10 +41,15 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not create server");
 		goto bail;
 	}
-	rc = mbus_server_run(server);
-	if (rc != 0) {
-		mbus_errorf("can not run server");
-		goto bail;
+	while (1) {
+		rc = mbus_server_run_timeout(server, -1);
+		if (rc < 0) {
+			mbus_errorf("can not run server");
+			goto bail;
+		}
+		if (rc == 1) {
+			break;
+		}
 	}
 	mbus_server_destroy(server);
 	return 0;

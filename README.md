@@ -79,7 +79,25 @@ namespaces.
 
 ### 5.1 server ###
 
+  - struct mbus_server * mbus_server_create (int argc, char *argv[]);
+  - void mbus_server_destroy (struct mbus_server *server);
+
+  - int mbus_server_run (struct mbus_server *server);
+  - int mbus_server_run_timeout (struct mbus_server *server, int milliseconds);
+
 ### 5.2 client ###
+
+  - struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[]);
+  - void mbus_client_destroy (struct mbus_client *client);
+
+  - int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event, void (*function) (struct mbus_client *client, const char *source, const char *event, cJSON *payload, void *data), void *data);
+  - int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, cJSON *payload, cJSON *result, void *data), void *data);
+  - int mbus_client_event (struct mbus_client *client, const char *event, cJSON *payload);
+  - int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, cJSON *event);
+  - int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, cJSON *call, cJSON **result);
+
+  - int mbus_client_run (struct mbus_client *client);
+  - int mbus_client_run_timeout (struct mbus_client *client, int milliseconds);
 
 ## 6. protocol ##
 

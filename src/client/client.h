@@ -40,4 +40,4 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, cJSON *call, cJSON **result);
 
 int mbus_client_run (struct mbus_client *client);
-int mbus_client_run_timeout (struct mbus_client *client, int msec);
+int mbus_client_run_timeout (struct mbus_client *client, int milliseconds);

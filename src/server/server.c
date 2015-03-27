@@ -1554,7 +1554,7 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
-int mbus_server_run (struct mbus_server *server)
+int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
 	char *string;
@@ -1573,199 +1573,221 @@ int mbus_server_run (struct mbus_server *server)
 	}
 	mbus_infof("running server");
 	polls = NULL;
-	server->running = 1;
-	while (server->running == 1) {
-		rc = server_handle_methods(server);
-		if (rc != 0) {
-			mbus_errorf("can not handle methods");
-			goto bail;
-		}
-		if (polls != NULL) {
-			free(polls);
-			polls = NULL;
-		}
-		n = 1 + server->clients.count;
-		polls = malloc(sizeof(struct mbus_poll) * n);
-		if (polls == NULL) {
-			mbus_errorf("can not allocate memory");
-			goto bail;
-		}
-		n = 0;
-		polls[n].events = mbus_poll_event_in;
-		polls[n].revents = 0;
-		polls[n].socket = server->socket;
-		n += 1;
-		TAILQ_FOREACH(client, &server->clients, clients) {
-			if (client_get_socket(client) != NULL) {
-				polls[n].events = mbus_poll_event_in;
-				polls[n].revents = 0;
-				polls[n].socket = client_get_socket(client);
-				if (client_get_requests_count(client) != 0) {
-					polls[n].events |= mbus_poll_event_out;
-				}
-				if (client_get_results_count(client) != 0) {
-					polls[n].events |= mbus_poll_event_out;
-				}
-				if (client_get_events_count(client) != 0) {
-					polls[n].events |= mbus_poll_event_out;
-				}
-				n += 1;
-			}
-		}
-		rc = mbus_socket_poll(polls, n, -1);
-		if (rc == 0) {
-			continue;
-		}
-		if (rc < 0) {
-			mbus_errorf("poll error");
-			goto bail;
-		}
-		if (polls[0].revents & mbus_poll_event_in) {
-			rc = server_accept_client(server);
-			if (rc == -1) {
-				mbus_errorf("can not accept new connection");
-				goto bail;
-			} else if (rc == -2) {
-				mbus_errorf("rejected new connection");
-			}
-		}
-		for (c = 1; c < n; c++) {
-			if (polls[c].revents == 0) {
-				continue;
-			}
-			client = server_find_client_by_socket(server, polls[c].socket);
-			if (client == NULL) {
-				mbus_errorf("can not find client by socket");
-				goto bail;
-			}
-			if (polls[c].revents & mbus_poll_event_in) {
-				string = mbus_socket_read_string(polls[c].socket);
-				if (string == NULL) {
-					mbus_debugf("can not read string from client");
-					client_set_socket(client, NULL);
-					mbus_infof("client: '%s' connection reset by peer", client_get_name(client));
-					break;
-				} else {
-					mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
-					if (client_get_socket(client) == polls[c].socket) {
-						rc = server_handle_method(server, client, string);
-					} else {
-						mbus_errorf("invalid socket, client mismatch");
-						free(string);
-						goto bail;
-					}
-					free(string);
-					if (rc != 0) {
-						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
-						client_set_socket(client, NULL);
-					}
-				}
-			}
-			if (polls[c].revents & mbus_poll_event_out) {
-				if (client_get_results_count(client) > 0) {
-					method = client_pop_result(client);
-					if (method == NULL) {
-						mbus_errorf("could not pop result from client");
-						break;
-					}
-					string = method_get_result_string(method);
-				} else if (client_get_requests_count(client) > 0) {
-					method = client_pop_request(client);
-					if (method == NULL) {
-						mbus_errorf("could not pop request from client");
-						break;
-					}
-					string = method_get_request_string(method);
-				} else if (client_get_events_count(client) > 0) {
-					method = client_pop_event(client);
-					if (method == NULL) {
-						mbus_errorf("could not pop event from client");
-						break;
-					}
-					string = method_get_request_string(method);
-				} else {
-					mbus_errorf("logic error");
-					goto bail;
-				}
-				if (string == NULL) {
-					mbus_errorf("can not build string from method event");
-					method_destroy(method);
-					goto bail;
-				}
-				mbus_debugf("send method to client: %s", string);
-				rc = mbus_socket_write_string(client_get_socket(client), string);
-				if (rc != 0) {
-					method_destroy(method);
-					mbus_debugf("can not write string to client");
-					client_set_socket(client, NULL);
-					mbus_infof("client: '%s' connection reset by server", client_get_name(client));
-					break;
-				}
-				method_destroy(method);
-			}
-			if (polls[c].revents & mbus_poll_event_err) {
-				client_set_socket(client, NULL);
-				mbus_infof("client: '%s' connection reset by server", client_get_name(client));
-				break;
-			}
-		}
-		TAILQ_FOREACH(client, &server->clients, clients) {
-			if (client_get_socket(client) == NULL) {
-				continue;
-			}
-			if ((client_get_status(client) & client_status_connected) != 0) {
-				continue;
-			}
-			client_set_status(client, client_get_status(client) | client_status_connected);
-			mbus_infof("client: '%s' connected to server", client_get_name(client));
-			rc = server_send_event_connected(server, client_get_name(client));
-			if (rc != 0) {
-				mbus_errorf("can not send connected event");
-				goto bail;
-			}
-		}
-		TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
-			if (client_get_socket(client) != NULL) {
-				continue;
-			}
-			mbus_infof("client: '%s' disconnected from server", client_get_name(client));
-			TAILQ_REMOVE(&server->clients, client, clients);
-			TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
-				if (method_get_source(method) != client) {
-					continue;
-				}
-				TAILQ_REMOVE(&server->methods, method, methods);
-				method_destroy(method);
-			}
-			TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
-				TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
-					if (strcmp(cJSON_GetStringValue(method_get_request_payload(method), "destination"), client_get_name(client)) == 0) {
-						TAILQ_REMOVE(&wclient->waits, method, methods);
-						method_set_result_code(method, -1);
-						client_push_result(wclient, method);
-					}
-				}
-			}
-			if ((client_get_status(client) & client_status_connected) != 0) {
-				rc = server_send_event_disconnected(server, client_get_name(client));
-				if (rc != 0) {
-					mbus_errorf("can not send disconnected event");
-					goto bail;
-				}
-			}
-			client_destroy(client);
-		}
+	if (server->running == 0) {
+		goto out;
+	}
+	rc = server_handle_methods(server);
+	if (rc != 0) {
+		mbus_errorf("can not handle methods");
+		goto bail;
 	}
 	if (polls != NULL) {
 		free(polls);
 		polls = NULL;
 	}
-	return 0;
+	n = 1 + server->clients.count;
+	polls = malloc(sizeof(struct mbus_poll) * n);
+	if (polls == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	n = 0;
+	polls[n].events = mbus_poll_event_in;
+	polls[n].revents = 0;
+	polls[n].socket = server->socket;
+	n += 1;
+	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_socket(client) != NULL) {
+			polls[n].events = mbus_poll_event_in;
+			polls[n].revents = 0;
+			polls[n].socket = client_get_socket(client);
+			if (client_get_requests_count(client) != 0) {
+				polls[n].events |= mbus_poll_event_out;
+			}
+			if (client_get_results_count(client) != 0) {
+				polls[n].events |= mbus_poll_event_out;
+			}
+			if (client_get_events_count(client) != 0) {
+				polls[n].events |= mbus_poll_event_out;
+			}
+			n += 1;
+		}
+	}
+	rc = mbus_socket_poll(polls, n, milliseconds);
+	if (rc == 0) {
+		goto out;
+	}
+	if (rc < 0) {
+		mbus_errorf("poll error");
+		goto bail;
+	}
+	if (polls[0].revents & mbus_poll_event_in) {
+		rc = server_accept_client(server);
+		if (rc == -1) {
+			mbus_errorf("can not accept new connection");
+			goto bail;
+		} else if (rc == -2) {
+			mbus_errorf("rejected new connection");
+		}
+	}
+	for (c = 1; c < n; c++) {
+		if (polls[c].revents == 0) {
+			continue;
+		}
+		client = server_find_client_by_socket(server, polls[c].socket);
+		if (client == NULL) {
+			mbus_errorf("can not find client by socket");
+			goto bail;
+		}
+		if (polls[c].revents & mbus_poll_event_in) {
+			string = mbus_socket_read_string(polls[c].socket);
+			if (string == NULL) {
+				mbus_debugf("can not read string from client");
+				client_set_socket(client, NULL);
+				mbus_infof("client: '%s' connection reset by peer", client_get_name(client));
+				break;
+			} else {
+				mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
+				if (client_get_socket(client) == polls[c].socket) {
+					rc = server_handle_method(server, client, string);
+				} else {
+					mbus_errorf("invalid socket, client mismatch");
+					free(string);
+					goto bail;
+				}
+				free(string);
+				if (rc != 0) {
+					mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
+					client_set_socket(client, NULL);
+				}
+			}
+		}
+		if (polls[c].revents & mbus_poll_event_out) {
+			if (client_get_results_count(client) > 0) {
+				method = client_pop_result(client);
+				if (method == NULL) {
+					mbus_errorf("could not pop result from client");
+					break;
+				}
+				string = method_get_result_string(method);
+			} else if (client_get_requests_count(client) > 0) {
+				method = client_pop_request(client);
+				if (method == NULL) {
+					mbus_errorf("could not pop request from client");
+					break;
+				}
+				string = method_get_request_string(method);
+			} else if (client_get_events_count(client) > 0) {
+				method = client_pop_event(client);
+				if (method == NULL) {
+					mbus_errorf("could not pop event from client");
+					break;
+				}
+				string = method_get_request_string(method);
+			} else {
+				mbus_errorf("logic error");
+				goto bail;
+			}
+			if (string == NULL) {
+				mbus_errorf("can not build string from method event");
+				method_destroy(method);
+				goto bail;
+			}
+			mbus_debugf("send method to client: %s", string);
+			rc = mbus_socket_write_string(client_get_socket(client), string);
+			if (rc != 0) {
+				method_destroy(method);
+				mbus_debugf("can not write string to client");
+				client_set_socket(client, NULL);
+				mbus_infof("client: '%s' connection reset by server", client_get_name(client));
+				break;
+			}
+			method_destroy(method);
+		}
+		if (polls[c].revents & mbus_poll_event_err) {
+			client_set_socket(client, NULL);
+			mbus_infof("client: '%s' connection reset by server", client_get_name(client));
+			break;
+		}
+	}
+	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_socket(client) == NULL) {
+			continue;
+		}
+		if ((client_get_status(client) & client_status_connected) != 0) {
+			continue;
+		}
+		client_set_status(client, client_get_status(client) | client_status_connected);
+		mbus_infof("client: '%s' connected to server", client_get_name(client));
+		rc = server_send_event_connected(server, client_get_name(client));
+		if (rc != 0) {
+			mbus_errorf("can not send connected event");
+			goto bail;
+		}
+	}
+	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+		if (client_get_socket(client) != NULL) {
+			continue;
+		}
+		mbus_infof("client: '%s' disconnected from server", client_get_name(client));
+		TAILQ_REMOVE(&server->clients, client, clients);
+		TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
+			if (method_get_source(method) != client) {
+				continue;
+			}
+			TAILQ_REMOVE(&server->methods, method, methods);
+			method_destroy(method);
+		}
+		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
+			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
+				if (strcmp(cJSON_GetStringValue(method_get_request_payload(method), "destination"), client_get_name(client)) == 0) {
+					TAILQ_REMOVE(&wclient->waits, method, methods);
+					method_set_result_code(method, -1);
+					client_push_result(wclient, method);
+				}
+			}
+		}
+		if ((client_get_status(client) & client_status_connected) != 0) {
+			rc = server_send_event_disconnected(server, client_get_name(client));
+			if (rc != 0) {
+				mbus_errorf("can not send disconnected event");
+				goto bail;
+			}
+		}
+		client_destroy(client);
+	}
+out:	if (polls != NULL) {
+		free(polls);
+		polls = NULL;
+	}
+	return (server->running == 0) ? 1 : 0;
 bail:	if (polls != NULL) {
 		free(polls);
 		polls = NULL;
 	}
 	return -1;
+}
+
+int mbus_server_run (struct mbus_server *server)
+{
+	int rc;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		return -1;
+	}
+	mbus_infof("running server");
+	while (server->running == 1) {
+		rc = mbus_server_run_timeout(server, -1);
+		if (rc < 0) {
+			mbus_errorf("can not run server");
+			goto bail;
+		}
+		if (rc == 1) {
+			break;
+		}
+	}
+	return 0;
+bail:	return -1;
 }
 
 void mbus_server_destroy (struct mbus_server *server)
@@ -1903,6 +1925,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 	mbus_infof("listening from: '%s:%s:%d'", server_protocol, server_address, server_port);
 	free(argv);
+	server->running = 1;
 	return server;
 bail:	mbus_server_destroy(server);
 	if (argv != NULL) {
