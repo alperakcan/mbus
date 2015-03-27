@@ -32,6 +32,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <arpa/inet.h>
 #include <poll.h>
 #include <errno.h>
@@ -97,6 +98,7 @@ static int mbus_socket_domain_to_posix (enum mbus_socket_domain domain)
 {
 	switch (domain) {
 		case mbus_socket_domain_af_inet:		return AF_INET;
+		case mbus_socket_domain_af_unix:		return AF_UNIX;
 	}
 	return -1;
 }
@@ -193,18 +195,28 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 {
 	int rc;
 	struct sockaddr_in sockaddr_in;
+	struct sockaddr_un sockaddr_un;
 	if (address == NULL) {
 		mbus_errorf("address is null");
 		return -1;
 	}
-	sockaddr_in.sin_family = socket->domain;
-	rc = inet_pton(socket->domain, address, &sockaddr_in.sin_addr);
-	if (rc <= 0) {
-		mbus_errorf("inet_pton failed for: '%s'", address);
+	if (socket->domain == AF_INET) {
+		sockaddr_in.sin_family = socket->domain;
+		rc = inet_pton(socket->domain, address, &sockaddr_in.sin_addr);
+		if (rc <= 0) {
+			mbus_errorf("inet_pton failed for: '%s'", address);
+			goto bail;
+		}
+		sockaddr_in.sin_port = htons(port);
+		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
+	} else if (socket->domain == AF_UNIX) {
+		sockaddr_un.sun_family = socket->domain;
+		strncpy(sockaddr_un.sun_path, address, sizeof(sockaddr_un.sun_path) - 1);
+		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
+	} else {
+		mbus_errorf("unknown socket domain");
 		goto bail;
 	}
-	sockaddr_in.sin_port = htons(port);
-	rc = connect(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
 	if (rc < 0) {
 		mbus_errorf("connect failed");
 		goto bail;
@@ -217,18 +229,28 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 {
 	int rc;
 	struct sockaddr_in sockaddr_in;
-	sockaddr_in.sin_family = socket->domain;
-	if (address == NULL) {
-		sockaddr_in.sin_addr.s_addr = INADDR_ANY;
-	} else {
-		rc = inet_pton(socket->domain, address, &sockaddr_in.sin_addr);
-		if (rc <= 0) {
-			mbus_errorf("inet_pton failed for: '%s'", address);
-			goto bail;
+	struct sockaddr_un sockaddr_un;
+	if (socket->domain == AF_INET) {
+		sockaddr_in.sin_family = socket->domain;
+		if (address == NULL) {
+			sockaddr_in.sin_addr.s_addr = INADDR_ANY;
+		} else {
+			rc = inet_pton(socket->domain, address, &sockaddr_in.sin_addr);
+			if (rc <= 0) {
+				mbus_errorf("inet_pton failed for: '%s'", address);
+				goto bail;
+			}
 		}
+		sockaddr_in.sin_port = htons(port);
+		rc = bind(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
+	} else if (socket->domain == AF_UNIX) {
+		sockaddr_un.sun_family = socket->domain;
+		strncpy(sockaddr_un.sun_path, address, sizeof(sockaddr_un.sun_path) - 1);
+		rc = bind(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
+	} else {
+		mbus_errorf("unknown socket domain");
+		goto bail;
 	}
-	sockaddr_in.sin_port = htons(port);
-	rc = bind(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
 	if (rc < 0) {
 		mbus_errorf("bind failed");
 		goto bail;

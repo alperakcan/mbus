@@ -53,14 +53,13 @@ namespaces.
   
   - --mbus-server-protocol
   
-    set communication protocol, available options: tcp, udp, uds. default: uds
+    set communication protocol, available options: tcp, uds. default: uds
 
   - --mbus-server-address
   
     set server address:
 
     - tcp: default is 127.0.0.1
-    - udp: default is 127.0.0.1
     - uds: default is /tmp/mbus-server
   
   - --mbus-server-port
@@ -68,7 +67,6 @@ namespaces.
     set server port:
 
     - tcp: default is 8000
-    - udp: default is 8000
     - uds: unused
 
 ### 4.2 listener ###

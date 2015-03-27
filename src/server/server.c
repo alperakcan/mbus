@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <getopt.h>
 
 #define MBUS_DEBUG_NAME	"mbus-server"
@@ -120,7 +121,7 @@ static void usage (void)
 {
 	fprintf(stdout, "mbus server arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level     : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-server-protocol : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
+	fprintf(stdout, "  --mbus-server-protocol : server protocol (tcp/uds, default: %s)\n", MBUS_SERVER_PROTOCOL);
 	fprintf(stdout, "  --mbus-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
 }
@@ -1802,13 +1803,16 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	const char *server_address;
 	const char *server_protocol;
 
+	enum mbus_socket_type socket_type;
+	enum mbus_socket_domain socket_domain;
+
 	server = NULL;
 
-	mbus_infof("creating server");
+	server_port = -1;
+	server_address = NULL;
+	server_protocol = NULL;
 
-	server_port = MBUS_SERVER_PORT;
-	server_address = MBUS_SERVER_ADDRESS;
-	server_protocol = MBUS_SERVER_PROTOCOL;
+	mbus_infof("creating server");
 
 	argv = malloc(sizeof(char *) * (argc + 1));
 	if (argv == NULL) {
@@ -1841,6 +1845,34 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		}
 	}
 
+	if (server_protocol == NULL) {
+		server_protocol = MBUS_SERVER_PROTOCOL;
+	}
+
+	if (strcmp(server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
+		if (server_port == -1) {
+			server_port = MBUS_SERVER_TCP_PORT;
+		}
+		if (server_address == NULL) {
+			server_address = MBUS_SERVER_TCP_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_inet;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(server_protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
+		if (server_port == -1) {
+			server_port = MBUS_SERVER_UDS_PORT;
+		}
+		if (server_address == NULL) {
+			server_address = MBUS_SERVER_UDS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_unix;
+		socket_type = mbus_socket_type_sock_stream;
+		unlink(server_address);
+	} else {
+		mbus_errorf("invalid server protocol");
+		goto bail;
+	}
+
 	server = malloc(sizeof(struct mbus_server));
 	if (server == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -1849,7 +1881,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	memset(server, 0, sizeof(struct mbus_server));
 	TAILQ_INIT(&server->clients);
 	TAILQ_INIT(&server->methods);
-	server->socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+	server->socket = mbus_socket_create(socket_domain, socket_type, mbus_socket_protocol_any);
 	if (server->socket == NULL) {
 		mbus_errorf("can not create socket");
 		goto bail;

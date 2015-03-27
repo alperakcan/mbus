@@ -126,12 +126,12 @@ struct mbus_client {
 #define OPTION_SERVER_PORT	0x104
 #define OPTION_CLIENT_NAME	0x105
 static struct option longopts[] = {
-	{ "mbus-help",		no_argument,		NULL,	OPTION_HELP },
-	{ "mbus-debug-level",	required_argument,	NULL,	OPTION_DEBUG_LEVEL },
+	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
+	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
 	{ "mbus-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
 	{ "mbus-server-address",	required_argument,	NULL,	OPTION_SERVER_ADDRESS },
-	{ "mbus-server-port",	required_argument,	NULL,	OPTION_SERVER_PORT },
-	{ "mbus-client-name",	required_argument,	NULL,	OPTION_CLIENT_NAME },
+	{ "mbus-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
+	{ "mbus-client-name",		required_argument,	NULL,	OPTION_CLIENT_NAME },
 	{ NULL,				0,			NULL,	0 },
 };
 
@@ -674,16 +674,20 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	const char *server_protocol;
 	const char *client_name;
 
+	enum mbus_socket_type socket_type;
+	enum mbus_socket_domain socket_domain;
+
 	argv = NULL;
 	client = NULL;
+	server_port = -1;
+	server_address = NULL;
+	server_protocol = NULL;
+
 	if (name == NULL) {
 		mbus_errorf("name is null");
 		goto bail;
 	}
 
-	server_port = MBUS_SERVER_PORT;
-	server_address = MBUS_SERVER_ADDRESS;
-	server_protocol = MBUS_SERVER_PROTOCOL;
 	client_name = name;
 
 	argv = malloc(sizeof(char *) * (argc + 1));
@@ -720,6 +724,33 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		}
 	}
 
+	if (server_protocol == NULL) {
+		server_protocol = MBUS_SERVER_PROTOCOL;
+	}
+
+	if (strcmp(server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
+		if (server_port == -1) {
+			server_port = MBUS_SERVER_TCP_PORT;
+		}
+		if (server_address == NULL) {
+			server_address = MBUS_SERVER_TCP_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_inet;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(server_protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
+		if (server_port == -1) {
+			server_port = MBUS_SERVER_UDS_PORT;
+		}
+		if (server_address == NULL) {
+			server_address = MBUS_SERVER_UDS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_unix;
+		socket_type = mbus_socket_type_sock_stream;
+	} else {
+		mbus_errorf("invalid server protocol");
+		goto bail;
+	}
+
 	mbus_infof("creating client: '%s'", client_name);
 
 	client = malloc(sizeof(struct mbus_client));
@@ -740,7 +771,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
-	client->socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+	client->socket = mbus_socket_create(socket_domain, socket_type, mbus_socket_protocol_any);
 	if (client->socket == NULL) {
 		mbus_errorf("can not create event socket");
 		goto bail;

@@ -28,6 +28,7 @@
 
 enum mbus_socket_domain {
 	mbus_socket_domain_af_inet,
+	mbus_socket_domain_af_unix,
 };
 
 enum mbus_socket_type {
