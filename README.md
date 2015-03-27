@@ -47,6 +47,9 @@ distributed applications framework.
 mBus client library (libmbus-client) is to simplify development of software using mbus
 (connecting to it).
 
+mBus is using cJSON library (http://cjson.sourceforge.net/) for JSON operations, thus
+heavily depends on it. mBus comes with built-in cJSON, and may externally linked if desired.
+
 ## 2. download ##
 
     git clone git@github.com:alperakcan/mbus.git
