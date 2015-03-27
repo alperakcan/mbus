@@ -94,7 +94,71 @@ heavily depends on it. mBus comes with built-in cJSON, and may externally linked
 
 ### 4.2 listener ###
 
+#### 4.1.1 command line options ####
+
+  - --mbus-help
+  
+    print available parameters list and exit
+
+  - --mbus-debug-level
+
+    set debug level, available options: debug, info, error. default: error
+  
+  - --mbus-server-protocol
+  
+    set communication protocol, available options: tcp, uds. default: uds
+
+  - --mbus-server-address
+  
+    set server address:
+
+    - tcp: default is 127.0.0.1
+    - uds: default is /tmp/mbus-server
+  
+  - --mbus-server-port
+  
+    set server port:
+
+    - tcp: default is 8000
+    - uds: unused
+
+  - --mbus-client-name
+  
+    set client name, default: org.mbus.app.listener
+
 ### 4.3 cli ###
+
+#### 4.1.1 command line options ####
+
+  - --mbus-help
+  
+    print available parameters list and exit
+
+  - --mbus-debug-level
+
+    set debug level, available options: debug, info, error. default: error
+  
+  - --mbus-server-protocol
+  
+    set communication protocol, available options: tcp, uds. default: uds
+
+  - --mbus-server-address
+  
+    set server address:
+
+    - tcp: default is 127.0.0.1
+    - uds: default is /tmp/mbus-server
+  
+  - --mbus-server-port
+  
+    set server port:
+
+    - tcp: default is 8000
+    - uds: unused
+
+  - --mbus-client-name
+  
+    set client name, default: org.mbus.app.cli
 
 ### 4.4 launcher ###
 
