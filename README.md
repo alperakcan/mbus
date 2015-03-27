@@ -7,9 +7,9 @@ mBus is a lightweight messaging system.
 3. <a href="#3-build">download</a>
 4. <a href="#4-execute">execute</a>
   - <a href="#41-controller">controller</a>
-  - <a href="#42-launcher">launcher</a>
-  - <a href="#43-listener">listener</a>
-  - <a href="#44-cli">cli</a>
+  - <a href="#42-listener">listener</a>
+  - <a href="#43-cli">cli</a>
+  - <a href="#44-launcher">launcher</a>
 5. <a href="#5-api">api</a>
 6. <a href="#6-protocol">protocol</a>
 7. <a href="#7-contact">contact</a>
@@ -30,17 +30,52 @@ namespaces.
 
 ## 2. download ##
 
+    git clone git@github.com:alperakcan/mbus.git
+
 ## 3. build ##
+
+    cd mbus
+    make
 
 ## 4. execute ##
 
 ### 4.1 controller ###
 
-### 4.2 launcher ###
+#### 4.1.1 command line options ####
 
-### 4.3 listener ###
+  - --mbus-help
+  
+    print available parameters list and exit
 
-### 4.4 cli ###
+  - --mbus-debug-level
+
+    set debug level, available options: debug, info, error. default: error
+  
+  - --mbus-server-protocol
+  
+    set communication protocol, available options: tcp, udp, uds. default: uds
+
+  - --mbus-server-address
+  
+    set server address:
+
+    - tcp: default is 127.0.0.1
+    - udp: default is 127.0.0.1
+    - uds: default is /tmp/mbus-server
+  
+  - --mbus-server-port
+  
+    set server port:
+
+    - tcp: default is 8000
+    - udp: default is 8000
+    - uds: unused
+
+### 4.2 listener ###
+
+### 4.3 cli ###
+
+### 4.4 launcher ###
 
 ## 5. api ##
 
