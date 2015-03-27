@@ -8,8 +8,11 @@ and applications. enabling development of component based distributed applicatio
 3. <a href="#3-build">download</a>
 4. <a href="#4-applications">applications</a>
   - <a href="#41-controller">controller</a>
+    - <a href="#411-command-line-options">command line options</a>
   - <a href="#42-listener">listener</a>
+    - <a href="#421-command-line-options">command line options</a>
   - <a href="#43-cli">cli</a>
+    - <a href="#431-command-line-options">command line options</a>
   - <a href="#44-launcher">launcher</a>
 5. <a href="#5-library">library</a>
   - <a href="#51-server">server</a>
@@ -94,7 +97,7 @@ heavily depends on it. mBus comes with built-in cJSON, and may externally linked
 
 ### 4.2 listener ###
 
-#### 4.1.1 command line options ####
+#### 4.2.1 command line options ####
 
   - --mbus-help
   
@@ -128,7 +131,7 @@ heavily depends on it. mBus comes with built-in cJSON, and may externally linked
 
 ### 4.3 cli ###
 
-#### 4.1.1 command line options ####
+#### 4.3.1 command line options ####
 
   - --mbus-help
   
