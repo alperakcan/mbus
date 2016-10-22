@@ -1103,6 +1103,38 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 		}
 		cJSON_Delete(payload);
 	}
+	if (command == NULL &&
+	    method_get_type(method) == method_type_command) {
+		cJSON *payload;
+		cJSON *result;
+		payload = cJSON_CreateObject();
+		if (payload == NULL) {
+			mbus_errorf("can not create result object");
+			method_destroy(method);
+			return -1;
+		}
+		result = cJSON_CreateObject();
+		if (result == NULL) {
+			mbus_errorf("can not create result object");
+			cJSON_Delete(payload);
+			method_destroy(method);
+			return -1;
+		}
+		rc = -1;
+		cJSON_AddStringToObjectCS(payload, "destination", method_get_source(method));
+		cJSON_AddStringToObjectCS(payload, "identifier", method_get_identifier(method));
+		cJSON_AddNumberToObjectCS(payload, "sequence", method_get_sequence(method));
+		cJSON_AddNumberToObjectCS(payload, "return", rc);
+		cJSON_AddItemToObjectCS(payload, "result", result);
+		rc = mbus_client_result(client, payload);
+		if (rc != 0) {
+			mbus_errorf("can not send result");
+			cJSON_Delete(payload);
+			method_destroy(method);
+			return -1;
+		}
+		cJSON_Delete(payload);
+	}
 	method_destroy(method);
 	return 0;
 }
