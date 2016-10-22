@@ -1571,7 +1571,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("server is null");
 		return -1;
 	}
-	mbus_infof("running server");
+	mbus_debugf("running server");
 	polls = NULL;
 	if (server->running == 0) {
 		goto out;
