@@ -126,6 +126,7 @@ struct mbus_client {
 #define OPTION_SERVER_PORT	0x104
 #define OPTION_CLIENT_NAME	0x105
 static struct option longopts[] = {
+	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
 	{ "mbus-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
@@ -135,7 +136,7 @@ static struct option longopts[] = {
 	{ NULL,				0,			NULL,	0 },
 };
 
-static void usage (void)
+void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level     : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
@@ -143,6 +144,7 @@ static void usage (void)
 	fprintf(stdout, "  --mbus-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
 	fprintf(stdout, "  --mbus-client-name     : client name (overrides api parameter)\n");
+	fprintf(stdout, "  --mbus-help            : this text\n");
 }
 
 static const char * callback_get_identifier (struct callback *callback)
@@ -719,7 +721,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 				client_name = optarg;
 				break;
 			case OPTION_HELP:
-				usage();
+				mbus_client_usage();
 				goto bail;
 		}
 	}

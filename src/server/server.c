@@ -109,6 +109,7 @@ struct mbus_server {
 #define OPTION_SERVER_ADDRESS	0x103
 #define OPTION_SERVER_PORT	0x104
 static struct option longopts[] = {
+	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
 	{ "mbus-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
@@ -124,6 +125,7 @@ static void usage (void)
 	fprintf(stdout, "  --mbus-server-protocol : server protocol (tcp/uds, default: %s)\n", MBUS_SERVER_PROTOCOL);
 	fprintf(stdout, "  --mbus-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
+	fprintf(stdout, "  --mbus-help            : this text\n");
 }
 
 

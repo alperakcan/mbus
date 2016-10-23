@@ -30,6 +30,8 @@
 
 struct mbus_client;
 
+void mbus_client_usage (void);
+
 struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[]);
 void mbus_client_destroy (struct mbus_client *client);
 
