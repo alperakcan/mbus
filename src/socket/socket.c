@@ -398,6 +398,7 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 	int p;
 	int rc;
 	struct pollfd *pollfd;
+	struct pollfd _pollfds[32];
 	if (polls == NULL) {
 		mbus_errorf("polls is null");
 		return -1;
@@ -406,10 +407,14 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 		mbus_errorf("invalid polls count");
 		return -1;
 	}
-	pollfd = malloc(sizeof(struct pollfd) * npolls);
-	if (pollfd == NULL) {
-		mbus_errorf("can not allocate memory");
-		return -1;
+	if (npolls < (int) (sizeof(_pollfds) / sizeof(_pollfds[0]))) {
+		pollfd = _pollfds;
+	} else {
+		pollfd = malloc(sizeof(struct pollfd) * npolls);
+		if (pollfd == NULL) {
+			mbus_errorf("can not allocate memory");
+			return -1;
+		}
 	}
 	for (p = 0; p < npolls; p++) {
 		pollfd[p].fd = polls[p].socket->fd;
@@ -420,12 +425,10 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 	rc = poll(pollfd, npolls, timeout);
 	if (rc < 0) {
 		mbus_errorf("poll error");
-		free(pollfd);
-		return -1;
+		goto bail;
 	}
 	if (rc == 0) {
-		free(pollfd);
-		return 0;
+		goto out;
 	}
 	for (p = 0; p < npolls; p++) {
 		if (pollfd[p].revents == 0) {
@@ -433,6 +436,12 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 		}
 		polls[p].revents = mbus_poll_event_from_posix(pollfd[p].revents);
 	}
-	free(pollfd);
+out:	if (pollfd != _pollfds) {
+		free(pollfd);
+	}
 	return rc;
+bail:	if (pollfd != _pollfds) {
+		free(pollfd);
+	}
+	return -1;
 }

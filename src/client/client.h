@@ -43,3 +43,4 @@ int mbus_client_command (struct mbus_client *client, const char *destination, co
 
 int mbus_client_run (struct mbus_client *client);
 int mbus_client_run_timeout (struct mbus_client *client, int milliseconds);
+int mbus_client_break (struct mbus_client *client);

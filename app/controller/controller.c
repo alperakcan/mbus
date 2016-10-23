@@ -28,21 +28,33 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "debug.h"
 #include "server.h"
+
+static volatile int g_running;
+
+static void signal_handler (int signal)
+{
+	(void) signal;
+	g_running = 0;
+}
 
 int main (int argc, char *argv[])
 {
 	int rc;
 	struct mbus_server *server;
+	g_running = 1;
+	signal(SIGINT, signal_handler);
+	signal(SIGTERM, signal_handler);
 	server = mbus_server_create(argc, argv);
 	if (server == NULL) {
 		mbus_errorf("can not create server");
 		goto bail;
 	}
-	while (1) {
-		rc = mbus_server_run_timeout(server, -1);
+	while (g_running) {
+		rc = mbus_server_run_timeout(server, 1000);
 		if (rc < 0) {
 			mbus_errorf("can not run server");
 			goto bail;

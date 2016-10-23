@@ -906,6 +906,16 @@ again:  ret = pthread_cond_timedwait(cond, mutex, &tspec);
         return ret;
 }
 
+int mbus_client_break (struct mbus_client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return -1;
+	}
+	pthread_cond_broadcast(&client->cond);
+	return 0;
+}
+
 int mbus_client_run (struct mbus_client *client)
 {
 	int rc;
