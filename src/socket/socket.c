@@ -427,7 +427,7 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 		if (errno == EINTR) {
 			goto intr;
 		}
-		mbus_errorf("poll error");
+		mbus_errorf("poll error (rc: %d, errno: %d - %s)", rc, errno, strerror(errno));
 		goto bail;
 	}
 	if (rc == 0) {
