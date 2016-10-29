@@ -425,7 +425,7 @@ int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
 	rc = poll(pollfd, npolls, timeout);
 	if (rc < 0) {
 		if (errno == EINTR) {
-			goto out;
+			goto intr;
 		}
 		mbus_errorf("poll error");
 		goto bail;
@@ -443,6 +443,10 @@ out:	if (pollfd != _pollfds) {
 		free(pollfd);
 	}
 	return rc;
+intr:	if (pollfd != _pollfds) {
+		free(pollfd);
+	}
+	return 0;
 bail:	if (pollfd != _pollfds) {
 		free(pollfd);
 	}
