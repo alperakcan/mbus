@@ -32,11 +32,10 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#include "cJSON.h"
-
 #define MBUS_DEBUG_NAME	"app-cli"
 
 #include "mbus/debug.h"
+#include "mbus/cJSON.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"

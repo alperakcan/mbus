@@ -30,11 +30,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "cJSON.h"
-
 #define MBUS_DEBUG_NAME	"app-listener"
 
 #include "mbus/debug.h"
+#include "mbus/cJSON.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
