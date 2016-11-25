@@ -670,6 +670,8 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	char **argv;
 	struct mbus_client *client;
 
+	int o_optind;
+
 	int server_port;
 	const char *server_address;
 	const char *server_protocol;
@@ -677,6 +679,8 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 
 	enum mbus_socket_type socket_type;
 	enum mbus_socket_domain socket_domain;
+
+	o_optind = optind;
 
 	argv = NULL;
 	client = NULL;
@@ -701,7 +705,6 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	}
 	argv[a] = NULL;
 
-	optind = 1;
 	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
 			case OPTION_DEBUG_LEVEL:
@@ -802,6 +805,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	}
 	pthread_mutex_unlock(&client->mutex);
 	free(argv);
+	optind = o_optind;
 	return client;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
@@ -809,6 +813,7 @@ bail:	if (client != NULL) {
 	if (argv != NULL) {
 		free(argv);
 	}
+	optind = o_optind;
 	return NULL;
 }
 
