@@ -35,11 +35,11 @@
 
 #define MBUS_DEBUG_NAME	"mbus-server"
 
-#include "cJSON.h"
-#include "debug.h"
-#include "tailq.h"
-#include "method.h"
-#include "socket.h"
+#include "mbus/cJSON.h"
+#include "mbus/debug.h"
+#include "mbus/tailq.h"
+#include "mbus/method.h"
+#include "mbus/socket.h"
 #include "server.h"
 
 struct method {

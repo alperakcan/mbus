@@ -34,15 +34,14 @@
 #include <pthread.h>
 #include <sys/time.h>
 
-#include "cJSON.h"
-
 #define MBUS_DEBUG_NAME	"mbus-client"
 
-#include "debug.h"
-#include "tailq.h"
-#include "method.h"
-#include "socket.h"
-#include "server.h"
+#include "mbus/cJSON.h"
+#include "mbus/debug.h"
+#include "mbus/tailq.h"
+#include "mbus/method.h"
+#include "mbus/socket.h"
+#include "mbus/server.h"
 #include "client.h"
 
 enum method_type {

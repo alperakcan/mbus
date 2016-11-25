@@ -10,10 +10,12 @@ libmbus-cJSON.so_ldflags-y = \
 
 distdir = ../dist
 
+dist.base = mbus
+
 dist.include-y = \
 	cJSON.h
 
 dist.lib-y = \
 	libmbus-cJSON.so
 
-include ../../Makefile.lib
+include ../Makefile.lib

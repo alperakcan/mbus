@@ -40,10 +40,10 @@
 
 #define MBUS_DEBUG_NAME	"mbus-launcher"
 
-#include "debug.h"
-#include "cJSON.h"
-#include "tailq.h"
-#include "exec.h"
+#include "mbus/debug.h"
+#include "mbus/cJSON.h"
+#include "mbus/tailq.h"
+#include "mbus/exec.h"
 
 struct arg {
 	TAILQ_ENTRY(arg) args;

@@ -39,7 +39,7 @@
 
 #define MBUS_DEBUG_NAME	"mbus-socket"
 
-#include "debug.h"
+#include "mbus/debug.h"
 #include "socket.h"
 
 struct mbus_socket {

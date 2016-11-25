@@ -19,6 +19,8 @@ libmbus-client.so_ldflags-y = \
 
 distdir = ../../dist
 
+dist.base = mbus
+
 dist.include-y = \
 	client.h
 

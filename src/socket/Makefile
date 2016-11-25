@@ -16,6 +16,8 @@ libmbus-socket.so_ldflags-y = \
 
 distdir = ../../dist
 
+dist.base = mbus
+
 dist.include-y = \
 	socket.h
 

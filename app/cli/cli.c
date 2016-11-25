@@ -36,10 +36,10 @@
 
 #define MBUS_DEBUG_NAME	"app-cli"
 
-#include "debug.h"
-#include "method.h"
-#include "client.h"
-#include "server.h"
+#include "mbus/debug.h"
+#include "mbus/method.h"
+#include "mbus/client.h"
+#include "mbus/server.h"
 #include "cli.h"
 
 #define OPTION_HELP		0x100

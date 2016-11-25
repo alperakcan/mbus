@@ -45,7 +45,7 @@
 
 #define MBUS_DEBUG_NAME	"mbus-exec"
 
-#include "debug.h"
+#include "mbus/debug.h"
 #include "exec.h"
 
 pid_t mbus_exec (char * const *args, int *io)

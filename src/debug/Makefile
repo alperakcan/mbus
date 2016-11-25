@@ -7,6 +7,8 @@ libmbus-debug.so_files-y = \
 
 distdir = ../../dist
 
+dist.base = mbus
+
 dist.include-y = \
 	debug.h
 

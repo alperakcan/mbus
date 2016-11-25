@@ -14,6 +14,8 @@ libmbus-exec.so_files-y = \
 libmbus-exec.so_ldflags-y = \
 	-lmbus-debug
 
+dist.base = mbus
+
 distdir = ../../dist
 
 dist.include-y = \

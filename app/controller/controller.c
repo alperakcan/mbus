@@ -30,8 +30,8 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include "debug.h"
-#include "server.h"
+#include "mbus/debug.h"
+#include "mbus/server.h"
 
 static volatile int g_running;
 

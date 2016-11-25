@@ -34,10 +34,10 @@
 
 #define MBUS_DEBUG_NAME	"app-listener"
 
-#include "debug.h"
-#include "method.h"
-#include "client.h"
-#include "server.h"
+#include "mbus/debug.h"
+#include "mbus/method.h"
+#include "mbus/client.h"
+#include "mbus/server.h"
 #include "listener.h"
 
 static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, cJSON *payload, void *data)

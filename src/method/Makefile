@@ -1,6 +1,8 @@
 
 distdir = ../../dist
 
+dist.base = mbus
+
 dist.include-y = \
 	method.h
 
