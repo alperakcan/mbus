@@ -146,6 +146,7 @@ extern void cJSON_Minify(char *json);
 
 extern const char * cJSON_GetStringValue (cJSON *object,const char *string);
 extern int cJSON_GetIntValue (cJSON *object,const char *string);
+extern int cJSON_GetNumberValue (cJSON *object,const char *string);
 
 #ifdef __cplusplus
 }

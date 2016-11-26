@@ -774,3 +774,16 @@ int cJSON_GetIntValue (cJSON *object,const char *string)
 	}
 	return item->valueint;
 }
+
+int cJSON_GetNumberValue (cJSON *object,const char *string)
+{
+	cJSON *item;
+	item = cJSON_GetObjectItem(object, string);
+	if (item == NULL) {
+		return -1;
+	}
+	if (item->type != cJSON_Number) {
+		return -1;
+	}
+	return item->valuedouble;
+}
