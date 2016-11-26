@@ -705,6 +705,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	}
 	argv[a] = NULL;
 
+	optind = 1;
 	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
 			case OPTION_DEBUG_LEVEL:
@@ -751,7 +752,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		socket_domain = mbus_socket_domain_af_unix;
 		socket_type = mbus_socket_type_sock_stream;
 	} else {
-		mbus_errorf("invalid server protocol");
+		mbus_errorf("invalid server protocol: %s", server_protocol);
 		goto bail;
 	}
 
