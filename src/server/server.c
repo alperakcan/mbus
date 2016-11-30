@@ -97,35 +97,72 @@ struct client {
 TAILQ_HEAD(clients, client);
 
 struct mbus_server {
-	struct mbus_socket *socket;
+	struct {
+		struct {
+			int enabled;
+			const char *address;
+			unsigned int port;
+			struct mbus_socket *socket;
+		} uds;
+		struct {
+			int enabled;
+			const char *address;
+			unsigned int port;
+			struct mbus_socket *socket;
+		} tcp;
+		struct {
+			int enabled;
+			const char *address;
+			unsigned int port;
+			struct mbus_socket *socket;
+		} websocket;
+	} socket;
 	struct clients clients;
 	struct methods methods;
 	int running;
 };
 
-#define OPTION_HELP		0x100
-#define OPTION_DEBUG_LEVEL	0x101
-#define OPTION_SERVER_PROTOCOL	0x102
-#define OPTION_SERVER_ADDRESS	0x103
-#define OPTION_SERVER_PORT	0x104
+#define OPTION_HELP			0x100
+#define OPTION_DEBUG_LEVEL		0x101
+#define OPTION_SERVER_TCP_ENABLE	0x102
+#define OPTION_SERVER_TCP_ADDRESS	0x103
+#define OPTION_SERVER_TCP_PORT		0x104
+#define OPTION_SERVER_UDS_ENABLE	0x105
+#define OPTION_SERVER_UDS_ADDRESS	0x106
+#define OPTION_SERVER_UDS_PORT		0x107
+#define OPTION_SERVER_WEBSOCKET_ENABLE	0x108
+#define OPTION_SERVER_WEBSOCKET_ADDRESS	0x109
+#define OPTION_SERVER_WEBSOCKET_PORT	0x110
 static struct option longopts[] = {
-	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
-	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
-	{ "mbus-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
-	{ "mbus-server-address",	required_argument,	NULL,	OPTION_SERVER_ADDRESS },
-	{ "mbus-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
-	{ NULL,				0,			NULL,	0 },
+	{ "help",				no_argument,		NULL,	OPTION_HELP },
+	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
+	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
+	{ "mbus-server-tcp-enable",		required_argument,	NULL,	OPTION_SERVER_TCP_ENABLE },
+	{ "mbus-server-tcp-address",		required_argument,	NULL,	OPTION_SERVER_TCP_ADDRESS },
+	{ "mbus-server-tcp-port",		required_argument,	NULL,	OPTION_SERVER_TCP_PORT },
+	{ "mbus-server-uds-enable",		required_argument,	NULL,	OPTION_SERVER_UDS_ENABLE },
+	{ "mbus-server-uds-address",		required_argument,	NULL,	OPTION_SERVER_UDS_ADDRESS },
+	{ "mbus-server-uds-port",		required_argument,	NULL,	OPTION_SERVER_UDS_PORT },
+	{ "mbus-server-websocket-enable",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ENABLE },
+	{ "mbus-server-websocket-address",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ADDRESS },
+	{ "mbus-server-websocket-port",		required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_PORT },
+	{ NULL,					0,			NULL,	0 },
 };
 
 static void usage (void)
 {
 	fprintf(stdout, "mbus server arguments:\n");
-	fprintf(stdout, "  --mbus-debug-level     : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-server-protocol : server protocol (tcp/uds, default: %s)\n", MBUS_SERVER_PROTOCOL);
-	fprintf(stdout, "  --mbus-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
-	fprintf(stdout, "  --mbus-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
-	fprintf(stdout, "  --mbus-help            : this text\n");
+	fprintf(stdout, "  --mbus-debug-level             : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
+	fprintf(stdout, "  --mbus-server-tcp-enable       : server tcp enable (default: %d)\n", MBUS_SERVER_TCP_ENABLE);
+	fprintf(stdout, "  --mbus-server-tcp-address      : server tcp address (default: %s)\n", MBUS_SERVER_TCP_ADDRESS);
+	fprintf(stdout, "  --mbus-server-tcp-port         : server tcp port (default: %d)\n", MBUS_SERVER_TCP_PORT);
+	fprintf(stdout, "  --mbus-server-uds-enable       : server uds enable (default: %d)\n", MBUS_SERVER_UDS_ENABLE);
+	fprintf(stdout, "  --mbus-server-uds-address      : server uds address (default: %s)\n", MBUS_SERVER_UDS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-uds-port         : server uds port (default: %d)\n", MBUS_SERVER_UDS_PORT);
+	fprintf(stdout, "  --mbus-server-websocket-enable : server websocket enable (default: %d)\n", MBUS_SERVER_WEBSOCKET_ENABLE);
+	fprintf(stdout, "  --mbus-server-websocket-address: server websocket address (default: %s)\n", MBUS_SERVER_WEBSOCKET_ADDRESS);
+	fprintf(stdout, "  --mbus-server-websocket-port   : server websocket port (default: %d)\n", MBUS_SERVER_WEBSOCKET_PORT);
+	fprintf(stdout, "  --mbus-help                    : this text\n");
 }
 
 
@@ -1140,7 +1177,7 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-static int server_accept_client (struct mbus_server *server)
+static int server_accept_client (struct mbus_server *server, struct mbus_socket *from)
 {
 	int rc;
 	char *name;
@@ -1153,7 +1190,7 @@ static int server_accept_client (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	socket = mbus_socket_accept(server->socket);
+	socket = mbus_socket_accept(from);
 	if (socket == NULL) {
 		mbus_errorf("can not accept new socket connection");
 		goto bail;
@@ -1587,17 +1624,31 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		free(polls);
 		polls = NULL;
 	}
-	n = 1 + server->clients.count;
+	n = 3 + server->clients.count;
 	polls = malloc(sizeof(struct mbus_poll) * n);
 	if (polls == NULL) {
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
 	n = 0;
-	polls[n].events = mbus_poll_event_in;
-	polls[n].revents = 0;
-	polls[n].socket = server->socket;
-	n += 1;
+	if (server->socket.uds.socket != NULL) {
+		polls[n].events = mbus_poll_event_in;
+		polls[n].revents = 0;
+		polls[n].socket = server->socket.uds.socket;
+		n += 1;
+	}
+	if (server->socket.tcp.socket != NULL) {
+		polls[n].events = mbus_poll_event_in;
+		polls[n].revents = 0;
+		polls[n].socket = server->socket.tcp.socket;
+		n += 1;
+	}
+	if (server->socket.websocket.socket != NULL) {
+		polls[n].events = mbus_poll_event_in;
+		polls[n].revents = 0;
+		polls[n].socket = server->socket.websocket.socket;
+		n += 1;
+	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) != NULL) {
 			polls[n].events = mbus_poll_event_in;
@@ -1623,17 +1674,46 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("poll error");
 		goto bail;
 	}
-	if (polls[0].revents & mbus_poll_event_in) {
-		rc = server_accept_client(server);
-		if (rc == -1) {
-			mbus_errorf("can not accept new connection");
-			goto bail;
-		} else if (rc == -2) {
-			mbus_errorf("rejected new connection");
-		}
-	}
-	for (c = 1; c < n; c++) {
+	for (c = 0; c < n; c++) {
 		if (polls[c].revents == 0) {
+			continue;
+		}
+		if (polls[c].socket == server->socket.uds.socket ||
+		    polls[c].socket == server->socket.tcp.socket ||
+		    polls[c].socket == server->socket.websocket.socket) {
+			if (polls[c].socket == server->socket.uds.socket) {
+				if (polls[c].revents & mbus_poll_event_in) {
+					rc = server_accept_client(server, server->socket.uds.socket);
+					if (rc == -1) {
+						mbus_errorf("can not accept new connection");
+						goto bail;
+					} else if (rc == -2) {
+						mbus_errorf("rejected new connection");
+					}
+				}
+			}
+			if (polls[c].socket == server->socket.tcp.socket) {
+				if (polls[c].revents & mbus_poll_event_in) {
+					rc = server_accept_client(server, server->socket.tcp.socket);
+					if (rc == -1) {
+						mbus_errorf("can not accept new connection");
+						goto bail;
+					} else if (rc == -2) {
+						mbus_errorf("rejected new connection");
+					}
+				}
+			}
+			if (polls[c].socket == server->socket.websocket.socket) {
+				if (polls[c].revents & mbus_poll_event_in) {
+					rc = server_accept_client(server, server->socket.websocket.socket);
+					if (rc == -1) {
+						mbus_errorf("can not accept new connection");
+						goto bail;
+					} else if (rc == -2) {
+						mbus_errorf("rejected new connection");
+					}
+				}
+			}
 			continue;
 		}
 		client = server_find_client_by_socket(server, polls[c].socket);
@@ -1799,8 +1879,14 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server == NULL) {
 		return;
 	}
-	if (server->socket != NULL) {
-		mbus_socket_destroy(server->socket);
+	if (server->socket.uds.socket != NULL) {
+		mbus_socket_destroy(server->socket.uds.socket);
+	}
+	if (server->socket.tcp.socket != NULL) {
+		mbus_socket_destroy(server->socket.tcp.socket);
+	}
+	if (server->socket.websocket.socket != NULL) {
+		mbus_socket_destroy(server->socket.websocket.socket);
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
@@ -1823,20 +1909,31 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	char **argv;
 	struct mbus_server *server;
 
-	int server_port;
-	const char *server_address;
-	const char *server_protocol;
-
-	enum mbus_socket_type socket_type;
-	enum mbus_socket_domain socket_domain;
-
+	argv= NULL;
 	server = NULL;
 
-	server_port = -1;
-	server_address = NULL;
-	server_protocol = NULL;
-
 	mbus_infof("creating server");
+
+	server = malloc(sizeof(struct mbus_server));
+	if (server == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	memset(server, 0, sizeof(struct mbus_server));
+	TAILQ_INIT(&server->clients);
+	TAILQ_INIT(&server->methods);
+
+	server->socket.tcp.enabled = MBUS_SERVER_TCP_ENABLE;
+	server->socket.tcp.address = MBUS_SERVER_TCP_ADDRESS;
+	server->socket.tcp.port = MBUS_SERVER_TCP_PORT;
+
+	server->socket.uds.enabled = MBUS_SERVER_UDS_ENABLE;
+	server->socket.uds.address = MBUS_SERVER_UDS_ADDRESS;
+	server->socket.uds.port = MBUS_SERVER_UDS_PORT;
+
+	server->socket.websocket.enabled = MBUS_SERVER_WEBSOCKET_ENABLE;
+	server->socket.websocket.address = MBUS_SERVER_WEBSOCKET_ADDRESS;
+	server->socket.websocket.port = MBUS_SERVER_WEBSOCKET_PORT;
 
 	argv = malloc(sizeof(char *) * (argc + 1));
 	if (argv == NULL) {
@@ -1854,14 +1951,32 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			case OPTION_DEBUG_LEVEL:
 				mbus_debug_level = mbus_debug_level_from_string(optarg);
 				break;
-			case OPTION_SERVER_PROTOCOL:
-				server_protocol = optarg;
+			case OPTION_SERVER_TCP_ENABLE:
+				server->socket.tcp.enabled = !!atoi(optarg);
 				break;
-			case OPTION_SERVER_ADDRESS:
-				server_address = optarg;
+			case OPTION_SERVER_TCP_ADDRESS:
+				server->socket.tcp.address = optarg;
 				break;
-			case OPTION_SERVER_PORT:
-				server_port = atoi(optarg);
+			case OPTION_SERVER_TCP_PORT:
+				server->socket.tcp.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_UDS_ENABLE:
+				server->socket.uds.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_UDS_ADDRESS:
+				server->socket.uds.address = optarg;
+				break;
+			case OPTION_SERVER_UDS_PORT:
+				server->socket.uds.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_WEBSOCKET_ENABLE:
+				server->socket.websocket.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_WEBSOCKET_ADDRESS:
+				server->socket.websocket.address = optarg;
+				break;
+			case OPTION_SERVER_WEBSOCKET_PORT:
+				server->socket.websocket.port = atoi(optarg);
 				break;
 			case OPTION_HELP:
 				usage();
@@ -1869,63 +1984,63 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		}
 	}
 
-	if (server_protocol == NULL) {
-		server_protocol = MBUS_SERVER_PROTOCOL;
-	}
-
-	if (strcmp(server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
-		if (server_port == -1) {
-			server_port = MBUS_SERVER_TCP_PORT;
-		}
-		if (server_address == NULL) {
-			server_address = MBUS_SERVER_TCP_ADDRESS;
-		}
-		socket_domain = mbus_socket_domain_af_inet;
-		socket_type = mbus_socket_type_sock_stream;
-	} else if (strcmp(server_protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
-		if (server_port == -1) {
-			server_port = MBUS_SERVER_UDS_PORT;
-		}
-		if (server_address == NULL) {
-			server_address = MBUS_SERVER_UDS_ADDRESS;
-		}
-		socket_domain = mbus_socket_domain_af_unix;
-		socket_type = mbus_socket_type_sock_stream;
-		unlink(server_address);
-	} else {
-		mbus_errorf("invalid server protocol");
+	if (server->socket.tcp.enabled == 0 &&
+	    server->socket.uds.enabled == 0 &&
+	    server->socket.websocket.enabled == 0) {
+		mbus_errorf("at leat one protocol must be enabled");
 		goto bail;
 	}
 
-	server = malloc(sizeof(struct mbus_server));
-	if (server == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
+	if (server->socket.tcp.enabled == 1) {
+		server->socket.tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+		if (server->socket.tcp.socket == NULL) {
+			mbus_errorf("can not create socket");
+			goto bail;
+		}
+		rc = mbus_socket_set_reuseaddr(server->socket.tcp.socket, 1);
+		if (rc != 0) {
+			mbus_errorf("can not reuse socket");
+			goto bail;
+		}
+		rc = mbus_socket_bind(server->socket.tcp.socket, server->socket.tcp.address, server->socket.tcp.port);
+		if (rc != 0) {
+			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", server->socket.tcp.address, server->socket.tcp.port);
+			goto bail;
+		}
+		rc = mbus_socket_listen(server->socket.tcp.socket, 1024);
+		if (rc != 0) {
+			mbus_errorf("can not listen socket");
+			goto bail;
+		}
+		mbus_infof("listening from: '%s:%s:%d'", "tcp", server->socket.tcp.address, server->socket.tcp.port);
 	}
-	memset(server, 0, sizeof(struct mbus_server));
-	TAILQ_INIT(&server->clients);
-	TAILQ_INIT(&server->methods);
-	server->socket = mbus_socket_create(socket_domain, socket_type, mbus_socket_protocol_any);
-	if (server->socket == NULL) {
-		mbus_errorf("can not create socket");
-		goto bail;
+	if (server->socket.uds.enabled == 1) {
+		server->socket.uds.socket = mbus_socket_create(mbus_socket_domain_af_unix, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+		if (server->socket.uds.socket == NULL) {
+			mbus_errorf("can not create socket");
+			goto bail;
+		}
+		rc = mbus_socket_set_reuseaddr(server->socket.uds.socket, 1);
+		if (rc != 0) {
+			mbus_errorf("can not reuse socket");
+			goto bail;
+		}
+		rc = mbus_socket_bind(server->socket.uds.socket, server->socket.uds.address, server->socket.uds.port);
+		if (rc != 0) {
+			mbus_errorf("can not bind socket: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
+			goto bail;
+		}
+		rc = mbus_socket_listen(server->socket.uds.socket, 1024);
+		if (rc != 0) {
+			mbus_errorf("can not listen socket");
+			goto bail;
+		}
+		mbus_infof("listening from: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
 	}
-	rc = mbus_socket_set_reuseaddr(server->socket, 1);
-	if (rc != 0) {
-		mbus_errorf("can not reuse socket");
-		goto bail;
+	if (server->socket.websocket.enabled == 1) {
+		mbus_infof("listening from: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
 	}
-	rc = mbus_socket_bind(server->socket, server_address, server_port);
-	if (rc != 0) {
-		mbus_errorf("can not bind socket: '%s:%s:%d'", server_protocol, server_address, server_port);
-		goto bail;
-	}
-	rc = mbus_socket_listen(server->socket, 1024);
-	if (rc != 0) {
-		mbus_errorf("can not listen socket");
-		goto bail;
-	}
-	mbus_infof("listening from: '%s:%s:%d'", server_protocol, server_address, server_port);
+
 	free(argv);
 	server->running = 1;
 	return server;

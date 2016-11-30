@@ -62,6 +62,7 @@ void mbus_socket_destroy (struct mbus_socket *socket);
 void mbus_socket_close (struct mbus_socket *socket);
 
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on);
+int mbus_socket_get_reuseaddr (struct mbus_socket *socket);
 
 int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned short port);
 int mbus_socket_listen (struct mbus_socket *socket, int backlog);

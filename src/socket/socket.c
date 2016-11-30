@@ -42,6 +42,10 @@
 #include "mbus/debug.h"
 #include "socket.h"
 
+struct websocket_per_session_data {
+	int fd;
+};
+
 struct mbus_socket {
 	int domain;
 	int type;
@@ -191,6 +195,24 @@ int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on)
 	return 0;
 }
 
+int mbus_socket_get_reuseaddr (struct mbus_socket *socket)
+{
+	int rc;
+	int opt;
+	socklen_t optlen;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	optlen = sizeof(opt);
+	rc = getsockopt(socket->fd, SOL_SOCKET, SO_REUSEADDR, &opt, &optlen);
+	if (rc < 0) {
+		mbus_errorf("setsockopt reuseaddr failed");
+		return -1;
+	}
+	return opt;
+}
+
 int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsigned short port)
 {
 	int rc;
@@ -246,13 +268,16 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 	} else if (socket->domain == AF_UNIX) {
 		sockaddr_un.sun_family = socket->domain;
 		strncpy(sockaddr_un.sun_path, address, sizeof(sockaddr_un.sun_path) - 1);
+		if (mbus_socket_get_reuseaddr(socket) == 1) {
+			unlink(address);
+		}
 		rc = bind(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
 	} else {
 		mbus_errorf("unknown socket domain");
 		goto bail;
 	}
 	if (rc < 0) {
-		mbus_errorf("bind failed");
+		mbus_errorf("bind failed (%s)", strerror(errno));
 		goto bail;
 	}
 	return 0;
