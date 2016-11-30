@@ -1594,19 +1594,21 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
-struct websocket_client {
+struct websocket_client_data {
+	struct lws *wsi;
 	struct client *client;
-	struct libwebsocket *wsi;
 };
 
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {
+	struct websocket_client_data *data;
 	(void) wsi;
 	(void) reason;
 	(void) user;
 	(void) in;
 	(void) len;
 	mbus_infof("websocket callback");
+	data = (struct websocket_client_data *) user;
 	switch (reason) {
 		case LWS_CALLBACK_LOCK_POLL:
 			mbus_infof("  lock poll");
@@ -1658,6 +1660,14 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_RECEIVE:
 			mbus_infof("  receive");
+			mbus_infof("    data: %p", data);
+			mbus_infof("      wsi   : %p", data->wsi);
+			mbus_infof("      client: %p", data->client);
+			if (data->wsi == NULL &&
+			    data->client == NULL) {
+				data->wsi = wsi;
+			}
+			exit(0);
 			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);
@@ -1671,7 +1681,7 @@ static struct lws_protocols websocket_protocols[] = {
 	{
 		"mbus",
 		websocket_protocol_mbus_callback,
-		sizeof(struct websocket_client),
+		sizeof(struct websocket_client_data),
 		0,
 		0,
 		NULL,
