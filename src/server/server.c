@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <libwebsockets.h>
 
 #define MBUS_DEBUG_NAME	"mbus-server"
 
@@ -114,7 +115,7 @@ struct mbus_server {
 			int enabled;
 			const char *address;
 			unsigned int port;
-			struct mbus_socket *socket;
+			struct lws_context *context;
 		} websocket;
 	} socket;
 	struct clients clients;
@@ -1593,6 +1594,116 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
+struct websocket_client {
+	struct client *client;
+	struct libwebsocket *wsi;
+};
+
+static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
+{
+	(void) wsi;
+	(void) reason;
+	(void) user;
+	(void) in;
+	(void) len;
+	mbus_infof("websocket callback");
+	switch (reason) {
+		case LWS_CALLBACK_LOCK_POLL:
+			mbus_infof("  lock poll");
+			break;
+		case LWS_CALLBACK_ADD_POLL_FD:
+			mbus_infof("  add poll fd");
+			break;
+		case LWS_CALLBACK_UNLOCK_POLL:
+			mbus_infof("  unlock poll");
+			break;
+		case LWS_CALLBACK_GET_THREAD_ID:
+			mbus_infof("  get thread id");
+			break;
+		case LWS_CALLBACK_PROTOCOL_INIT:
+			mbus_infof("  protocol init");
+			break;
+		case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
+			mbus_infof("  filter network connection");
+			break;
+		case LWS_CALLBACK_WSI_CREATE:
+			mbus_infof("  wsi create");
+			break;
+		case LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED:
+			mbus_infof("  new client instantiated");
+			break;
+		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
+			mbus_infof("  change mode poll fd");
+			break;
+		case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
+			mbus_infof("  filter protocol connection");
+			break;
+		case LWS_CALLBACK_CONFIRM_EXTENSION_OKAY:
+			mbus_infof("  confirm extensions okay");
+			break;
+		case LWS_CALLBACK_ESTABLISHED:
+			mbus_infof("  established");
+			break;
+		case LWS_CALLBACK_DEL_POLL_FD:
+			mbus_infof("  del poll fd");
+			break;
+		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
+			mbus_infof("  http drop protocol");
+			break;
+		case LWS_CALLBACK_CLOSED:
+			mbus_infof("  closed");
+			break;
+		case LWS_CALLBACK_WSI_DESTROY:
+			mbus_infof("  destroy");
+			break;
+		case LWS_CALLBACK_RECEIVE:
+			mbus_infof("  receive");
+			break;
+		default:
+			mbus_errorf("unknown reason: %d", reason);
+			exit(0);
+			break;
+	}
+	return 0;
+}
+
+static struct lws_protocols websocket_protocols[] = {
+	{
+		"mbus",
+		websocket_protocol_mbus_callback,
+		sizeof(struct websocket_client),
+		0,
+		0,
+		NULL,
+	},
+	{
+		NULL,
+		NULL,
+		0,
+		0,
+		0,
+		NULL
+	}
+};
+
+static const struct lws_extension websocket_extensions[] = {
+	{
+		"permessage-deflate",
+		lws_extension_callback_pm_deflate,
+		"permessage-deflate"
+	},
+	{
+		"deflate-frame",
+		lws_extension_callback_pm_deflate,
+		"deflate_frame"
+	},
+	{
+		NULL,
+		NULL,
+		NULL
+	}
+};
+
 int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
@@ -1643,12 +1754,6 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		polls[n].socket = server->socket.tcp.socket;
 		n += 1;
 	}
-	if (server->socket.websocket.socket != NULL) {
-		polls[n].events = mbus_poll_event_in;
-		polls[n].revents = 0;
-		polls[n].socket = server->socket.websocket.socket;
-		n += 1;
-	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) != NULL) {
 			polls[n].events = mbus_poll_event_in;
@@ -1679,8 +1784,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			continue;
 		}
 		if (polls[c].socket == server->socket.uds.socket ||
-		    polls[c].socket == server->socket.tcp.socket ||
-		    polls[c].socket == server->socket.websocket.socket) {
+		    polls[c].socket == server->socket.tcp.socket) {
 			if (polls[c].socket == server->socket.uds.socket) {
 				if (polls[c].revents & mbus_poll_event_in) {
 					rc = server_accept_client(server, server->socket.uds.socket);
@@ -1695,17 +1799,6 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			if (polls[c].socket == server->socket.tcp.socket) {
 				if (polls[c].revents & mbus_poll_event_in) {
 					rc = server_accept_client(server, server->socket.tcp.socket);
-					if (rc == -1) {
-						mbus_errorf("can not accept new connection");
-						goto bail;
-					} else if (rc == -2) {
-						mbus_errorf("rejected new connection");
-					}
-				}
-			}
-			if (polls[c].socket == server->socket.websocket.socket) {
-				if (polls[c].revents & mbus_poll_event_in) {
-					rc = server_accept_client(server, server->socket.websocket.socket);
 					if (rc == -1) {
 						mbus_errorf("can not accept new connection");
 						goto bail;
@@ -1838,7 +1931,11 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 		client_destroy(client);
 	}
-out:	if (polls != NULL) {
+out:
+	{
+		lws_service(server->socket.websocket.context, 0);
+	}
+	if (polls != NULL) {
 		free(polls);
 		polls = NULL;
 	}
@@ -1885,8 +1982,8 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server->socket.tcp.socket != NULL) {
 		mbus_socket_destroy(server->socket.tcp.socket);
 	}
-	if (server->socket.websocket.socket != NULL) {
-		mbus_socket_destroy(server->socket.websocket.socket);
+	if (server->socket.websocket.context != NULL) {
+		lws_context_destroy(server->socket.websocket.context);
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
@@ -2038,6 +2135,19 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		mbus_infof("listening from: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
 	}
 	if (server->socket.websocket.enabled == 1) {
+		struct lws_context_creation_info info;
+		memset(&info, 0, sizeof(info));
+		info.iface = NULL;
+		info.port = server->socket.websocket.port;
+		info.protocols = websocket_protocols;
+		info.extensions = websocket_extensions;
+		info.gid = -1;
+		info.uid = -1;
+		server->socket.websocket.context = lws_create_context(&info);
+		if (server->socket.websocket.context == NULL) {
+			mbus_errorf("can not create websocket context for: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
+			goto bail;
+		}
 		mbus_infof("listening from: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
 	}
 

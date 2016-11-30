@@ -16,6 +16,9 @@ libmbus-server.so_ldflags-y = \
 	-lmbus-socket \
 	-lmbus-cJSON
 
+libmbus-server.so_ldflags-y += \
+	-lwebsockets
+
 distdir = ../../dist
 
 dist.base = mbus
