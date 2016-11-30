@@ -1597,6 +1597,10 @@ bail:	if (method != NULL) {
 struct websocket_client_data {
 	struct lws *wsi;
 	struct client *client;
+	unsigned int expected;
+	unsigned int received;
+	unsigned int length;
+	char *buffer;
 };
 
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
@@ -1658,14 +1662,18 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 		case LWS_CALLBACK_WSI_DESTROY:
 			mbus_infof("  destroy");
 			break;
+		case LWS_CALLBACK_PROTOCOL_DESTROY:
+			mbus_infof("  protocol destroy");
+			break;
 		case LWS_CALLBACK_RECEIVE:
 			mbus_infof("  receive");
 			mbus_infof("    data: %p", data);
 			mbus_infof("      wsi   : %p", data->wsi);
 			mbus_infof("      client: %p", data->client);
+			mbus_infof("    in: %p", in);
+			mbus_infof("    len: %zd", len);
 			if (data->wsi == NULL &&
 			    data->client == NULL) {
-				data->wsi = wsi;
 			}
 			exit(0);
 			break;

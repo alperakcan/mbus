@@ -45,7 +45,12 @@
 
   function doSend(message)
   {
-    writeToScreen("sent: " + message);
+    var l;
+    l = new Uint32Array(1);
+    l[0] = message.length;
+    writeToScreen("send: " + l);
+    websocket.send(l);
+    writeToScreen("send: " + message);
     websocket.send(message);
   }
 
