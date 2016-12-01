@@ -47,6 +47,14 @@
 
 #define MBUS_SERVER_NAME			"org.mbus.server"
 
+/* command create
+ *
+ * {
+ *   "comment": "create specific json object goes here"
+ * }
+ */
+#define MBUS_SERVER_COMMAND_CREATE		"command.create"
+
 /* command event
  *
  * {
@@ -66,7 +74,7 @@
 /* command result
  *
  * {
- *   "comment": "call specific json object goes here"
+ *   "comment": "result specific json object goes here"
  * }
  */
 #define MBUS_SERVER_COMMAND_RESULT		"command.result"
