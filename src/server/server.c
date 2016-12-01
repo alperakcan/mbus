@@ -81,9 +81,17 @@ enum client_status {
 	client_status_connected		= 0x00000001,
 };
 
+enum client_link {
+	client_link_unknown,
+	client_link_tcp,
+	client_link_uds,
+	client_link_websocket,
+};
+
 struct client {
 	TAILQ_ENTRY(client) clients;
 	char *name;
+	enum client_link link;
 	enum client_status status;
 	struct mbus_socket *socket;
 	struct subscriptions subscriptions;
@@ -122,6 +130,8 @@ struct mbus_server {
 	struct methods methods;
 	int running;
 };
+
+static struct mbus_server *g_server;
 
 #define OPTION_HELP			0x100
 #define OPTION_DEBUG_LEVEL		0x101
@@ -770,7 +780,9 @@ static void client_destroy (struct client *client)
 		return;
 	}
 	if (client->socket != NULL) {
-		mbus_socket_destroy(client->socket);
+		if (client->link == client_link_tcp) {
+			mbus_socket_destroy(client->socket);
+		}
 	}
 	if (client->name != NULL) {
 		free(client->name);
@@ -808,7 +820,7 @@ static void client_destroy (struct client *client)
 	free(client);
 }
 
-static struct client * client_create (const char *name)
+static struct client * client_create (const char *name, enum client_link link)
 {
 	struct client *client;
 	client = NULL;
@@ -834,6 +846,7 @@ static struct client * client_create (const char *name)
 		goto bail;
 	}
 	client->status = 0;
+	client->link = link;
 	client->ssequence = MBUS_METHOD_SEQUENCE_START;
 	client->esequence = MBUS_METHOD_SEQUENCE_START;
 	return client;
@@ -841,7 +854,7 @@ bail:	client_destroy(client);
 	return NULL;
 }
 
-static struct client * server_create_client_by_name (struct mbus_server *server, const char *name)
+static struct client * server_find_client_by_name (struct mbus_server *server, const char *name)
 {
 	struct client *client;
 	if (name == NULL) {
@@ -850,17 +863,10 @@ static struct client * server_create_client_by_name (struct mbus_server *server,
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (strcmp(client_get_name(client), name) == 0) {
-			mbus_errorf("client with name: '%s' already exists", name);
-			return NULL;
+			return client;
 		}
 	}
-	client = client_create(name);
-	if (client == NULL) {
-		mbus_errorf("can not create client");
-		return NULL;
-	}
-	TAILQ_INSERT_TAIL(&server->clients, client, clients);
-	return client;
+	return NULL;
 }
 
 static struct client * server_find_client_by_socket (struct mbus_server *server, struct mbus_socket *socket)
@@ -1218,6 +1224,18 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("can not create method");
 		goto bail;
 	}
+	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
+		mbus_errorf("invalid type: %s", method_get_request_type(method));
+		goto bail;
+	}
+	if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
+		mbus_errorf("invalid destination: %s", method_get_request_destination(method));
+		goto bail;
+	}
+	if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
+		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
+		goto bail;
+	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (strcmp(client_get_name(client), method_get_request_source(method)) == 0) {
 			break;
@@ -1228,7 +1246,12 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		client = NULL;
 		goto exists;
 	}
-	client = server_create_client_by_name(server, method_get_request_source(method));
+	client = server_find_client_by_name(server, method_get_request_source(method));
+	if (client != NULL) {
+		mbus_errorf("client with name: %s already exists", method_get_request_source(method));
+		goto bail;
+	}
+	client = client_create(method_get_request_source(method), client_link_tcp);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
@@ -1239,7 +1262,11 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		goto bail;
 	}
 	mbus_infof("client: '%s' accepted", client_get_name(client));
-	method_set_result_code(method, 0);
+	rc = method_set_result_code(method, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set method result code");
+		goto bail;
+	}
 	rc = mbus_socket_write_string(socket, method_get_result_string(method));
 	if (rc != 0) {
 		mbus_errorf("can not write string");
@@ -1247,6 +1274,7 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 	}
 	method_destroy(method);
 	free(string);
+	TAILQ_INSERT_TAIL(&server->clients, client, clients);
 	return 0;
 bail:	if (socket != NULL) {
 		mbus_socket_destroy(socket);
@@ -1624,18 +1652,104 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
+struct websocket_client_data_buffer {
+	unsigned int length;
+	unsigned int size;
+	uint8_t *buffer;
+};
+
 struct websocket_client_data {
 	struct lws *wsi;
 	struct client *client;
 	struct {
-		unsigned int length;
-		unsigned int size;
-		uint8_t *buffer;
+		struct websocket_client_data_buffer in;
+		struct websocket_client_data_buffer out;
 	} buffer;
 };
 
+static void websocket_client_data_buffer_uninit (struct websocket_client_data_buffer *buffer)
+{
+	if (buffer->buffer != NULL) {
+		free(buffer->buffer);
+	}
+	memset(buffer, 0, sizeof(struct websocket_client_data_buffer));
+}
+
+static void websocket_client_data_buffer_init (struct websocket_client_data_buffer *buffer)
+{
+	websocket_client_data_buffer_uninit(buffer);
+	memset(buffer, 0, sizeof(struct websocket_client_data_buffer));
+}
+
+static unsigned int websocket_client_data_buffer_length (struct websocket_client_data_buffer *buffer)
+{
+	return buffer->length;
+}
+
+static int websocket_client_data_buffer_push (struct websocket_client_data_buffer *buffer, const void *data, unsigned int length)
+{
+	if (buffer->size < buffer->length + length) {
+		uint8_t *tmp;
+		while (buffer->size < buffer->length + length) {
+			buffer->size += 1024;
+		}
+		tmp = realloc(buffer->buffer, buffer->size);
+		if (tmp == NULL) {
+			tmp = malloc(buffer->size);
+			if (tmp == NULL) {
+				mbus_errorf("can not allocate memory");
+				return -1;
+			}
+			memcpy(tmp, buffer->buffer, buffer->length);
+			free(buffer->buffer);
+		}
+		buffer->buffer = tmp;
+	}
+	memcpy(buffer->buffer + buffer->length, data, length);
+	buffer->length += length;
+	return 0;
+}
+
+static int websocket_client_data_buffer_push_string (struct websocket_client_data_buffer *buffer, const char *string)
+{
+	int rc;
+	uint32_t length;
+	if (string == NULL) {
+		mbus_errorf("string is invalid");
+		return -1;
+	}
+	length = strlen(string);
+	rc = websocket_client_data_buffer_push(buffer, &length, sizeof(length));
+	if (rc != 0) {
+		mbus_errorf("can not push length");
+		return -1;
+	}
+	rc = websocket_client_data_buffer_push(buffer, string, length);
+	if (rc != 0) {
+		mbus_errorf("can not push string");
+		return -1;
+	}
+	return 0;
+}
+
+int websocket_client_data_buffer_shift (struct websocket_client_data_buffer *buffer, unsigned int length)
+{
+	if (length == 0) {
+		return 0;
+	}
+	if (length > buffer->length) {
+		mbus_errorf("invalid length");
+		return -1;
+	}
+	memmove(buffer->buffer, buffer->buffer + length, buffer->length - length);
+	buffer->length -= length;
+	return 0;
+}
+
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {
+	int rc;
+	struct mbus_server *server;
 	struct websocket_client_data *data;
 	(void) wsi;
 	(void) reason;
@@ -1643,6 +1757,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 	(void) in;
 	(void) len;
 	mbus_infof("websocket callback");
+	server = g_server;
 	data = (struct websocket_client_data *) user;
 	switch (reason) {
 		case LWS_CALLBACK_LOCK_POLL:
@@ -1663,9 +1778,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 		case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
 			mbus_infof("  filter network connection");
 			break;
-		case LWS_CALLBACK_WSI_CREATE:
-			mbus_infof("  wsi create");
-			break;
 		case LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED:
 			mbus_infof("  new client instantiated");
 			break;
@@ -1680,6 +1792,9 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_ESTABLISHED:
 			mbus_infof("  established");
+			data->wsi = wsi;
+			websocket_client_data_buffer_init(&data->buffer.in);
+			websocket_client_data_buffer_init(&data->buffer.out);
 			break;
 		case LWS_CALLBACK_DEL_POLL_FD:
 			mbus_infof("  del poll fd");
@@ -1687,57 +1802,57 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
 			mbus_infof("  http drop protocol");
 			break;
-		case LWS_CALLBACK_CLOSED:
-			mbus_infof("  closed");
-			break;
-		case LWS_CALLBACK_WSI_DESTROY:
-			mbus_infof("  destroy");
-			break;
 		case LWS_CALLBACK_PROTOCOL_DESTROY:
 			mbus_infof("  protocol destroy");
+			break;
+		case LWS_CALLBACK_WSI_CREATE:
+			mbus_infof("  wsi create");
+			break;
+		case LWS_CALLBACK_WSI_DESTROY:
+			mbus_infof("  wsi destroy");
+			break;
+		case LWS_CALLBACK_CLOSED:
+			mbus_infof("  closed");
+			websocket_client_data_buffer_uninit(&data->buffer.in);
+			websocket_client_data_buffer_uninit(&data->buffer.out);
+			if (data->client != NULL) {
+				client_destroy(data->client);
+				data->client = NULL;
+			}
+			data->wsi = NULL;
 			break;
 		case LWS_CALLBACK_RECEIVE:
 			mbus_infof("  receive");
 			mbus_infof("    data: %p", data);
 			mbus_infof("      wsi   : %p", data->wsi);
 			mbus_infof("      client: %p", data->client);
-			mbus_infof("      buffer: %p", data->buffer.buffer);
-			mbus_infof("        length  : %d", data->buffer.length);
-			mbus_infof("        size    : %d", data->buffer.size);
+			mbus_infof("      buffer:");
+			mbus_infof("        in:");
+			mbus_infof("          length  : %d", data->buffer.in.length);
+			mbus_infof("          size    : %d", data->buffer.in.size);
+			mbus_infof("        out:");
+			mbus_infof("          length  : %d", data->buffer.out.length);
+			mbus_infof("          size    : %d", data->buffer.out.size);
 			mbus_infof("    in: %p", in);
 			mbus_infof("    len: %zd", len);
 			if (data->wsi == NULL &&
 			    data->client == NULL) {
 			}
-			if (data->buffer.size < data->buffer.length + len) {
-				uint8_t *tmp;
-				while (data->buffer.size < data->buffer.length + len) {
-					data->buffer.size += 1024;
-				}
-				tmp = realloc(data->buffer.buffer, data->buffer.size);
-				if (tmp == NULL) {
-					tmp = malloc(data->buffer.size);
-					if (tmp == NULL) {
-						mbus_errorf("can not allocate memory");
-						exit(0);
-					}
-					memcpy(tmp, data->buffer.buffer, data->buffer.length);
-					free(data->buffer.buffer);
-				}
-				data->buffer.buffer = tmp;
+			rc = websocket_client_data_buffer_push(&data->buffer.in, in, len);
+			if (rc != 0) {
+				mbus_errorf("can not push in");
+				exit(0);
 			}
-			memcpy(data->buffer.buffer + data->buffer.length, in, len);
-			data->buffer.length += len;
 			{
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
-				mbus_infof("      buffer: %p", data->buffer.buffer);
-				mbus_infof("        length  : %d", data->buffer.length);
-				mbus_infof("        size    : %d", data->buffer.size);
-				ptr = data->buffer.buffer;
-				end = ptr + data->buffer.length;
-				while (ptr < end) {
+				mbus_infof("      buffer.in:");
+				mbus_infof("        length  : %d", data->buffer.in.length);
+				mbus_infof("        size    : %d", data->buffer.in.size);
+				while (1) {
+					ptr = data->buffer.in.buffer;
+					end = ptr + data->buffer.in.length;
 					if (end - ptr < 4) {
 						break;
 					}
@@ -1749,8 +1864,109 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						break;
 					}
 					mbus_infof("message: '%.*s'", expected, ptr);
-					ptr += expected;
+					if (data->client == NULL) {
+						char *string;
+						struct method *method;
+						string = strndup((char *) ptr, expected);
+						if (string == NULL) {
+							mbus_errorf("can not allocate memory");
+							exit(0);
+						}
+						method = method_create_from_string(NULL, string);
+						if (method == NULL) {
+							mbus_errorf("can not create method");
+							exit(0);
+						}
+						if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
+							mbus_errorf("invalid type: %s", method_get_request_type(method));
+							exit(0);
+						}
+						if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
+							mbus_errorf("invalid destination: %s", method_get_request_destination(method));
+							exit(0);
+						}
+						if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
+							mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
+							exit(0);
+						}
+						data->client = server_find_client_by_name(server, method_get_request_source(method));
+						if (data->client != NULL) {
+							mbus_errorf("client with name: %s already exists", method_get_request_source(method));
+							exit(0);
+						}
+						data->client = client_create(method_get_request_source(method), client_link_websocket);
+						if (data->client == NULL) {
+							mbus_errorf("can not create client");
+							exit(0);
+						}
+						rc = client_set_socket(data->client, (struct mbus_socket *) data);
+						if (rc != 0) {
+							mbus_errorf("can not set client socket");
+							exit(0);
+						}
+						mbus_infof("client: '%s' accepted", client_get_name(data->client));
+						rc = method_set_result_code(method, 0);
+						if (rc != 0) {
+							mbus_errorf("can not set method result code");
+							exit(0);
+						}
+						rc = websocket_client_data_buffer_push_string(&data->buffer.out, method_get_result_string(method));
+						if (rc != 0) {
+							mbus_errorf("can not write string");
+							exit(0);
+						}
+						lws_callback_on_writable(data->wsi);
+						method_destroy(method);
+						free(string);
+					}
+					rc = websocket_client_data_buffer_shift(&data->buffer.in, sizeof(uint32_t) + expected);
+					if (rc != 0) {
+						mbus_errorf("can not shift in");
+						exit(0);
+					}
 				}
+			}
+			break;
+		case LWS_CALLBACK_SERVER_WRITEABLE:
+			mbus_infof("  server writable");
+			while (websocket_client_data_buffer_length(&data->buffer.out) > 0 &&
+			       lws_send_pipe_choked(data->wsi) == 0) {
+				uint8_t *ptr;
+				uint8_t *end;
+				uint32_t expected;
+				uint8_t *payload;
+				ptr = data->buffer.out.buffer;
+				end = ptr + data->buffer.out.length;
+				if (end - ptr < 4) {
+					break;
+				}
+				expected  = ptr[0] << 0x00;
+				expected |= ptr[1] << 0x08;
+				expected |= ptr[2] << 0x10;
+				expected |= ptr[3] << 0x18;
+				if (end - ptr < (int) (sizeof(uint32_t) + expected)) {
+					break;
+				}
+				mbus_infof("write");
+				payload = malloc(sizeof(uint32_t) + expected + LWS_PRE);
+				if (payload == NULL) {
+					mbus_errorf("can not allocate memory");
+					exit(0);
+				}
+				memset(payload, 0, sizeof(uint32_t) + expected + LWS_PRE);
+				memcpy(payload, ptr, sizeof(uint32_t) + expected);
+				rc = lws_write(data->wsi, payload, sizeof(uint32_t) + expected, LWS_WRITE_BINARY);
+				mbus_infof("expected: %d, rc: %d", expected, rc);
+				rc = websocket_client_data_buffer_shift(&data->buffer.out, sizeof(uint32_t) + expected);
+				if (rc != 0) {
+					mbus_errorf("can not shift in");
+					exit(0);
+				}
+				free(payload);
+				break;
+			}
+			if (websocket_client_data_buffer_length(&data->buffer.out) > 0) {
+				lws_callback_on_writable(data->wsi);
 			}
 			break;
 		default:
@@ -2247,6 +2463,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 
 	free(argv);
 	server->running = 1;
+	g_server = server;
 	return server;
 bail:	mbus_server_destroy(server);
 	if (argv != NULL) {
