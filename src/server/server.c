@@ -1719,11 +1719,13 @@ static int websocket_client_data_buffer_push_string (struct websocket_client_dat
 		return -1;
 	}
 	length = strlen(string);
+	length = htonl(length);
 	rc = websocket_client_data_buffer_push(buffer, &length, sizeof(length));
 	if (rc != 0) {
 		mbus_errorf("can not push length");
 		return -1;
 	}
+	length = ntohl(length);
 	rc = websocket_client_data_buffer_push(buffer, string, length);
 	if (rc != 0) {
 		mbus_errorf("can not push string");
@@ -1860,6 +1862,8 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 					expected |= *ptr++ << 0x08;
 					expected |= *ptr++ << 0x10;
 					expected |= *ptr++ << 0x18;
+					expected = ntohl(expected);
+					mbus_errorf("%d", expected);
 					if (end - ptr < expected) {
 						break;
 					}
@@ -1942,14 +1946,15 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 					break;
 				}
 				mbus_infof("write");
-				payload = malloc(expected + LWS_PRE);
+				payload = malloc(LWS_PRE + expected);
 				if (payload == NULL) {
 					mbus_errorf("can not allocate memory");
 					exit(0);
 				}
-				memset(payload, 0, expected + LWS_PRE);
-				memcpy(payload, ptr, expected);
-				rc = lws_write(data->wsi, payload, expected, LWS_WRITE_BINARY);
+				memset(payload, 0, LWS_PRE + expected);
+				memcpy(payload + LWS_PRE, ptr, expected);
+				mbus_errorf("payload: %d, %.*s", expected - 4, expected - 4, ptr + 4);
+				rc = lws_write(data->wsi, payload + LWS_PRE, expected, LWS_WRITE_BINARY);
 				mbus_infof("expected: %d, rc: %d", expected, rc);
 				rc = websocket_client_data_buffer_shift(&data->buffer.out, rc);
 				if (rc != 0) {

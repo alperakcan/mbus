@@ -3,7 +3,12 @@ WebSocket = require('ws');
 
 const MBUS_SERVER_NAME				= 'org.mbus.server';
 const MBUS_METHOD_TYPE_COMMAND		= 'org.mbus.method.type.command';
+const MBUS_METHOD_TYPE_RESULT		= 'org.mbus.method.type.result';
 const MBUS_SERVER_COMMAND_CREATE	= 'command.create';
+const MBUS_SERVER_COMMAND_SUBSCRIBE	= "command.subscribe";
+
+const MBUS_METHOD_SEQUENCE_START	= 1;
+const MBUS_METHOD_SEQUENCE_END		= 9999;
 
 function MBusClientRequest (type, source, destination, identifier, sequence, payload)
 {
@@ -78,57 +83,146 @@ function MBusClient (name, options) {
 	}
 	
 	this.type = 'MBusClient';
-	this._sequence = 1;
+	
+	this.onConnected = function () { };
+	
+	this._name = name;
+	this._sequence = MBUS_METHOD_SEQUENCE_START;
+	this._socket = null;
+	this._requests = Array();
+	this._pendings = Array();
 	this._callbacks = Array();
 	this._incoming = Buffer(0);
 	
-	this._socket = new WebSocket("ws://127.0.0.1:9000", 'mbus');
-	
-	var scope = function (f, scope) {
+	this._scope = function (f, scope) {
 		return function () {
 			return f.apply(scope, arguments);
 		};
 	};
 	
-	this._sendString = function sendString (message) {
+	this._sendString = function (message) {
 		if (typeof message !== 'string') {
 			return false;
 		}
-		console.log('sending', message);
-	    var l;
-	    l = Uint32Array(1);
-	    l[0] = message.length;
-	    this._socket.send(l);
-	    this._socket.send(message);
+		console.log('sending', message.length, message);
+	    var b;
+	    b = Buffer(4 + message.length);
+	    b.fill(0);
+	    b.writeUInt32BE(message.length, 0);
+	    b.write(message, 4);
+	    this._socket.send(b);
 	    return true;
 	}
 	
-	this._socket.on('open', scope(function open() {
+	this._scheduleRequests = function () {
+		var request;
+		while (this._requests.length > 0) {
+			request = this._requests.shift();
+			this._sendString(request.stringify());
+			this._pendings.push(request);
+		}
+	}
+	
+	this._handleResult = function (object) {
+		var index;
+		var requests;
+		requests = this._pendings.filter(function (request) {
+			return request._sequence == object['sequence'];
+		});
+		if (requests.length == 0) {
+			console.log('can not find request for sequence:', object['sequence']);
+			return -1;
+		}
+		if (requests.length > 1) {
+			console.log('too many request with sequence:', object['sequence']);
+			return -1;
+		}
+		index = this._pendings.indexOf(requests[0]);
+		if (index == -1) {
+			console.log('can not find request for sequence:', object['sequence']);
+			return -1;
+		}
+		request = this._pendings[index];
+		this._pendings.splice(index, 1);
+		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
+			request._destination == MBUS_SERVER_NAME &&
+			request._identifier == MBUS_SERVER_COMMAND_CREATE) {
+			console.log('connected');
+			this.onConnected();
+		}
+	}
+	
+	this._handleIncoming = function () {
+		while (this._incoming.length >= 4) {
+			var slice;
+			var string;
+			var expected;
+			expected = this._incoming.readUInt32BE(0);
+			if (expected < this._incoming.length - 4) {
+				break;
+			}
+			console.log('expected:', expected);
+			slice = this._incoming.slice(4, 4 + expected);
+			this._incoming = this._incoming.slice(4 + expected);
+			string = slice.toString();
+			object = JSON.parse(string)
+			console.log('string:', object);
+			if (object['type'] == MBUS_METHOD_TYPE_RESULT) {
+				this._handleResult(object);
+			}
+		}
+	}
+}
+
+MBusClient.prototype.connect = function () {
+	this._socket = WebSocket("ws://127.0.0.1:9000", 'mbus');
+
+	this._socket.on('open', this._scope(function open() {
 		var request;
 		console.log('open');
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
-		this._sendString(request.stringify());
-		delete request;
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
+		this._sequence += 1;
+		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
+			this._sequence = MBUS_METHOD_SEQUENCE_START;
+		}
+		this._requests.push(request);
+		this._scheduleRequests();
 	}, this))
 
-	this._socket.on('close', scope(function close(code, message) {
-		console.log('close, code:', code, ', message:', message);
-	}, this))
-
-	this._socket.on('message', scope(function message(data, flags) {
+	this._socket.on('message', this._scope(function message(data, flags) {
 		console.log('message:', data, 'flags:', flags);
 		this._incoming = Buffer.concat([this._incoming, data]);
 		console.log('incoming:', this._incoming.length);
+		this._handleIncoming();
 	}, this))
 
-	this._socket.on('error', scope(function error(error) {
+	this._socket.on('close', this._scope(function close(code, message) {
+		console.log('close, code:', code, ', message:', message);
+	}, this))
+
+	this._socket.on('error', this._scope(function error(error) {
 		console.log('error:', error);
 	}, this))
 }
 
 MBusClient.prototype.subscribe = function (source, event, callback) {
+	var request;
+	var payload;
+	payload = {
+			source: source,
+			event: event,
+	};
+	console.log('subscribe:', payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
+	this._sequence += 1;
+	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	this._requests.push(request);
+	this._scheduleRequests();
+
 	var cb;
-	cb = new MBusClientCallback(source, event, callback);
+	cb = MBusClientCallback(source, event, callback);
 	this._callbacks.push(cb);
 	console.log('callbacks: ', this._callbacks);
 }

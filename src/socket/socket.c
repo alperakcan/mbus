@@ -371,22 +371,23 @@ char * mbus_socket_read_string (struct mbus_socket *socket)
 {
 	int rc;
 	char *string;
-	int32_t length;
+	uint32_t length;
 	if (socket == NULL) {
 		mbus_errorf("socket is null");
 		return NULL;
 	}
-	rc = mbus_socket_read(socket, &length, sizeof(int32_t));
-	if (rc != sizeof(int32_t)) {
+	rc = mbus_socket_read(socket, &length, sizeof(uint32_t));
+	if (rc != sizeof(uint32_t)) {
 		return NULL;
 	}
+	length = ntohl(length);
 	string = malloc(length + 1);
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 		return NULL;
 	}
 	rc = mbus_socket_read(socket, string, length);
-	if (rc != length) {
+	if (rc != (int) length) {
 		free(string);
 		return NULL;
 	}
@@ -397,7 +398,7 @@ char * mbus_socket_read_string (struct mbus_socket *socket)
 int mbus_socket_write_string (struct mbus_socket *socket, const char *string)
 {
 	int rc;
-	int32_t length;
+	uint32_t length;
 	if (socket == NULL) {
 		mbus_errorf("socket is null");
 		return -1;
@@ -407,12 +408,14 @@ int mbus_socket_write_string (struct mbus_socket *socket, const char *string)
 		return -1;
 	}
 	length = strlen(string);
-	rc = mbus_socket_write(socket, &length, sizeof(int32_t));
-	if (rc != sizeof(int32_t)) {
+	length = htonl(length);
+	rc = mbus_socket_write(socket, &length, sizeof(uint32_t));
+	if (rc != sizeof(uint32_t)) {
 		return -1;
 	}
+	length = ntohl(length);
 	rc = mbus_socket_write(socket, string, length);
-	if (rc != length) {
+	if (rc != (int) length) {
 		return -1;
 	}
 	return 0;
