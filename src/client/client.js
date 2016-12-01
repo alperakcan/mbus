@@ -67,12 +67,9 @@ function MBusClientCallback (source, event, callback)
 		return null;
 	}
 	this.type = 'MBusClientCallback';
-	cb = {
-		source: source,
-		event: event,
-		function: callback,
-	}
-	return cb;
+	this._source = source;
+	this._event = event;
+	this._callback = callback;
 }
 
 function MBusClient (name, options) {
