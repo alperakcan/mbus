@@ -83,8 +83,8 @@ function MBusClient (name, options) {
 	
 	this.type = 'MBusClient';
 	this._sequence = 1;
-	this._callbacks = new Array();
-	this._incoming = new Uint8Array();
+	this._callbacks = Array();
+	this._incoming = Buffer(0);
 	
 	this._socket = new WebSocket("ws://127.0.0.1:9000", 'mbus');
 	
@@ -100,7 +100,7 @@ function MBusClient (name, options) {
 		}
 		console.log('sending', message);
 	    var l;
-	    l = new Uint32Array(1);
+	    l = Uint32Array(1);
 	    l[0] = message.length;
 	    this._socket.send(l);
 	    this._socket.send(message);
@@ -121,6 +121,8 @@ function MBusClient (name, options) {
 
 	this._socket.on('message', scope(function message(data, flags) {
 		console.log('message:', data, 'flags:', flags);
+		this._incoming = Buffer.concat([this._incoming, data]);
+		console.log('incoming:', this._incoming.length);
 	}, this))
 
 	this._socket.on('error', scope(function error(error) {
