@@ -1937,27 +1937,21 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				uint8_t *payload;
 				ptr = data->buffer.out.buffer;
 				end = ptr + data->buffer.out.length;
-				if (end - ptr < 4) {
-					break;
-				}
-				expected  = ptr[0] << 0x00;
-				expected |= ptr[1] << 0x08;
-				expected |= ptr[2] << 0x10;
-				expected |= ptr[3] << 0x18;
-				if (end - ptr < (int) (sizeof(uint32_t) + expected)) {
+				expected = end - ptr;
+				if (end - ptr < expected) {
 					break;
 				}
 				mbus_infof("write");
-				payload = malloc(sizeof(uint32_t) + expected + LWS_PRE);
+				payload = malloc(expected + LWS_PRE);
 				if (payload == NULL) {
 					mbus_errorf("can not allocate memory");
 					exit(0);
 				}
-				memset(payload, 0, sizeof(uint32_t) + expected + LWS_PRE);
-				memcpy(payload, ptr, sizeof(uint32_t) + expected);
-				rc = lws_write(data->wsi, payload, sizeof(uint32_t) + expected, LWS_WRITE_BINARY);
+				memset(payload, 0, expected + LWS_PRE);
+				memcpy(payload, ptr, expected);
+				rc = lws_write(data->wsi, payload, expected, LWS_WRITE_BINARY);
 				mbus_infof("expected: %d, rc: %d", expected, rc);
-				rc = websocket_client_data_buffer_shift(&data->buffer.out, sizeof(uint32_t) + expected);
+				rc = websocket_client_data_buffer_shift(&data->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not shift in");
 					exit(0);
