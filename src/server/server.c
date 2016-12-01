@@ -270,6 +270,14 @@ bail:	subscription_destroy(subscription);
 	return NULL;
 }
 
+static const char * method_get_request_source (struct method *method)
+{
+	if (method == NULL) {
+		return NULL;
+	}
+	return method->request.source;
+}
+
 static const char * method_get_request_destination (struct method *method)
 {
 	if (method == NULL) {
@@ -394,10 +402,12 @@ static struct method * method_create_from_string (struct client *source, const c
 {
 	struct method *method;
 	method = NULL;
+#if 0
 	if (source == NULL) {
 		mbus_errorf("source is null");
 		goto bail;
 	}
+#endif
 	if (string == NULL) {
 		mbus_errorf("string is null");
 		goto bail;
@@ -1181,10 +1191,12 @@ bail:	if (payload != NULL) {
 static int server_accept_client (struct mbus_server *server, struct mbus_socket *from)
 {
 	int rc;
-	char *name;
+	char *string;
+	struct method *method;
 	struct client *client;
 	struct mbus_socket *socket;
-	name = NULL;
+	string = NULL;
+	method = NULL;
 	client = NULL;
 	socket = NULL;
 	if (server == NULL) {
@@ -1196,22 +1208,27 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("can not accept new socket connection");
 		goto bail;
 	}
-	name = mbus_socket_read_string(socket);
-	if (name == NULL) {
+	string = mbus_socket_read_string(socket);
+	if (string == NULL) {
 		mbus_errorf("can not read name");
 		goto bail;
 	}
+	method = method_create_from_string(NULL, string);
+	if (method == NULL) {
+		mbus_errorf("can not create method");
+		goto bail;
+	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (strcmp(client_get_name(client), name) == 0) {
+		if (strcmp(client_get_name(client), method_get_request_source(method)) == 0) {
 			break;
 		}
 	}
 	if (client != NULL) {
-		mbus_errorf("client with name: '%s' already exists", name);
+		mbus_errorf("client with name: '%s' already exists", method_get_request_source(method));
 		client = NULL;
 		goto exists;
 	}
-	client = server_create_client_by_name(server, name);
+	client = server_create_client_by_name(server, method_get_request_source(method));
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
@@ -1222,7 +1239,14 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		goto bail;
 	}
 	mbus_infof("client: '%s' accepted", client_get_name(client));
-	free(name);
+	method_set_result_code(method, 0);
+	rc = mbus_socket_write_string(socket, method_get_result_string(method));
+	if (rc != 0) {
+		mbus_errorf("can not write string");
+		goto bail;
+	}
+	method_destroy(method);
+	free(string);
 	return 0;
 bail:	if (socket != NULL) {
 		mbus_socket_destroy(socket);
@@ -1230,8 +1254,11 @@ bail:	if (socket != NULL) {
 	if (client != NULL) {
 		client_destroy(client);
 	}
-	if (name != NULL) {
-		free(name);
+	if (method != NULL) {
+		method_destroy(method);
+	}
+	if (string != NULL) {
+		free(string);
 	}
 	return -1;
 exists:	if (socket != NULL) {
@@ -1240,8 +1267,11 @@ exists:	if (socket != NULL) {
 	if (client != NULL) {
 		client_destroy(client);
 	}
-	if (name != NULL) {
-		free(name);
+	if (method != NULL) {
+		method_destroy(method);
+	}
+	if (string != NULL) {
+		free(string);
 	}
 	return -2;
 }
@@ -1597,10 +1627,11 @@ bail:	if (method != NULL) {
 struct websocket_client_data {
 	struct lws *wsi;
 	struct client *client;
-	unsigned int expected;
-	unsigned int received;
-	unsigned int length;
-	char *buffer;
+	struct {
+		unsigned int length;
+		unsigned int size;
+		uint8_t *buffer;
+	} buffer;
 };
 
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
@@ -1670,12 +1701,57 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			mbus_infof("    data: %p", data);
 			mbus_infof("      wsi   : %p", data->wsi);
 			mbus_infof("      client: %p", data->client);
+			mbus_infof("      buffer: %p", data->buffer.buffer);
+			mbus_infof("        length  : %d", data->buffer.length);
+			mbus_infof("        size    : %d", data->buffer.size);
 			mbus_infof("    in: %p", in);
 			mbus_infof("    len: %zd", len);
 			if (data->wsi == NULL &&
 			    data->client == NULL) {
 			}
-			exit(0);
+			if (data->buffer.size < data->buffer.length + len) {
+				uint8_t *tmp;
+				while (data->buffer.size < data->buffer.length + len) {
+					data->buffer.size += 1024;
+				}
+				tmp = realloc(data->buffer.buffer, data->buffer.size);
+				if (tmp == NULL) {
+					tmp = malloc(data->buffer.size);
+					if (tmp == NULL) {
+						mbus_errorf("can not allocate memory");
+						exit(0);
+					}
+					memcpy(tmp, data->buffer.buffer, data->buffer.length);
+					free(data->buffer.buffer);
+				}
+				data->buffer.buffer = tmp;
+			}
+			memcpy(data->buffer.buffer + data->buffer.length, in, len);
+			data->buffer.length += len;
+			{
+				uint8_t *ptr;
+				uint8_t *end;
+				uint32_t expected;
+				mbus_infof("      buffer: %p", data->buffer.buffer);
+				mbus_infof("        length  : %d", data->buffer.length);
+				mbus_infof("        size    : %d", data->buffer.size);
+				ptr = data->buffer.buffer;
+				end = ptr + data->buffer.length;
+				while (ptr < end) {
+					if (end - ptr < 4) {
+						break;
+					}
+					expected  = *ptr++ << 0x00;
+					expected |= *ptr++ << 0x08;
+					expected |= *ptr++ << 0x10;
+					expected |= *ptr++ << 0x18;
+					if (end - ptr < expected) {
+						break;
+					}
+					mbus_infof("message: '%.*s'", expected, ptr);
+					ptr += expected;
+				}
+			}
 			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);

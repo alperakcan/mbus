@@ -26,6 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define MBUS_METHOD_TYPE_CREATE					"org.mbus.method.type.create"
 #define MBUS_METHOD_TYPE_COMMAND				"org.mbus.method.type.command"
 #define MBUS_METHOD_TYPE_STATUS					"org.mbus.method.type.status"
 #define MBUS_METHOD_TYPE_EVENT					"org.mbus.method.type.event"

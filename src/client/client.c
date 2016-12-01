@@ -486,10 +486,12 @@ static struct request * request_create (const char *type, const char *source, co
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
+#if 0
 	if (payload == NULL) {
 		mbus_errorf("payload is null");
 		goto bail;
 	}
+#endif
 	request = malloc(sizeof(struct request));
 	if (request == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -498,7 +500,11 @@ static struct request * request_create (const char *type, const char *source, co
 	memset(request, 0, sizeof(struct request));
 	request->state = request_state_detached;
 	request->sequence = sequence;
-	request->payload = cJSON_Duplicate((cJSON *) payload, 1);
+	if (payload == NULL) {
+		request->payload = cJSON_CreateObject();
+	} else {
+		request->payload = cJSON_Duplicate((cJSON *) payload, 1);
+	}
 	if (request->payload == NULL) {
 		mbus_errorf("can not create request payload");
 		goto bail;
@@ -764,6 +770,8 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct mbus_client));
+	client->incommand = 0;
+	client->sequence = MBUS_METHOD_SEQUENCE_START;
 	TAILQ_INIT(&client->methods);
 	TAILQ_INIT(&client->requests);
 	TAILQ_INIT(&client->waitings);
@@ -792,13 +800,38 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		mbus_errorf("can not connect to server: '%s:%s:%d'", server_protocol, server_address, server_port);
 		goto bail;
 	}
-	rc = mbus_socket_write_string(client->socket, client->name);
-	if (rc != 0) {
-		mbus_errorf("can not write to socket");
-		goto bail;
+	{
+		char *string;
+		struct method *method;
+		struct request *request;
+		request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, client->sequence, NULL);
+		if (request == NULL) {
+			mbus_errorf("can not create request");
+			goto bail;
+		}
+		rc = mbus_socket_write_string(client->socket, request_get_string(request));
+		if (rc != 0) {
+			mbus_errorf("can not write to socket");
+			request_destroy(request);
+			goto bail;
+		}
+		string = mbus_socket_read_string(client->socket);
+		if (string == NULL) {
+			mbus_errorf("can not read result");
+			request_destroy(request);
+			goto bail;
+		}
+		method = method_create_from_string(string);
+		if (string == NULL) {
+			mbus_errorf("can not create method");
+			free(string);
+			request_destroy(request);
+			goto bail;
+		}
+		free(string);
+		method_destroy(method);
+		request_destroy(request);
 	}
-	client->incommand = 0;
-	client->sequence = MBUS_METHOD_SEQUENCE_START;
 	pthread_mutex_lock(&client->mutex);
 	pthread_create(&client->thread, NULL, client_worker, client);
 	while (client->started == 0) {
