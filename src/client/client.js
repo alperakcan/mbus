@@ -1,6 +1,5 @@
 
 WebSocket = require('ws');
-var inherits = require('inherits')
 
 const MBUS_SERVER_NAME				= 'org.mbus.server';
 const MBUS_METHOD_TYPE_COMMAND		= 'org.mbus.method.type.command';
