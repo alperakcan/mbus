@@ -93,6 +93,7 @@ function MBusClient (name, options) {
 	
 	this.onConnected = function () { };
 	this.onSubscribed = function (source, event) { };
+	this.onDisconnected = function () { };
 	
 	this._name = name;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -251,12 +252,26 @@ MBusClient.prototype.connect = function () {
 		this._handleIncoming();
 	}, this);
 
-	this._socket.onclose =  this._scope(function close(code, message) {
-		console.log('close, code:', code, ', message:', message);
+	this._socket.onclose =  this._scope(function close(event) {
+		console.log('close, event:', event.code, event.reason);
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+		this._socket = null;
+		this._requests = Array();
+		this._pendings = Array();
+		this._callbacks = Array();
+		this._incoming = new Uint8Array(0);
+		this.onDisconnected(event.code, event.reason);
 	}, this);
 
-	this._socket.onerror = this._scope(function error(error) {
-		console.log('error:', error);
+	this._socket.onerror = this._scope(function error(event) {
+		console.log('error, event:', event);
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+		this._socket = null;
+		this._requests = Array();
+		this._pendings = Array();
+		this._callbacks = Array();
+		this._incoming = new Uint8Array(0);
+		this.onDisconnected(event.code, event.reason);
 	}, this);
 }
 
