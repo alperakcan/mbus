@@ -1921,7 +1921,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
 					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
 						server->socket.websocket.pollfds.pollfds[i].events = pa->events;
-						mbus_errorf("0x%08x", pa->events);
 						break;
 					}
 				}
