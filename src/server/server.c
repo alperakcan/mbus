@@ -356,7 +356,7 @@ static char * method_get_result_string (struct method *method)
 	if (method->result.string != NULL) {
 		free(method->result.string);
 	}
-	method->result.string = cJSON_Print(method->result.json);
+	method->result.string = cJSON_PrintUnformatted(method->result.json);
 	return method->result.string;
 }
 
@@ -368,7 +368,7 @@ static char * method_get_request_string (struct method *method)
 	if (method->request.string != NULL) {
 		free(method->request.string);
 	}
-	method->request.string = cJSON_Print(method->request.json);
+	method->request.string = cJSON_PrintUnformatted(method->request.json);
 	return method->request.string;
 }
 
@@ -1819,6 +1819,9 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_PROTOCOL_DESTROY:
 			mbus_debugf("  protocol destroy");
+			break;
+		case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
+			mbus_debugf("  ws peer initiated close");
 			break;
 		case LWS_CALLBACK_WSI_CREATE:
 			mbus_debugf("  wsi create");

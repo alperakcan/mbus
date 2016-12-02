@@ -416,7 +416,7 @@ static char * request_get_string (struct request *request)
 	if (request->string != NULL) {
 		free(request->string);
 	}
-	request->string = cJSON_Print(request->json);
+	request->string = cJSON_PrintUnformatted(request->json);
 	return request->string;
 }
 
@@ -1104,7 +1104,7 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 			break;
 	}
 	pthread_mutex_unlock(&client->mutex);
-	{
+	if (mbus_debug_level >= mbus_debug_level_debug) {
 		char *string;
 		string = cJSON_Print(method_get_payload(method));
 		if (string == NULL) {
@@ -1112,7 +1112,7 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 			method_destroy(method);
 			return -1;
 		}
-		mbus_infof("%s.%s: %s", method_get_source(method), method_get_identifier(method), string);
+		mbus_debugf("%s.%s: %s", method_get_source(method), method_get_identifier(method), string);
 		free(string);
 	}
 	if (callback != NULL) {

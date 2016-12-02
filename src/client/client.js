@@ -1,5 +1,7 @@
 
-WebSocket = require('ws');
+//WebSocket = require('ws');
+//TextEncoder = require('text-encoder-lite');
+//module.exports = MBusClient
 
 const MBUS_SERVER_NAME					= 'org.mbus.server';
 const MBUS_METHOD_TYPE_COMMAND			= 'org.mbus.method.type.command';
@@ -13,8 +15,8 @@ const MBUS_METHOD_EVENT_SOURCE_ALL		= "org.mbus.method.event.source.all";
 const MBUS_METHOD_EVENT_IDENTIFIER_ALL	= "org.mbus.method.event.identifier.all";
 const MBUS_METHOD_STATUS_IDENTIFIER_ALL	= "org.mbus.method.event.status.all";
 
-const MBUS_METHOD_SEQUENCE_START	= 1;
-const MBUS_METHOD_SEQUENCE_END		= 9999;
+const MBUS_METHOD_SEQUENCE_START		= 1;
+const MBUS_METHOD_SEQUENCE_END			= 9999;
 
 function MBusClientRequest (type, source, destination, identifier, sequence, payload)
 {
@@ -98,7 +100,7 @@ function MBusClient (name, options) {
 	this._requests = Array();
 	this._pendings = Array();
 	this._callbacks = Array();
-	this._incoming = Buffer(0);
+	this._incoming = new Uint8Array(0);
 	
 	this._scope = function (f, scope) {
 		return function () {
@@ -107,14 +109,19 @@ function MBusClient (name, options) {
 	};
 	
 	this._sendString = function (message) {
+	    var b;
+	    var s;
 		if (typeof message !== 'string') {
 			return false;
 		}
-	    var b;
-	    b = Buffer(4 + message.length);
+	    s = new TextEncoder("utf-8").encode(message);
+	    b = new Uint8Array(4 + s.length);
 	    b.fill(0);
-	    b.writeUInt32BE(message.length, 0);
-	    b.write(message, 4);
+	    b[0] = s.length >> 0x16;
+	    b[1] = s.length >> 0x10;
+	    b[2] = s.length >> 0x08;
+	    b[3] = s.length >> 0x00;
+	    b.set(s, 4);
 	    this._socket.send(b);
 	    return true;
 	}
@@ -196,13 +203,16 @@ function MBusClient (name, options) {
 			var slice;
 			var string;
 			var expected;
-			expected = this._incoming.readUInt32BE(0);
+			expected  = this._incoming[0] << 0x18;
+			expected |= this._incoming[1] << 0x10;
+			expected |= this._incoming[2] << 0x08;
+			expected |= this._incoming[3] << 0x00;
 			if (expected > this._incoming.length - 4) {
 				break;
 			}
 			slice = this._incoming.slice(4, 4 + expected);
 			this._incoming = this._incoming.slice(4 + expected);
-			string = slice.toString();
+			string = new TextDecoder("utf-8").decode(slice);
 			object = JSON.parse(string)
 			if (object['type'] == MBUS_METHOD_TYPE_RESULT) {
 				this._handleResult(object);
@@ -218,9 +228,10 @@ function MBusClient (name, options) {
 }
 
 MBusClient.prototype.connect = function () {
-	this._socket = WebSocket("ws://127.0.0.1:9000", 'mbus');
+	this._socket = new WebSocket("ws://127.0.0.1:9000", 'mbus');
+	this._socket.binaryType = 'arraybuffer';
 
-	this._socket.on('open', this._scope(function open() {
+	this._socket.onopen = this._scope(function open() {
 		var request;
 		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
 		this._sequence += 1;
@@ -229,20 +240,24 @@ MBusClient.prototype.connect = function () {
 		}
 		this._requests.push(request);
 		this._scheduleRequests();
-	}, this))
+	}, this);
 
-	this._socket.on('message', this._scope(function message(data, flags) {
-		this._incoming = Buffer.concat([this._incoming, data]);
+	this._socket.onmessage = this._scope(function message(event) {
+		var b = new Uint8Array(event.data);
+		var n = new Uint8Array(this._incoming.length + b.length);
+		n.set(this._incoming);
+		n.set(b, this._incoming.length);
+		this._incoming = n;
 		this._handleIncoming();
-	}, this))
+	}, this);
 
-	this._socket.on('close', this._scope(function close(code, message) {
+	this._socket.onclose =  this._scope(function close(code, message) {
 		console.log('close, code:', code, ', message:', message);
-	}, this))
+	}, this);
 
-	this._socket.on('error', this._scope(function error(error) {
+	this._socket.onerror = this._scope(function error(error) {
 		console.log('error:', error);
-	}, this))
+	}, this);
 }
 
 MBusClient.prototype.subscribe = function (source, event, callback) {
@@ -264,5 +279,3 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 	cb = MBusClientCallback(source, event, callback);
 	this._callbacks.push(cb);
 }
-
-module.exports = MBusClient

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+	<meta charset="utf-8" />
+	<title>org.mbus.listener</title>
+	<script src="../../src/client/client.js"></script> 
+ 	<script language="javascript" type="text/javascript">
+		var output;
+  		var mbc;
+
+		function init()
+		{
+			output = document.getElementById("output");
+			
+			mbc = new MBusClient('org.mbus.listener');
+			
+			mbc.onConnected = function () {
+				mbc.subscribe("org.mbus.server", "org.mbus.method.event.status.all", function (source, event, payload) {
+					console.log(source + '.' + event, JSON.stringify(payload, null, '\t'));
+					writeToScreen(source + '.' + event + ':' + JSON.stringify(payload));
+				})
+				mbc.subscribe(MBUS_METHOD_EVENT_SOURCE_ALL, "org.mbus.method.event.identifier.all", function (source, event, payload) {
+					console.log(source + '.' + event, JSON.stringify(payload, null, '\t'));
+					writeToScreen(source + '.' + event + ':' + JSON.stringify(payload));
+				})
+			};
+			 
+			mbc.connect();
+		}
+		
+		function writeToScreen(message)
+		{
+			var pre = document.createElement("p");
+			pre.style.wordWrap = "break-word";
+			pre.innerHTML = message;
+			output.appendChild(pre);
+		}
+		
+		window.addEventListener("load", init, false);
+	</script>
+	<h2>org.mbus.listener</h2>
+	<div id="output"></div>
+</html>
