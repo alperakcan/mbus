@@ -124,6 +124,11 @@ struct mbus_server {
 			const char *address;
 			unsigned int port;
 			struct lws_context *context;
+			struct {
+				unsigned int length;
+				unsigned int size;
+				struct pollfd *pollfds;
+			} pollfds;
 		} websocket;
 	} socket;
 	struct clients clients;
@@ -1780,6 +1785,70 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_ADD_POLL_FD:
 			mbus_debugf("  add poll fd");
+			{
+				struct pollfd *tmp;
+				struct lws_pollargs *pa = (struct lws_pollargs *) in;
+				{
+					unsigned int i;
+					struct lws_pollargs *pa = (struct lws_pollargs *) in;
+					for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
+						if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
+							server->socket.websocket.pollfds.pollfds[i].events = pa->events;
+							break;
+						}
+					}
+					if (i < server->socket.websocket.pollfds.length) {
+						break;
+					}
+				}
+				if (server->socket.websocket.pollfds.length + 1 > server->socket.websocket.pollfds.size) {
+					while (server->socket.websocket.pollfds.length + 1 > server->socket.websocket.pollfds.size) {
+						server->socket.websocket.pollfds.size += 1024;
+					}
+					tmp = realloc(server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.size);
+					if (tmp == NULL) {
+						tmp = malloc(sizeof(int) * server->socket.websocket.pollfds.size);
+						if (tmp == NULL) {
+							mbus_errorf("can not allocate memory");
+							exit(0);
+						}
+						memcpy(tmp, server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
+						free(server->socket.websocket.pollfds.pollfds);
+					}
+					server->socket.websocket.pollfds.pollfds = tmp;
+					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].fd = pa->fd;
+					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].events = pa->events;
+					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].revents = 0;
+					server->socket.websocket.pollfds.length += 1;
+				}
+			}
+			break;
+		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
+			mbus_debugf("  change mode poll fd");
+			{
+				unsigned int i;
+				struct lws_pollargs *pa = (struct lws_pollargs *) in;
+				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
+					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
+						server->socket.websocket.pollfds.pollfds[i].events = pa->events;
+						break;
+					}
+				}
+			}
+			break;
+		case LWS_CALLBACK_DEL_POLL_FD:
+			mbus_debugf("  del poll fd");
+			{
+				unsigned int i;
+				struct lws_pollargs *pa = (struct lws_pollargs *) in;
+				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
+					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
+						memmove(&server->socket.websocket.pollfds.pollfds[i], &server->socket.websocket.pollfds.pollfds[i + 1], server->socket.websocket.pollfds.length - i);
+						server->socket.websocket.pollfds.length -= 1;
+						break;
+					}
+				}
+			}
 			break;
 		case LWS_CALLBACK_UNLOCK_POLL:
 			mbus_debugf("  unlock poll");
@@ -1796,9 +1865,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 		case LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED:
 			mbus_debugf("  new client instantiated");
 			break;
-		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-			mbus_debugf("  change mode poll fd");
-			break;
 		case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
 			mbus_debugf("  filter protocol connection");
 			break;
@@ -1810,9 +1876,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			data->wsi = wsi;
 			websocket_client_data_buffer_init(&data->buffer.in);
 			websocket_client_data_buffer_init(&data->buffer.out);
-			break;
-		case LWS_CALLBACK_DEL_POLL_FD:
-			mbus_debugf("  del poll fd");
 			break;
 		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
 			mbus_debugf("  http drop protocol");
@@ -2068,7 +2131,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		free(polls);
 		polls = NULL;
 	}
-	n = 3 + server->clients.count;
+	n  = 3;
+	n += server->clients.count;
+	n += server->socket.websocket.pollfds.length;
 	polls = malloc(sizeof(struct mbus_poll) * n);
 	if (polls == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -2370,6 +2435,9 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server->socket.websocket.context != NULL) {
 		lws_context_destroy(server->socket.websocket.context);
 	}
+	if (server->socket.websocket.pollfds.pollfds != NULL) {
+		free(server->socket.websocket.pollfds.pollfds);
+	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
 		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, clients);
@@ -2401,6 +2469,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
+	g_server = server;
 	memset(server, 0, sizeof(struct mbus_server));
 	TAILQ_INIT(&server->clients);
 	TAILQ_INIT(&server->methods);
@@ -2538,7 +2607,6 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 
 	free(argv);
 	server->running = 1;
-	g_server = server;
 	return server;
 bail:	mbus_server_destroy(server);
 	if (argv != NULL) {
