@@ -3,25 +3,28 @@
 //TextEncoder = require('text-encoder-lite');
 //module.exports = MBusClient
 
-const MBUS_SERVER_NAME					= 'org.mbus.server';
+const MBUS_SERVER_NAME								= 'org.mbus.server';
 
-const MBUS_METHOD_TYPE_COMMAND			= 'org.mbus.method.type.command';
-const MBUS_METHOD_TYPE_RESULT			= 'org.mbus.method.type.result';
-const MBUS_METHOD_TYPE_EVENT			= "org.mbus.method.type.event";
-const MBUS_METHOD_TYPE_STATUS			= "org.mbus.method.type.status";
+const MBUS_METHOD_TYPE_COMMAND						= 'org.mbus.method.type.command';
+const MBUS_METHOD_TYPE_RESULT						= 'org.mbus.method.type.result';
+const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
+const MBUS_METHOD_TYPE_STATUS						= "org.mbus.method.type.status";
 
-const MBUS_SERVER_COMMAND_CREATE		= 'command.create';
-const MBUS_SERVER_COMMAND_SUBSCRIBE		= "command.subscribe";
+const MBUS_SERVER_COMMAND_CREATE					= 'command.create';
+const MBUS_SERVER_COMMAND_SUBSCRIBE					= "command.subscribe";
+const MBUS_SERVER_COMMAND_EVENT						= "command.event";
 
-const MBUS_SERVER_EVENT_DISCONNECTED	= "event.disconnected";
+const MBUS_SERVER_EVENT_DISCONNECTED				= "event.disconnected";
 
-const MBUS_METHOD_EVENT_SOURCE_ALL		= "org.mbus.method.event.source.all";
-const MBUS_METHOD_EVENT_IDENTIFIER_ALL	= "org.mbus.method.event.identifier.all";
-const MBUS_METHOD_STATUS_IDENTIFIER_ALL	= "org.mbus.method.event.status.all";
+const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS		= "org.mbus.method.event.destination.subscribers";
 
+const MBUS_METHOD_EVENT_SOURCE_ALL					= "org.mbus.method.event.source.all";
 
-const MBUS_METHOD_SEQUENCE_START		= 1;
-const MBUS_METHOD_SEQUENCE_END			= 9999;
+const MBUS_METHOD_EVENT_IDENTIFIER_ALL				= "org.mbus.method.event.identifier.all";
+const MBUS_METHOD_STATUS_IDENTIFIER_ALL				= "org.mbus.method.event.status.all";
+
+const MBUS_METHOD_SEQUENCE_START					= 1;
+const MBUS_METHOD_SEQUENCE_END						= 9999;
 
 function MBusClientRequest (type, source, destination, identifier, sequence, payload)
 {
@@ -298,4 +301,24 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 	var cb;
 	cb = MBusClientCallback(source, event, callback);
 	this._callbacks.push(cb);
+}
+
+MBusClient.prototype.event = function (identifier, event) {
+	var request;
+	var payload;
+	if (event == null) {
+		event = {};
+	}
+	payload = {
+			destination: MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS,
+			identifier: identifier,
+			event: event,
+	};
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
+	this._sequence += 1;
+	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	this._requests.push(request);
+	this._scheduleRequests();
 }
