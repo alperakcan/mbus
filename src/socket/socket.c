@@ -178,6 +178,14 @@ void mbus_socket_close (struct mbus_socket *socket)
 	}
 }
 
+int mbus_socket_get_fd (struct mbus_socket *socket)
+{
+	if (socket == NULL) {
+		return -1;
+	}
+	return socket->fd;
+}
+
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on)
 {
 	int rc;

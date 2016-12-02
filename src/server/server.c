@@ -130,6 +130,11 @@ struct mbus_server {
 				struct pollfd *pollfds;
 			} pollfds;
 		} websocket;
+		struct {
+			unsigned int length;
+			unsigned int size;
+			struct pollfd *pollfds;
+		} pollfds;
 	} socket;
 	struct clients clients;
 	struct methods methods;
@@ -887,7 +892,22 @@ static struct client * server_find_client_by_name (struct mbus_server *server, c
 	return NULL;
 }
 
-static struct client * server_find_client_by_socket (struct mbus_server *server, struct mbus_socket *socket)
+static struct client * server_find_client_by_fd (struct mbus_server *server, int fd)
+{
+	struct client *client;
+	if (fd < 0) {
+		mbus_errorf("fd is invalid");
+		return NULL;
+	}
+	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
+			return client;
+		}
+	}
+	return NULL;
+}
+
+static __attribute__ ((__unused__)) struct client * server_find_client_by_socket (struct mbus_server *server, struct mbus_socket *socket)
 {
 	struct client *client;
 	if (socket == NULL) {
@@ -1879,10 +1899,17 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						free(server->socket.websocket.pollfds.pollfds);
 					}
 					server->socket.websocket.pollfds.pollfds = tmp;
-					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].fd = pa->fd;
-					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].events = pa->events;
-					server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].revents = 0;
-					server->socket.websocket.pollfds.length += 1;
+				}
+				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].fd = pa->fd;
+				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].events = pa->events;
+				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].revents = 0;
+				server->socket.websocket.pollfds.length += 1;
+				{
+					unsigned int i;
+					mbus_errorf("    length: %d", server->socket.websocket.pollfds.length);
+					for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
+						mbus_errorf("    %d ?= %d", server->socket.websocket.pollfds.pollfds[i].fd, pa->fd);
+					}
 				}
 			}
 			break;
@@ -1894,6 +1921,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
 					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
 						server->socket.websocket.pollfds.pollfds[i].events = pa->events;
+						mbus_errorf("0x%08x", pa->events);
 						break;
 					}
 				}
@@ -2138,13 +2166,11 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	struct client *nwclient;
 	struct method *method;
 	struct method *nmethod;
-	struct mbus_poll *polls;
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		return -1;
 	}
 	mbus_debugf("running server");
-	polls = NULL;
 	if (server->running == 0) {
 		goto out;
 	}
@@ -2153,54 +2179,77 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("can not handle methods");
 		goto bail;
 	}
-	if (polls != NULL) {
-		free(polls);
-		polls = NULL;
-	}
 	n  = 3;
 	n += server->clients.count;
 	n += server->socket.websocket.pollfds.length;
-	polls = malloc(sizeof(struct mbus_poll) * n);
-	if (polls == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
+	if (n > server->socket.pollfds.size) {
+		struct pollfd *tmp;
+		while (n > server->socket.pollfds.size) {
+			server->socket.pollfds.size += 1024;
+		}
+		tmp = realloc(server->socket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.pollfds.size);
+		if (tmp == NULL) {
+			tmp = malloc(sizeof(int) * server->socket.pollfds.size);
+			if (tmp == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+			memcpy(tmp, server->socket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.pollfds.length);
+			free(server->socket.pollfds.pollfds);
+		}
+		server->socket.pollfds.pollfds = tmp;
 	}
 	n = 0;
 	if (server->socket.uds.socket != NULL) {
-		polls[n].events = mbus_poll_event_in;
-		polls[n].revents = 0;
-		polls[n].socket = server->socket.uds.socket;
+		server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
+		server->socket.pollfds.pollfds[n].revents = 0;
+		server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(server->socket.uds.socket);
 		n += 1;
 	}
 	if (server->socket.tcp.socket != NULL) {
-		polls[n].events = mbus_poll_event_in;
-		polls[n].revents = 0;
-		polls[n].socket = server->socket.tcp.socket;
+		server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
+		server->socket.pollfds.pollfds[n].revents = 0;
+		server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(server->socket.tcp.socket);
 		n += 1;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
 		}
-		if (client_get_link(client) != client_link_tcp &&
-		    client_get_link(client) != client_link_uds) {
-			continue;
+		if (client_get_link(client) == client_link_tcp ||
+		    client_get_link(client) == client_link_uds) {
+			server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
+			server->socket.pollfds.pollfds[n].revents = 0;
+			server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
+			if (client_get_requests_count(client) != 0) {
+				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
+			}
+			if (client_get_results_count(client) != 0) {
+				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
+			}
+			if (client_get_events_count(client) != 0) {
+				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
+			}
+			n += 1;
+		} else if (client_get_link(client) == client_link_websocket) {
+			struct websocket_client_data *data;
+			data = (struct websocket_client_data *) client_get_socket(client);
+			if (client_get_requests_count(client) != 0) {
+				lws_callback_on_writable(data->wsi);
+			}
+			if (client_get_results_count(client) != 0) {
+				lws_callback_on_writable(data->wsi);
+			}
+			if (client_get_events_count(client) != 0) {
+				lws_callback_on_writable(data->wsi);
+			}
 		}
-		polls[n].events = mbus_poll_event_in;
-		polls[n].revents = 0;
-		polls[n].socket = client_get_socket(client);
-		if (client_get_requests_count(client) != 0) {
-			polls[n].events |= mbus_poll_event_out;
-		}
-		if (client_get_results_count(client) != 0) {
-			polls[n].events |= mbus_poll_event_out;
-		}
-		if (client_get_events_count(client) != 0) {
-			polls[n].events |= mbus_poll_event_out;
-		}
-		n += 1;
 	}
-	rc = mbus_socket_poll(polls, n, milliseconds);
+	if (server->socket.websocket.pollfds.length > 0) {
+		memcpy(&server->socket.pollfds.pollfds[n], server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
+		n += server->socket.websocket.pollfds.length;
+	}
+	rc = poll(server->socket.pollfds.pollfds, n, milliseconds);
 	if (rc == 0) {
 		goto out;
 	}
@@ -2209,13 +2258,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		goto bail;
 	}
 	for (c = 0; c < n; c++) {
-		if (polls[c].revents == 0) {
+		if (server->socket.pollfds.pollfds[c].revents == 0) {
 			continue;
 		}
-		if (polls[c].socket == server->socket.uds.socket ||
-		    polls[c].socket == server->socket.tcp.socket) {
-			if (polls[c].socket == server->socket.uds.socket) {
-				if (polls[c].revents & mbus_poll_event_in) {
+		if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.uds.socket) ||
+		    server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.tcp.socket)) {
+			if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.uds.socket)) {
+				if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
 					rc = server_accept_client(server, server->socket.uds.socket);
 					if (rc == -1) {
 						mbus_errorf("can not accept new connection");
@@ -2225,8 +2274,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					}
 				}
 			}
-			if (polls[c].socket == server->socket.tcp.socket) {
-				if (polls[c].revents & mbus_poll_event_in) {
+			if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.tcp.socket)) {
+				if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
 					rc = server_accept_client(server, server->socket.tcp.socket);
 					if (rc == -1) {
 						mbus_errorf("can not accept new connection");
@@ -2238,13 +2287,15 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 			continue;
 		}
-		client = server_find_client_by_socket(server, polls[c].socket);
+		client = server_find_client_by_fd(server, server->socket.pollfds.pollfds[c].fd);
 		if (client == NULL) {
+			mbus_errorf("can not find client by socket");
+			continue;
 			mbus_errorf("can not find client by socket");
 			goto bail;
 		}
-		if (polls[c].revents & mbus_poll_event_in) {
-			string = mbus_socket_read_string(polls[c].socket);
+		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
+			string = mbus_socket_read_string(client->socket);
 			if (string == NULL) {
 				mbus_debugf("can not read string from client");
 				client_set_socket(client, NULL);
@@ -2252,21 +2303,17 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				break;
 			} else {
 				mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
-				if (client_get_socket(client) == polls[c].socket) {
-					rc = server_handle_method(server, client, string);
-				} else {
-					mbus_errorf("invalid socket, client mismatch");
-					free(string);
-					goto bail;
-				}
-				free(string);
+				rc = server_handle_method(server, client, string);
 				if (rc != 0) {
 					mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
 					client_set_socket(client, NULL);
 				}
 			}
+			if (string != NULL) {
+				free(string);
+			}
 		}
-		if (polls[c].revents & mbus_poll_event_out) {
+		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_out) {
 			if (client_get_results_count(client) > 0) {
 				method = client_pop_result(client);
 				if (method == NULL) {
@@ -2308,13 +2355,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 			method_destroy(method);
 		}
-		if (polls[c].revents & mbus_poll_event_err) {
+		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_err) {
 			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_name(client));
 			break;
 		}
 	}
-out:
+out:	lws_service(server->socket.websocket.context, 0);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
@@ -2409,18 +2456,9 @@ out:
 			lws_callback_on_writable(data->wsi);
 			method_destroy(method);
 		}
-		lws_service(server->socket.websocket.context, 0);
-	}
-	if (polls != NULL) {
-		free(polls);
-		polls = NULL;
 	}
 	return (server->running == 0) ? 1 : 0;
-bail:	if (polls != NULL) {
-		free(polls);
-		polls = NULL;
-	}
-	return -1;
+bail:	return -1;
 }
 
 int mbus_server_run (struct mbus_server *server)
@@ -2463,6 +2501,9 @@ void mbus_server_destroy (struct mbus_server *server)
 	}
 	if (server->socket.websocket.pollfds.pollfds != NULL) {
 		free(server->socket.websocket.pollfds.pollfds);
+	}
+	if (server->socket.pollfds.pollfds != NULL) {
+		free(server->socket.pollfds.pollfds);
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;

@@ -54,7 +54,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	while (g_running) {
-		rc = mbus_server_run_timeout(server, 100);
+		rc = mbus_server_run_timeout(server, -1);
 		if (rc < 0) {
 			mbus_errorf("can not run server");
 			goto bail;
