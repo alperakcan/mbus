@@ -4,16 +4,21 @@
 //module.exports = MBusClient
 
 const MBUS_SERVER_NAME					= 'org.mbus.server';
+
 const MBUS_METHOD_TYPE_COMMAND			= 'org.mbus.method.type.command';
 const MBUS_METHOD_TYPE_RESULT			= 'org.mbus.method.type.result';
 const MBUS_METHOD_TYPE_EVENT			= "org.mbus.method.type.event";
 const MBUS_METHOD_TYPE_STATUS			= "org.mbus.method.type.status";
+
 const MBUS_SERVER_COMMAND_CREATE		= 'command.create';
 const MBUS_SERVER_COMMAND_SUBSCRIBE		= "command.subscribe";
+
+const MBUS_SERVER_EVENT_DISCONNECTED	= "event.disconnected";
 
 const MBUS_METHOD_EVENT_SOURCE_ALL		= "org.mbus.method.event.source.all";
 const MBUS_METHOD_EVENT_IDENTIFIER_ALL	= "org.mbus.method.event.identifier.all";
 const MBUS_METHOD_STATUS_IDENTIFIER_ALL	= "org.mbus.method.event.status.all";
+
 
 const MBUS_METHOD_SEQUENCE_START		= 1;
 const MBUS_METHOD_SEQUENCE_END			= 9999;
