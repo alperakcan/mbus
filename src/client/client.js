@@ -1,11 +1,17 @@
 
 WebSocket = require('ws');
 
-const MBUS_SERVER_NAME				= 'org.mbus.server';
-const MBUS_METHOD_TYPE_COMMAND		= 'org.mbus.method.type.command';
-const MBUS_METHOD_TYPE_RESULT		= 'org.mbus.method.type.result';
-const MBUS_SERVER_COMMAND_CREATE	= 'command.create';
-const MBUS_SERVER_COMMAND_SUBSCRIBE	= "command.subscribe";
+const MBUS_SERVER_NAME					= 'org.mbus.server';
+const MBUS_METHOD_TYPE_COMMAND			= 'org.mbus.method.type.command';
+const MBUS_METHOD_TYPE_RESULT			= 'org.mbus.method.type.result';
+const MBUS_METHOD_TYPE_EVENT			= "org.mbus.method.type.event";
+const MBUS_METHOD_TYPE_STATUS			= "org.mbus.method.type.status";
+const MBUS_SERVER_COMMAND_CREATE		= 'command.create';
+const MBUS_SERVER_COMMAND_SUBSCRIBE		= "command.subscribe";
+
+const MBUS_METHOD_EVENT_SOURCE_ALL		= "org.mbus.method.event.source.all";
+const MBUS_METHOD_EVENT_IDENTIFIER_ALL	= "org.mbus.method.event.identifier.all";
+const MBUS_METHOD_STATUS_IDENTIFIER_ALL	= "org.mbus.method.event.status.all";
 
 const MBUS_METHOD_SEQUENCE_START	= 1;
 const MBUS_METHOD_SEQUENCE_END		= 9999;
@@ -40,7 +46,6 @@ function MBusClientRequest (type, source, destination, identifier, sequence, pay
 	this._identifier = identifier;
 	this._sequence = sequence;
 	this._payload = payload;
-	console.log('request:', this);
 }
 
 MBusClientRequest.prototype.stringify = function () {
@@ -85,6 +90,7 @@ function MBusClient (name, options) {
 	this.type = 'MBusClient';
 	
 	this.onConnected = function () { };
+	this.onSubscribed = function (source, event) { };
 	
 	this._name = name;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -104,7 +110,6 @@ function MBusClient (name, options) {
 		if (typeof message !== 'string') {
 			return false;
 		}
-		console.log('sending', message.length, message);
 	    var b;
 	    b = Buffer(4 + message.length);
 	    b.fill(0);
@@ -147,9 +152,43 @@ function MBusClient (name, options) {
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
 			request._destination == MBUS_SERVER_NAME &&
 			request._identifier == MBUS_SERVER_COMMAND_CREATE) {
-			console.log('connected');
 			this.onConnected();
 		}
+		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
+			request._destination == MBUS_SERVER_NAME &&
+			request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
+			this.onSubscribed(request._payload['source'], request._payload['event']);
+		}
+	}
+
+	this._handleEvent = function (object) {
+		this._callbacks.forEach(function (callback) {
+			if (callback._source !== MBUS_METHOD_EVENT_SOURCE_ALL) {
+				if (object['source'] !== callback._source) {
+					return;
+				}
+			}
+			if (callback._event !== MBUS_METHOD_EVENT_IDENTIFIER_ALL) {
+				if (object['identifier'] !== callback._event) {
+					return;
+				}
+			}
+			callback._callback(object['source'], object['identifier'], object['payload']);
+		})
+	}
+	
+	this._handleStatus = function (object) {
+		this._callbacks.forEach(function (callback) {
+			if (object['source'] !== callback._source) {
+				return;
+			}
+			if (callback._event !== MBUS_METHOD_STATUS_IDENTIFIER_ALL) {
+				if (object['identifier'] !== callback._event) {
+					return;
+				}
+			}
+			callback._callback(object['source'], object['identifier'], object['payload']);
+		})
 	}
 	
 	this._handleIncoming = function () {
@@ -158,17 +197,21 @@ function MBusClient (name, options) {
 			var string;
 			var expected;
 			expected = this._incoming.readUInt32BE(0);
-			if (expected < this._incoming.length - 4) {
+			if (expected > this._incoming.length - 4) {
 				break;
 			}
-			console.log('expected:', expected);
 			slice = this._incoming.slice(4, 4 + expected);
 			this._incoming = this._incoming.slice(4 + expected);
 			string = slice.toString();
 			object = JSON.parse(string)
-			console.log('string:', object);
 			if (object['type'] == MBUS_METHOD_TYPE_RESULT) {
 				this._handleResult(object);
+			} else if (object['type'] == MBUS_METHOD_TYPE_EVENT) {
+				this._handleEvent(object);
+			} else if (object['type'] == MBUS_METHOD_TYPE_STATUS) {
+				this._handleStatus(object);
+			} else {
+				console.log('unknown type:', object['type']);
 			}
 		}
 	}
@@ -179,7 +222,6 @@ MBusClient.prototype.connect = function () {
 
 	this._socket.on('open', this._scope(function open() {
 		var request;
-		console.log('open');
 		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
@@ -190,9 +232,7 @@ MBusClient.prototype.connect = function () {
 	}, this))
 
 	this._socket.on('message', this._scope(function message(data, flags) {
-		console.log('message:', data, 'flags:', flags);
 		this._incoming = Buffer.concat([this._incoming, data]);
-		console.log('incoming:', this._incoming.length);
 		this._handleIncoming();
 	}, this))
 
@@ -212,7 +252,6 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 			source: source,
 			event: event,
 	};
-	console.log('subscribe:', payload);
 	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
@@ -224,7 +263,6 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 	var cb;
 	cb = MBusClientCallback(source, event, callback);
 	this._callbacks.push(cb);
-	console.log('callbacks: ', this._callbacks);
 }
 
 module.exports = MBusClient
