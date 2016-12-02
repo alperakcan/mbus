@@ -1752,7 +1752,7 @@ static int websocket_client_data_buffer_push_string (struct websocket_client_dat
 	return 0;
 }
 
-int websocket_client_data_buffer_shift (struct websocket_client_data_buffer *buffer, unsigned int length)
+static int websocket_client_data_buffer_shift (struct websocket_client_data_buffer *buffer, unsigned int length)
 {
 	if (length == 0) {
 		return 0;
@@ -1764,6 +1764,69 @@ int websocket_client_data_buffer_shift (struct websocket_client_data_buffer *buf
 	memmove(buffer->buffer, buffer->buffer + length, buffer->length - length);
 	buffer->length -= length;
 	return 0;
+}
+
+static int websocket_accept_client (struct mbus_server *server, struct websocket_client_data *data, const char *string)
+{
+	int rc;
+	struct client *client;
+	struct method *method;
+	method = NULL;
+	method = method_create_from_string(NULL, string);
+	if (method == NULL) {
+		mbus_errorf("can not create method");
+		goto bail;
+	}
+	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
+		mbus_errorf("invalid type: %s", method_get_request_type(method));
+		goto bail;
+	}
+	if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
+		mbus_errorf("invalid destination: %s", method_get_request_destination(method));
+		goto bail;
+	}
+	if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
+		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
+		goto bail;
+	}
+	client = server_find_client_by_name(server, method_get_request_source(method));
+	if (client != NULL) {
+		mbus_errorf("client with name: %s already exists", method_get_request_source(method));
+		goto bail;
+	}
+	data->client = client_create(method_get_request_source(method), client_link_websocket);
+	if (data->client == NULL) {
+		mbus_errorf("can not create client");
+		goto bail;
+	}
+	rc = client_set_socket(data->client, (struct mbus_socket *) data);
+	if (rc != 0) {
+		mbus_errorf("can not set client socket");
+		goto bail;
+	}
+	mbus_debugf("client: '%s' accepted", client_get_name(data->client));
+	rc = method_set_result_code(method, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set method result code");
+		goto bail;
+	}
+	rc = websocket_client_data_buffer_push_string(&data->buffer.out, method_get_result_string(method));
+	if (rc != 0) {
+		mbus_errorf("can not write string");
+		goto bail;
+	}
+	lws_callback_on_writable(data->wsi);
+	method_destroy(method);
+	TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
+	return 0;
+bail:	if (method != NULL) {
+		method_destroy(method);
+	}
+	if (data->client != NULL) {
+		client_destroy(data->client);
+		data->client = NULL;
+	}
+	return -1;
 }
 
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
@@ -1954,53 +2017,11 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						exit(0);
 					}
 					if (data->client == NULL) {
-						struct method *method;
-						method = method_create_from_string(NULL, string);
-						if (method == NULL) {
-							mbus_errorf("can not create method");
-							exit(0);
-						}
-						if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
-							mbus_errorf("invalid type: %s", method_get_request_type(method));
-							exit(0);
-						}
-						if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
-							mbus_errorf("invalid destination: %s", method_get_request_destination(method));
-							exit(0);
-						}
-						if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
-							mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
-							exit(0);
-						}
-						data->client = server_find_client_by_name(server, method_get_request_source(method));
-						if (data->client != NULL) {
-							mbus_errorf("client with name: %s already exists", method_get_request_source(method));
-							exit(0);
-						}
-						data->client = client_create(method_get_request_source(method), client_link_websocket);
-						if (data->client == NULL) {
-							mbus_errorf("can not create client");
-							exit(0);
-						}
-						rc = client_set_socket(data->client, (struct mbus_socket *) data);
+						rc = websocket_accept_client(server, data, string);
 						if (rc != 0) {
-							mbus_errorf("can not set client socket");
-							exit(0);
+							mbus_errorf("can not accept client");
+							lws_callback_on_writable(data->wsi);
 						}
-						mbus_debugf("client: '%s' accepted", client_get_name(data->client));
-						rc = method_set_result_code(method, 0);
-						if (rc != 0) {
-							mbus_errorf("can not set method result code");
-							exit(0);
-						}
-						rc = websocket_client_data_buffer_push_string(&data->buffer.out, method_get_result_string(method));
-						if (rc != 0) {
-							mbus_errorf("can not write string");
-							exit(0);
-						}
-						lws_callback_on_writable(data->wsi);
-						method_destroy(method);
-						TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
 					} else {
 						mbus_debugf("new request from client: '%s', '%s'", client_get_name(data->client), string);
 						rc = server_handle_method(server, data->client, string);
@@ -2020,6 +2041,11 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_SERVER_WRITEABLE:
 			mbus_debugf("  server writable");
+			if (data->client == NULL ||
+			    client_get_socket(data->client) == NULL) {
+				mbus_debugf("client is closed");
+				return -1;
+			}
 			while (websocket_client_data_buffer_length(&data->buffer.out) > 0 &&
 			       lws_send_pipe_choked(data->wsi) == 0) {
 				uint8_t *ptr;
