@@ -77,6 +77,21 @@ struct command {
 };
 TAILQ_HEAD(commands, command);
 
+struct websocket_client_data_buffer {
+	unsigned int length;
+	unsigned int size;
+	uint8_t *buffer;
+};
+
+struct websocket_client_data {
+	struct lws *wsi;
+	struct client *client;
+	struct {
+		struct websocket_client_data_buffer in;
+		struct websocket_client_data_buffer out;
+	} buffer;
+};
+
 enum client_status {
 	client_status_connected		= 0x00000001,
 };
@@ -900,8 +915,20 @@ static struct client * server_find_client_by_fd (struct mbus_server *server, int
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
-			return client;
+		if (client_get_link(client) == client_link_websocket) {
+			struct websocket_client_data *data;
+			data = (struct websocket_client_data *) client_get_socket(client);
+			if (lws_get_socket_fd(data->wsi) == fd) {
+				return client;
+			}
+		} else if (client_get_link(client) == client_link_uds) {
+			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
+				return client;
+			}
+		} else if (client_get_link(client) == client_link_tcp) {
+			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
+				return client;
+			}
 		}
 	}
 	return NULL;
@@ -1690,21 +1717,6 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
-struct websocket_client_data_buffer {
-	unsigned int length;
-	unsigned int size;
-	uint8_t *buffer;
-};
-
-struct websocket_client_data {
-	struct lws *wsi;
-	struct client *client;
-	struct {
-		struct websocket_client_data_buffer in;
-		struct websocket_client_data_buffer out;
-	} buffer;
-};
-
 static void websocket_client_data_buffer_uninit (struct websocket_client_data_buffer *buffer)
 {
 	if (buffer->buffer != NULL) {
@@ -1904,13 +1916,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].events = pa->events;
 				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].revents = 0;
 				server->socket.websocket.pollfds.length += 1;
-				{
-					unsigned int i;
-					mbus_errorf("    length: %d", server->socket.websocket.pollfds.length);
-					for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
-						mbus_errorf("    %d ?= %d", server->socket.websocket.pollfds.pollfds[i].fd, pa->fd);
-					}
-				}
 			}
 			break;
 		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
@@ -2288,10 +2293,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 		client = server_find_client_by_fd(server, server->socket.pollfds.pollfds[c].fd);
 		if (client == NULL) {
-			mbus_errorf("can not find client by socket");
 			continue;
 			mbus_errorf("can not find client by socket");
 			goto bail;
+		}
+		if (client_get_link(client) != client_link_tcp &&
+		    client_get_link(client) != client_link_uds) {
+			continue;
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
 			string = mbus_socket_read_string(client->socket);
