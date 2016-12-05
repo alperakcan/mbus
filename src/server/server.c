@@ -1905,7 +1905,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						tmp = malloc(sizeof(int) * server->socket.websocket.pollfds.size);
 						if (tmp == NULL) {
 							mbus_errorf("can not allocate memory");
-							exit(0);
+							return -1;
 						}
 						memcpy(tmp, server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
 						free(server->socket.websocket.pollfds.pollfds);
@@ -2017,7 +2017,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			rc = websocket_client_data_buffer_push(&data->buffer.in, in, len);
 			if (rc != 0) {
 				mbus_errorf("can not push in");
-				exit(0);
+				return -1;
 			}
 			{
 				uint8_t *ptr;
@@ -2046,7 +2046,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 					string = strndup((char *) ptr, expected);
 					if (string == NULL) {
 						mbus_errorf("can not allocate memory");
-						exit(0);
+						return -1;
 					}
 					if (data->client == NULL) {
 						rc = websocket_accept_client(server, data, string);
@@ -2059,14 +2059,15 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						rc = server_handle_method(server, data->client, string);
 						if (rc != 0) {
 							mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(data->client));
-							exit(0);
+							free(string);
+							return -1;
 						}
 					}
 					free(string);
 					rc = websocket_client_data_buffer_shift(&data->buffer.in, sizeof(uint32_t) + expected);
 					if (rc != 0) {
 						mbus_errorf("can not shift in");
-						exit(0);
+						return -1;
 					}
 				}
 			}
@@ -2094,7 +2095,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				payload = malloc(LWS_PRE + expected);
 				if (payload == NULL) {
 					mbus_errorf("can not allocate memory");
-					exit(0);
+					return -1;
 				}
 				memset(payload, 0, LWS_PRE + expected);
 				memcpy(payload + LWS_PRE, ptr, expected);
@@ -2104,7 +2105,8 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				rc = websocket_client_data_buffer_shift(&data->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not shift in");
-					exit(0);
+					free(payload);
+					return -1;
 				}
 				free(payload);
 				break;
@@ -2115,7 +2117,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);
-			exit(0);
+			return -1;
 			break;
 	}
 	return 0;
@@ -2458,7 +2460,8 @@ out:	lws_service(server->socket.websocket.context, 0);
 			rc = websocket_client_data_buffer_push_string(&data->buffer.out, string);
 			if (rc != 0) {
 				mbus_errorf("can not push string");
-				exit(0);
+				method_destroy(method);
+				return -1;
 			}
 			lws_callback_on_writable(data->wsi);
 			method_destroy(method);
