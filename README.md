@@ -74,24 +74,42 @@ mBus client library (libmbus-client) is to simplify development of software usin
 
     set debug level, available options: debug, info, error. default: error
   
-  - --mbus-server-protocol
+  - --mbus-server-tcp-enable
   
-    set communication protocol, available options: tcp, uds. default: uds
-
-  - --mbus-server-address
+    server tcp enable, default: 1
   
-    set server address:
-
-    - tcp: default is 127.0.0.1
-    - uds: default is /tmp/mbus-server
+  - --mbus-server-tcp-address
   
-  - --mbus-server-port
+    server tcp address, default: 127.0.0.1
   
-    set server port:
-
-    - tcp: default is 8000
-    - uds: unused
-
+  - --mbus-server-tcp-port
+  
+    server tcp port, default: 8000
+  
+  - --mbus-server-uds-enable
+  
+    server uds enable, default: 1
+  
+  - --mbus-server-uds-address
+  
+    server uds address, default: /tmp/mbus-server
+  
+  - --mbus-server-uds-port
+  
+    server uds port, default: -1
+  
+  - --mbus-server-websocket-enable
+  
+    server websocket enable, default: 1
+    
+  - --mbus-server-websocket-address
+  
+    server websocket address, default: 127.0.0.1
+  
+  - --mbus-server-websocket-port
+  
+    server websocket port, default: 9000
+  
 ### 4.2 listener ###
 
 #### 4.2.1 command line options ####
