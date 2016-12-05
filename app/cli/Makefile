@@ -14,7 +14,7 @@ mbus-cli_files-y = \
 mbus-cli_ldflags-y = \
 	-lmbus-debug \
 	-lmbus-client \
-	-lmbus-cJSON
+	-lmbus-json
 
 distdir = ../../dist
 

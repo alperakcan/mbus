@@ -35,7 +35,7 @@
 #define MBUS_DEBUG_NAME	"app-cli"
 
 #include "mbus/debug.h"
-#include "mbus/cJSON.h"
+#include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
@@ -64,17 +64,17 @@ static void usage (void)
 struct arg {
 	const char *destination;
 	const char *command;
-	cJSON *payload;
+	struct mbus_json *payload;
 	int finished;
 	int result;
 };
 
-static void cli_status_server_connected (struct mbus_client *client, const char *source, const char *status, cJSON *payload, void *data)
+static void cli_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
 {
 	int rc;
 	struct arg *arg = data;
 	char *string;
-	cJSON *result;
+	struct mbus_json *result;
 	(void) source;
 	(void) status;
 	(void) payload;
@@ -83,13 +83,13 @@ static void cli_status_server_connected (struct mbus_client *client, const char 
 		mbus_errorf("can not call command");
 	}
 	if (result != NULL) {
-		string = cJSON_Print(result);
+		string = mbus_json_print(result);
 		if (string == NULL) {
 			return;
 		}
 		fprintf(stdout, "%s.%s: %s\n", arg->destination, arg->command, string);
 		free(string);
-		cJSON_Delete(result);
+		mbus_json_delete(result);
 	}
 	arg->result = rc;
 	arg->finished = 1;
@@ -118,7 +118,7 @@ int main (int argc, char *argv[])
 				arg.command = optarg;
 				break;
 			case OPTION_PAYLOAD:
-				arg.payload = cJSON_Parse(optarg);
+				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
 					mbus_errorf("invalid payload");
 					goto bail;
@@ -152,14 +152,14 @@ int main (int argc, char *argv[])
 			break;
 		}
 	}
-	cJSON_Delete(arg.payload);
+	mbus_json_delete(arg.payload);
 	mbus_client_destroy(client);
 	return arg.result;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
 	}
 	if (arg.payload != NULL) {
-		cJSON_Delete(arg.payload);
+		mbus_json_delete(arg.payload);
 	}
 	return -1;
 }

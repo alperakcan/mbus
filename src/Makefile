@@ -3,6 +3,7 @@ subdir-y = \
 	debug \
 	client \
 	exec \
+	json \
 	method \
 	server \
 	socket \
@@ -22,6 +23,7 @@ method_depends-y = \
 
 server_depends-y = \
 	debug \
+	json \
 	method \
 	socket \
 	queue

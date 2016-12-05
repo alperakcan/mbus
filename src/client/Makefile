@@ -14,7 +14,7 @@ libmbus-client.so_files-y = \
 libmbus-client.so_ldflags-y = \
 	-lmbus-debug \
 	-lmbus-socket \
-	-lmbus-cJSON \
+	-lmbus-json \
 	-lpthread
 
 distdir = ../../dist

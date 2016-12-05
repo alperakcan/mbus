@@ -13,7 +13,7 @@ mbus-launcher_files-y = \
 
 mbus-launcher_ldflags-y = \
 	-lmbus-debug \
-	-lmbus-cJSON \
+	-lmbus-json \
 	-lmbus-exec
 
 distdir = ../../dist

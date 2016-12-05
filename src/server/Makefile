@@ -14,7 +14,7 @@ libmbus-server.so_files-y = \
 libmbus-server.so_ldflags-y = \
 	-lmbus-debug \
 	-lmbus-socket \
-	-lmbus-cJSON
+	-lmbus-json
 
 libmbus-server.so_ldflags-y += \
 	-lwebsockets

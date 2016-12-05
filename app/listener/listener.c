@@ -33,13 +33,13 @@
 #define MBUS_DEBUG_NAME	"app-listener"
 
 #include "mbus/debug.h"
-#include "mbus/cJSON.h"
+#include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
 #include "listener.h"
 
-static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, cJSON *payload, void *data)
+static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data)
 {
 	char *string;
 	(void) client;
@@ -47,7 +47,7 @@ static void listener_event_all_all (struct mbus_client *client, const char *sour
 	(void) event;
 	(void) payload;
 	(void) data;
-	string = cJSON_Print(payload);
+	string = mbus_json_print(payload);
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 	} else {
@@ -56,11 +56,11 @@ static void listener_event_all_all (struct mbus_client *client, const char *sour
 	}
 }
 
-static void listener_status_server_connected (struct mbus_client *client, const char *source, const char *status, cJSON *payload, void *data)
+static void listener_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
 {
 	int rc;
 	char *string;
-	cJSON *result;
+	struct mbus_json *result;
 	(void) client;
 	(void) source;
 	(void) status;
@@ -71,17 +71,17 @@ static void listener_status_server_connected (struct mbus_client *client, const 
 		mbus_errorf("can not call command");
 	}
 	if (result != NULL) {
-		string = cJSON_Print(result);
+		string = mbus_json_print(result);
 		if (string == NULL) {
 			return;
 		}
 		fprintf(stdout, "%s.%s: %s\n", MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_STATUS, string);
 		free(string);
-		cJSON_Delete(result);
+		mbus_json_delete(result);
 	}
 }
 
-static void listener_status_server_subscribed (struct mbus_client *client, const char *source, const char *status, cJSON *payload, void *data)
+static void listener_status_server_subscribed (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
 {
 	(void) client;
 	(void) source;

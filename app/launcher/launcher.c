@@ -41,7 +41,7 @@
 #define MBUS_DEBUG_NAME	"mbus-launcher"
 
 #include "mbus/debug.h"
-#include "mbus/cJSON.h"
+#include "mbus/json.h"
 #include "mbus/tailq.h"
 #include "mbus/exec.h"
 
@@ -214,11 +214,11 @@ static void app_destroy (struct app *app)
 	free(app);
 }
 
-static struct app * app_create (cJSON *application)
+static struct app * app_create (struct mbus_json *application)
 {
 	int i;
-	cJSON *item;
-	cJSON *object;
+	struct mbus_json *item;
+	struct mbus_json *object;
 
 	struct app *app;
 	struct arg *arg;
@@ -242,35 +242,35 @@ static struct app * app_create (cJSON *application)
 	app->io[1] = -1;
 	app->logfd = -1;
 
-	app->enable = ((object = cJSON_GetObjectItem(application, "enable")) != NULL) ? (object->type == cJSON_True) : 0;
-	app->name = (cJSON_GetStringValue(application, "name") != NULL) ? strdup(cJSON_GetStringValue(application, "name")) : NULL;
-	app->log = ((object = cJSON_GetObjectItem(application, "enable")) != NULL) ? (object->type == cJSON_True) : 0;
+	app->enable = ((object = mbus_json_get_object_item(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
+	app->name = (mbus_json_get_string_value(application, "name") != NULL) ? strdup(mbus_json_get_string_value(application, "name")) : NULL;
+	app->log = ((object = mbus_json_get_object_item(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
 
-	object = cJSON_GetObjectItem(application, "arguments");
+	object = mbus_json_get_object_item(application, "arguments");
 	if (object == NULL) {
 		goto out;
 	}
-	object = object->child;
+	object = mbus_json_get_child(object);
 	while (object != NULL) {
-		if (object->type == cJSON_String) {
-			arg = arg_create(object->string, object->valuestring);
+		if (mbus_json_get_type(object) == mbus_json_type_string) {
+			arg = arg_create(mbus_json_get_name(object), mbus_json_get_value_string(object));
 			if (arg == NULL) {
 				mbus_errorf("can not create arg");
 				goto bail;
 			}
 			TAILQ_INSERT_TAIL(&app->args, arg, args);
-		} else if (object->type == cJSON_Array) {
-			for (i = 0; i < cJSON_GetArraySize(object); i++) {
-				item = cJSON_GetArrayItem(object, i);
+		} else if (mbus_json_get_type(object) == mbus_json_type_array) {
+			for (i = 0; i < mbus_json_get_array_size(object); i++) {
+				item = mbus_json_get_array_item(object, i);
 				if (item == NULL) {
 					mbus_errorf("can not create arg");
 					goto bail;
 				}
-				if (item->type != cJSON_String) {
-					mbus_errorf("invalid argument: %s", item->string);
+				if (mbus_json_get_type(item) != mbus_json_type_string) {
+					mbus_errorf("invalid argument: %s", mbus_json_get_name(item));
 					goto bail;
 				}
-				arg = arg_create(object->string, item->valuestring);
+				arg = arg_create(mbus_json_get_name(object), mbus_json_get_value_string(item));
 				if (arg == NULL) {
 					mbus_errorf("can not create arg");
 					goto bail;
@@ -278,10 +278,10 @@ static struct app * app_create (cJSON *application)
 				TAILQ_INSERT_TAIL(&app->args, arg, args);
 			}
 		} else {
-			mbus_errorf("invalid argument: %s", object->string);
+			mbus_errorf("invalid argument: %s", mbus_json_get_name(object));
 			goto bail;
 		}
-		object = object->next;
+		object = mbus_json_get_next(object);
 	}
 
 out:	if (app->name == NULL) {
@@ -373,9 +373,9 @@ static struct config * config_create (const char *file)
 	char *buffer;
 	struct config *config;
 
-	cJSON *root;
-	cJSON *application;
-	cJSON *applications;
+	struct mbus_json *root;
+	struct mbus_json *application;
+	struct mbus_json *applications;
 
 	struct app *app;
 
@@ -394,9 +394,9 @@ static struct config * config_create (const char *file)
 		goto bail;
 	}
 
-	root = cJSON_Parse(buffer);
+	root = mbus_json_parse(buffer);
 	if (root == NULL) {
-		mbus_errorf("can not parse file: %s", cJSON_GetErrorPtr());
+		mbus_errorf("can not parse file");
 		goto bail;
 	}
 
@@ -408,13 +408,13 @@ static struct config * config_create (const char *file)
 	memset(config, 0, sizeof(struct config));
 	TAILQ_INIT(&config->apps);
 
-	applications = cJSON_GetObjectItem(root, "applications");
-	if (applications == NULL || applications->type != cJSON_Array) {
+	applications = mbus_json_get_object_item(root, "applications");
+	if (applications == NULL || mbus_json_get_type(applications) != mbus_json_type_array) {
 		mbus_errorf("can not parse config");
 		goto bail;
 	}
-	for (i = 0; i < cJSON_GetArraySize(applications); i++) {
-		application = cJSON_GetArrayItem(applications, i);
+	for (i = 0; i < mbus_json_get_array_size(applications); i++) {
+		application = mbus_json_get_array_item(applications, i);
 		if (application == NULL) {
 			mbus_errorf("can not parse config");
 			goto bail;
@@ -428,13 +428,13 @@ static struct config * config_create (const char *file)
 	}
 
 	free(buffer);
-	cJSON_Delete(root);
+	mbus_json_delete(root);
 	return config;
 bail:	if (buffer != NULL) {
 		free(buffer);
 	}
 	if (root != NULL) {
-		cJSON_Delete(root);
+		mbus_json_delete(root);
 	}
 	if (config != NULL) {
 		config_destroy(config);
