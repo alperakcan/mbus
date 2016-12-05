@@ -206,6 +206,8 @@ mBus client library (libmbus-client) is to simplify development of software usin
 
 ## 6. protocol ##
 
+  mbus controller supports tcp, uds, and websockets connections.
+
 ## 7. contact ##
 
 if you are using the software and/or have any questions, suggestions, etc. please contact with me at alper.akcan@gmail.com
