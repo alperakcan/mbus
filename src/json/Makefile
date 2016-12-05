@@ -20,6 +20,9 @@ libmbus-json.so_ldflags-y = \
 	-lmbus-json-cJSON \
 	-lpthread
 
+libmbus-json.so_depends-y = \
+	cJSON
+
 distdir = ../../dist
 
 dist.base = mbus

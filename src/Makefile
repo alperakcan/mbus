@@ -11,6 +11,7 @@ subdir-y = \
 
 client_depends-y = \
 	debug \
+	json \
 	method \
 	socket \
 	server
