@@ -51,9 +51,6 @@ distributed applications framework.
 mBus client library (libmbus-client) is to simplify development of software using mbus
 (connecting to it).
 
-mBus is using cJSON library (http://cjson.sourceforge.net/) for JSON operations, thus
-heavily depends on it. mBus comes with built-in cJSON, and may externally linked if desired.
-
 ## 2. download ##
 
     git clone git@github.com:alperakcan/mbus.git
@@ -180,11 +177,11 @@ heavily depends on it. mBus comes with built-in cJSON, and may externally linked
   - struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[]);
   - void mbus_client_destroy (struct mbus_client *client);
 
-  - int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event, void (*function) (struct mbus_client *client, const char *source, const char *event, cJSON *payload, void *data), void *data);
-  - int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, cJSON *payload, cJSON *result, void *data), void *data);
-  - int mbus_client_event (struct mbus_client *client, const char *event, cJSON *payload);
-  - int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, cJSON *event);
-  - int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, cJSON *call, cJSON **result);
+  - int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event, void (*function) (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data), void *data);
+  - int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data), void *data);
+  - int mbus_client_event (struct mbus_client *client, const char *event, struct mbus_json *payload);
+  - int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, struct mbus_json *event);
+  - int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **result);
 
   - int mbus_client_run (struct mbus_client *client);
   - int mbus_client_run_timeout (struct mbus_client *client, int milliseconds);
@@ -225,24 +222,3 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-### cJSON Copyright (c) 2009 Dave Gamble ###
- 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
- 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
- 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
