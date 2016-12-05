@@ -16,9 +16,7 @@ libmbus-json.so_files-y = \
 
 libmbus-json.so_ldflags-y = \
 	-lmbus-debug \
-	-lmbus-socket \
-	-lmbus-json-cJSON \
-	-lpthread
+	-lmbus-json-cJSON
 
 libmbus-json.so_depends-y = \
 	cJSON
