@@ -340,3 +340,23 @@ MBusClient.prototype.event = function (identifier, event) {
 	this._requests.push(request);
 	this._scheduleRequests();
 }
+
+MBusClient.prototype.command = function (destination, identifier, command) {
+	var request;
+	var payload;
+	if (command == null) {
+		command = {};
+	}
+	payload = {
+			destination: destination,
+			identifier: identifier,
+			call: command,
+	};
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, this._sequence, payload);
+	this._sequence += 1;
+	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	this._requests.push(request);
+	this._scheduleRequests();
+}

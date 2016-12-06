@@ -1472,6 +1472,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 	const char *identifier;
 	struct method *request;
 	struct client *client;
+	struct command *command;
 	struct mbus_json *call;
 	response = 1;
 	if (server == NULL) {
@@ -1583,6 +1584,15 @@ command_status_bail:
 		}
 		if (client == NULL) {
 			mbus_errorf("client %s does not exists", destination);
+			goto bail;
+		}
+		TAILQ_FOREACH(command, &client->commands, commands) {
+			if (strcmp(identifier, command->identifier) == 0) {
+				break;
+			}
+		}
+		if (command == NULL) {
+			mbus_errorf("client: %s does not have such command: %s", destination, identifier);
 			goto bail;
 		}
 		request = method_create(MBUS_METHOD_TYPE_COMMAND, client_get_name(method_get_source(method)), destination, identifier, method_get_request_sequence(method), call);
