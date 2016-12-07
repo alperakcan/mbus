@@ -51,6 +51,10 @@ struct mbus_socket {
 	int type;
 	int protocol;
 	int fd;
+	struct {
+		unsigned int size;
+		char *buffer;
+	} buffer;
 };
 
 static int mbus_poll_event_to_posix (enum mbus_poll_event event)
@@ -131,6 +135,7 @@ struct mbus_socket * mbus_socket_create (enum mbus_socket_domain domain, enum mb
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
+	memset(s, 0, sizeof(struct mbus_socket));
 	s->domain = mbus_socket_domain_to_posix(domain);
 	if (s->domain < 0) {
 		mbus_errorf("invalid domain");
@@ -163,6 +168,9 @@ void mbus_socket_destroy (struct mbus_socket *socket)
 	}
 	if (socket->fd >= 0) {
 		close(socket->fd);
+	}
+	if (socket->buffer.buffer != NULL) {
+		free(socket->buffer.buffer);
 	}
 	free(socket);
 }
@@ -406,7 +414,9 @@ char * mbus_socket_read_string (struct mbus_socket *socket)
 int mbus_socket_write_string (struct mbus_socket *socket, const char *string)
 {
 	int rc;
-	uint32_t length;
+	uint32_t slength;
+	uint32_t nlength;
+	uint32_t wlength;
 	if (socket == NULL) {
 		mbus_errorf("socket is null");
 		return -1;
@@ -415,15 +425,28 @@ int mbus_socket_write_string (struct mbus_socket *socket, const char *string)
 		mbus_errorf("string is null");
 		return -1;
 	}
-	length = strlen(string);
-	length = htonl(length);
-	rc = mbus_socket_write(socket, &length, sizeof(uint32_t));
-	if (rc != sizeof(uint32_t)) {
-		return -1;
+	slength = strlen(string);
+	wlength = sizeof(uint32_t) + slength;
+	if (wlength > socket->buffer.size) {
+		char *tmp;
+		while (wlength > socket->buffer.size) {
+			socket->buffer.size += 4096;
+		}
+		tmp = realloc(socket->buffer.buffer, socket->buffer.size);
+		if (tmp == NULL) {
+			tmp = malloc(socket->buffer.size);
+			if (tmp == NULL) {
+				return -1;
+			}
+			free(socket->buffer.buffer);
+		}
+		socket->buffer.buffer = tmp;
 	}
-	length = ntohl(length);
-	rc = mbus_socket_write(socket, string, length);
-	if (rc != (int) length) {
+	nlength = htonl(slength);
+	memcpy(socket->buffer.buffer, &nlength, sizeof(uint32_t));
+	memcpy(socket->buffer.buffer + sizeof(uint32_t), string, slength);
+	rc = mbus_socket_write(socket, socket->buffer.buffer, wlength);
+	if (rc != (int) wlength) {
 		return -1;
 	}
 	return 0;
