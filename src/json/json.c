@@ -20,7 +20,7 @@ struct mbus_json * mbus_json_create_array (void)
 	return (struct mbus_json *) cJSON_CreateArray();
 }
 
-int mbus_json_add_item_to_array (struct mbus_json *array, struct mbus_json *item)
+int mbus_json_add_item_to_array (struct mbus_json *array, const struct mbus_json *item)
 {
 	cJSON_AddItemToArray((cJSON *) array, (cJSON *) item);
 	return 0;
@@ -80,15 +80,15 @@ struct mbus_json * mbus_json_get_array_item (struct mbus_json *json, int at)
 	return (struct mbus_json *) cJSON_GetArrayItem((cJSON *) json, at);
 }
 
-int mbus_json_add_item_to_object_cs (struct mbus_json *array, const char *name, struct mbus_json *item)
+int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
-	cJSON_AddItemToObjectCS((cJSON *) array, name, (cJSON *) item);
+	cJSON_AddItemToObjectCS((cJSON *) json, name, (cJSON *) item);
 	return 0;
 }
 
-int mbus_json_delete_item_from_object (struct mbus_json *array, const char *name)
+int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 {
-	cJSON_DeleteItemFromObject((cJSON *) array, name);
+	cJSON_DeleteItemFromObject((cJSON *) json, name);
 	return 0;
 }
 
@@ -119,12 +119,23 @@ double mbus_json_get_number_value (struct mbus_json *json, const char *name)
 	return cJSON_GetNumberValue((cJSON *) json, name);
 }
 
+int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number)
+{
+	cJSON *object;
+	object = cJSON_GetObjectItem((cJSON *) json, name);
+	if (object == NULL) {
+		return -1;
+	}
+	cJSON_SetNumberValue(object, number);
+	return 0;
+}
+
 struct mbus_json * mbus_json_get_object_item (struct mbus_json *json, const char *name)
 {
 	return (struct mbus_json *) cJSON_GetObjectItem((cJSON *) json, name);
 }
 
-struct mbus_json * mbus_json_duplicate (struct mbus_json *json, int recursive)
+struct mbus_json * mbus_json_duplicate (const struct mbus_json *json, int recursive)
 {
 	return (struct mbus_json *) cJSON_Duplicate((cJSON *) json, recursive);
 }

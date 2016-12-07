@@ -27,10 +27,10 @@ const char * mbus_json_get_value_string (struct mbus_json *json);
 int mbus_json_get_array_size (struct mbus_json *json);
 struct mbus_json * mbus_json_get_array_item (struct mbus_json *json, int at);
 
-int mbus_json_add_item_to_array (struct mbus_json *array, struct mbus_json *item);
+int mbus_json_add_item_to_array (struct mbus_json *array, const struct mbus_json *item);
 
-int mbus_json_add_item_to_object_cs (struct mbus_json *array, const char *name, struct mbus_json *item);
-int mbus_json_delete_item_from_object (struct mbus_json *array, const char *name);
+int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, struct mbus_json *item);
+int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name);
 
 int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name, double number);
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string);
@@ -39,8 +39,10 @@ int mbus_json_get_int_value (struct mbus_json *json, const char *name);
 const char * mbus_json_get_string_value (struct mbus_json *json, const char *name);
 double mbus_json_get_number_value (struct mbus_json *json, const char *name);
 
+int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number);
+
 struct mbus_json * mbus_json_get_object_item (struct mbus_json *json, const char *name);
-struct mbus_json * mbus_json_duplicate (struct mbus_json *json, int recursive);
+struct mbus_json * mbus_json_duplicate (const struct mbus_json *json, int recursive);
 
 char * mbus_json_print (struct mbus_json *json);
 char * mbus_json_print_unformatted (struct mbus_json *json);
