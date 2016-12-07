@@ -325,6 +325,7 @@ struct mbus_socket * mbus_socket_accept (struct mbus_socket *socket)
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
+	memset(s, 0, sizeof(struct mbus_socket));
 	s->domain = socket->domain;
 	s->type = socket->type;
 	socklen = sizeof(struct sockaddr_in);
