@@ -3,46 +3,46 @@
 //TextEncoder = require('text-encoder-lite');
 //module.exports = MBusClient
 
-const MBUS_METHOD_TYPE_CREATE						= "org.mbus.method.type.create";
-const MBUS_METHOD_TYPE_COMMAND						= "org.mbus.method.type.command";
-const MBUS_METHOD_TYPE_STATUS						= "org.mbus.method.type.status";
-const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
-const MBUS_METHOD_TYPE_RESULT						= "org.mbus.method.type.result";
+const MBUS_METHOD_TYPE_CREATE			= "org.mbus.method.type.create";
+const MBUS_METHOD_TYPE_COMMAND			= "org.mbus.method.type.command";
+const MBUS_METHOD_TYPE_STATUS			= "org.mbus.method.type.status";
+const MBUS_METHOD_TYPE_EVENT			= "org.mbus.method.type.event";
+const MBUS_METHOD_TYPE_RESULT			= "org.mbus.method.type.result";
 
-const MBUS_METHOD_SEQUENCE_START					= 1;
-const MBUS_METHOD_SEQUENCE_END						= 9999;
+const MBUS_METHOD_SEQUENCE_START		= 1;
+const MBUS_METHOD_SEQUENCE_END			= 9999;
 
-const MBUS_METHOD_EVENT_SOURCE_ALL					= "org.mbus.method.event.source.all";
+const MBUS_METHOD_EVENT_SOURCE_ALL		= "org.mbus.method.event.source.all";
 
-const MBUS_METHOD_EVENT_DESTINATION_ALL				= "org.mbus.method.event.destination.all";
-const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS		= "org.mbus.method.event.destination.subscribers";
+const MBUS_METHOD_EVENT_DESTINATION_ALL		= "org.mbus.method.event.destination.all";
+const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS	= "org.mbus.method.event.destination.subscribers";
 
-const MBUS_METHOD_EVENT_IDENTIFIER_ALL				= "org.mbus.method.event.identifier.all";
+const MBUS_METHOD_EVENT_IDENTIFIER_ALL		= "org.mbus.method.event.identifier.all";
 
-const MBUS_METHOD_STATUS_IDENTIFIER_ALL				= "org.mbus.method.event.status.all";
+const MBUS_METHOD_STATUS_IDENTIFIER_ALL		= "org.mbus.method.event.status.all";
 
-const MBUS_SERVER_NAME								= "org.mbus.server";
+const MBUS_SERVER_NAME				= "org.mbus.server";
 
-const MBUS_SERVER_COMMAND_CREATE					= "command.create";
-const MBUS_SERVER_COMMAND_EVENT						= "command.event";
-const MBUS_SERVER_COMMAND_CALL						= "command.call";
-const MBUS_SERVER_COMMAND_RESULT					= "command.result";
-const MBUS_SERVER_COMMAND_STATUS					= "command.status";
-const MBUS_SERVER_COMMAND_SUBSCRIBE					= "command.subscribe";
-const MBUS_SERVER_COMMAND_REGISTER					= "command.register";
-const MBUS_SERVER_COMMAND_UNSUBSCRIBE				= "command.unsubscribe";
-const MBUS_SERVER_COMMAND_CLOSE						= "command.close";
+const MBUS_SERVER_COMMAND_CREATE		= "command.create";
+const MBUS_SERVER_COMMAND_EVENT			= "command.event";
+const MBUS_SERVER_COMMAND_CALL			= "command.call";
+const MBUS_SERVER_COMMAND_RESULT		= "command.result";
+const MBUS_SERVER_COMMAND_STATUS		= "command.status";
+const MBUS_SERVER_COMMAND_SUBSCRIBE		= "command.subscribe";
+const MBUS_SERVER_COMMAND_REGISTER		= "command.register";
+const MBUS_SERVER_COMMAND_UNSUBSCRIBE		= "command.unsubscribe";
+const MBUS_SERVER_COMMAND_CLOSE			= "command.close";
 
-const MBUS_SERVER_STATUS_CONNECTED					= "status.connected";
-const MBUS_SERVER_STATUS_DISCONNECTED				= "status.disconnected";
-const MBUS_SERVER_STATUS_SUBSCRIBED					= "status.subscribed";
-const MBUS_SERVER_STATUS_SUBSCRIBER					= "status.subscriber";
-const MBUS_SERVER_STATUS_UNSUBSCRIBED				= "status.unsubscribed";
+const MBUS_SERVER_STATUS_CONNECTED		= "status.connected";
+const MBUS_SERVER_STATUS_DISCONNECTED		= "status.disconnected";
+const MBUS_SERVER_STATUS_SUBSCRIBED		= "status.subscribed";
+const MBUS_SERVER_STATUS_SUBSCRIBER		= "status.subscriber";
+const MBUS_SERVER_STATUS_UNSUBSCRIBED		= "status.unsubscribed";
 
-const MBUS_SERVER_EVENT_CONNECTED					= "event.connected";
-const MBUS_SERVER_EVENT_DISCONNECTED				= "event.disconnected";
-const MBUS_SERVER_EVENT_SUBSCRIBED					= "event.subscribed";
-const MBUS_SERVER_EVENT_UNSUBSCRIBED				= "event.unsubscribed";
+const MBUS_SERVER_EVENT_CONNECTED		= "event.connected";
+const MBUS_SERVER_EVENT_DISCONNECTED		= "event.disconnected";
+const MBUS_SERVER_EVENT_SUBSCRIBED		= "event.subscribed";
+const MBUS_SERVER_EVENT_UNSUBSCRIBED		= "event.unsubscribed";
 
 function MBusClientRequest (type, source, destination, identifier, sequence, payload)
 {
@@ -136,21 +136,21 @@ function MBusClient (name, options) {
 	};
 	
 	this._sendString = function (message) {
-	    var b;
-	    var s;
+		var b;
+	    	var s;
 		if (typeof message !== 'string') {
 			return false;
 		}
-	    s = new TextEncoder("utf-8").encode(message);
-	    b = new Uint8Array(4 + s.length);
-	    b.fill(0);
-	    b[0] = s.length >> 0x16;
-	    b[1] = s.length >> 0x10;
-	    b[2] = s.length >> 0x08;
-	    b[3] = s.length >> 0x00;
-	    b.set(s, 4);
-	    this._socket.send(b);
-	    return true;
+	    	s = new TextEncoder("utf-8").encode(message);
+	    	b = new Uint8Array(4 + s.length);
+	    	b.fill(0);
+	    	b[0] = s.length >> 0x16;
+	    	b[1] = s.length >> 0x10;
+	    	b[2] = s.length >> 0x08;
+	    	b[3] = s.length >> 0x00;
+	    	b.set(s, 4);
+	    	this._socket.send(b);
+	    	return true;
 	}
 	
 	this._scheduleRequests = function () {
@@ -305,8 +305,8 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 	var request;
 	var payload;
 	payload = {
-			source: source,
-			event: event,
+		source: source,
+		event: event,
 	};
 	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
 	this._sequence += 1;
@@ -328,9 +328,9 @@ MBusClient.prototype.event = function (identifier, event) {
 		event = {};
 	}
 	payload = {
-			destination: MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS,
-			identifier: identifier,
-			event: event,
+		destination: MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS,
+		identifier: identifier,
+		event: event,
 	};
 	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
 	this._sequence += 1;
@@ -348,9 +348,9 @@ MBusClient.prototype.command = function (destination, identifier, command) {
 		command = {};
 	}
 	payload = {
-			destination: destination,
-			identifier: identifier,
-			call: command,
+		destination: destination,
+		identifier: identifier,
+		call: command,
 	};
 	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, this._sequence, payload);
 	this._sequence += 1;
