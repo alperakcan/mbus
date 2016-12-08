@@ -1004,7 +1004,7 @@ static int mbus_client_result (struct mbus_client *client, struct mbus_json *pay
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (request->result == NULL) {
+	while (client->running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
@@ -1328,7 +1328,7 @@ int mbus_client_register (struct mbus_client *client, const char *command, int (
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (request->result == NULL) {
+	while (client->running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
