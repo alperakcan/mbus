@@ -822,12 +822,32 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 			goto bail;
 		}
 		method = method_create_from_string(string);
-		if (string == NULL) {
+		if (method == NULL) {
 			mbus_errorf("can not create method");
 			free(string);
 			request_destroy(request);
 			goto bail;
 		}
+		client_name = mbus_json_get_string_value(method_get_payload(method), "name");
+		if (client_name == NULL) {
+			mbus_errorf("can not get name value");
+			free(string);
+			method_destroy(method);
+			request_destroy(request);
+			goto bail;
+		}
+		if (strcmp(client->name, client_name) != 0) {
+			free(client->name);
+			client->name = strdup(client_name);
+			if (client->name == NULL) {
+				mbus_errorf("can not allocate memory");
+				free(string);
+				method_destroy(method);
+				request_destroy(request);
+				goto bail;
+			}
+		}
+
 		free(string);
 		method_destroy(method);
 		request_destroy(request);

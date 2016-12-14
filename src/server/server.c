@@ -373,6 +373,14 @@ static int method_set_result_payload (struct method *method, struct mbus_json *p
 	return 0;
 }
 
+static struct mbus_json * method_get_result_payload (struct method *method)
+{
+	if (method == NULL) {
+		return NULL;
+	}
+	return method->result.payload;
+}
+
 static char * method_get_result_string (struct method *method)
 {
 	if (method == NULL) {
@@ -470,7 +478,7 @@ static struct method * method_create_from_string (struct client *source, const c
 	    (method->request.identifier == NULL) ||
 	    (method->request.sequence == -1) ||
 	    (method->request.payload == NULL)) {
-		mbus_errorf("invalid method");
+		mbus_errorf("invalid method: '%s'", string);
 		goto bail;
 	}
 	method->result.json = mbus_json_create_object();
@@ -1337,6 +1345,7 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("can not set method result code");
 		goto bail;
 	}
+	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(client));
 	rc = mbus_socket_write_string(socket, method_get_result_string(method));
 	if (rc != 0) {
 		mbus_errorf("can not write string");
@@ -1866,6 +1875,7 @@ static int websocket_accept_client (struct mbus_server *server, struct websocket
 		goto bail;
 	}
 	mbus_debugf("client: '%s' accepted", client_get_name(data->client));
+	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(data->client));
 	rc = method_set_result_code(method, 0);
 	if (rc != 0) {
 		mbus_errorf("can not set method result code");

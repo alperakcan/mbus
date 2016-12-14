@@ -121,6 +121,10 @@ function MBusClient (name, options) {
 	this.onSubscribed = function (source, event) { };
 	this.onDisconnected = function () { };
 	
+	if (typeof name !== 'string') {
+		console.log('name:', name, 'is invalid, using empty name. server will generate a random name for us.');
+		name = "";
+	}
 	this._name = name;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
 	this._socket = null;
@@ -184,13 +188,14 @@ function MBusClient (name, options) {
 		request = this._pendings[index];
 		this._pendings.splice(index, 1);
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-			request._destination == MBUS_SERVER_NAME &&
-			request._identifier == MBUS_SERVER_COMMAND_CREATE) {
+		    request._destination == MBUS_SERVER_NAME &&
+		    request._identifier == MBUS_SERVER_COMMAND_CREATE) {
+		    	this._name = object['payload']['name'];
 			this.onConnected();
 		}
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-			request._destination == MBUS_SERVER_NAME &&
-			request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
+		    request._destination == MBUS_SERVER_NAME &&
+		    request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
 			this.onSubscribed(request._payload['source'], request._payload['event']);
 		}
 	}
