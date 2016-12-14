@@ -1263,6 +1263,8 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 {
 	int rc;
 	char *string;
+	char rname[64];
+	const char *name;
 	struct method *method;
 	struct client *client;
 	struct mbus_socket *socket;
@@ -1301,22 +1303,25 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (strcmp(client_get_name(client), method_get_request_source(method)) == 0) {
-			break;
+	name = method_get_request_source(method);
+	if (strlen(name) == 0) {
+		mbus_infof("empty name, creating a random name for client");
+		while (1) {
+			snprintf(rname, sizeof(rname), "org.mbus.client-random-%08x", rand());
+			client = server_find_client_by_name(server, rname);
+			if (client == NULL) {
+				break;
+			}
 		}
+		name = rname;
 	}
+	client = server_find_client_by_name(server, name);
 	if (client != NULL) {
-		mbus_errorf("client with name: '%s' already exists", method_get_request_source(method));
+		mbus_errorf("client with name: %s already exists", name);
 		client = NULL;
 		goto exists;
 	}
-	client = server_find_client_by_name(server, method_get_request_source(method));
-	if (client != NULL) {
-		mbus_errorf("client with name: %s already exists", method_get_request_source(method));
-		goto bail;
-	}
-	client = client_create(method_get_request_source(method), client_link_tcp);
+	client = client_create(name, client_link_tcp);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
@@ -1811,6 +1816,8 @@ static int websocket_client_data_buffer_shift (struct websocket_client_data_buff
 static int websocket_accept_client (struct mbus_server *server, struct websocket_client_data *data, const char *string)
 {
 	int rc;
+	char rname[64];
+	const char *name;
 	struct client *client;
 	struct method *method;
 	method = NULL;
@@ -1831,12 +1838,24 @@ static int websocket_accept_client (struct mbus_server *server, struct websocket
 		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
 		goto bail;
 	}
-	client = server_find_client_by_name(server, method_get_request_source(method));
+	name = method_get_request_source(method);
+	if (strlen(name) == 0) {
+		mbus_infof("empty name, creating a random name for client");
+		while (1) {
+			snprintf(rname, sizeof(rname), "org.mbus.client-random-%08x", rand());
+			client = server_find_client_by_name(server, rname);
+			if (client == NULL) {
+				break;
+			}
+		}
+		name = rname;
+	}
+	client = server_find_client_by_name(server, name);
 	if (client != NULL) {
-		mbus_errorf("client with name: %s already exists", method_get_request_source(method));
+		mbus_errorf("client with name: %s already exists", name);
 		goto bail;
 	}
-	data->client = client_create(method_get_request_source(method), client_link_websocket);
+	data->client = client_create(name, client_link_websocket);
 	if (data->client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
