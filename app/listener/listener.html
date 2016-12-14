@@ -14,7 +14,7 @@
 			{
 				output = document.getElementById("output");
 			
-				mbc = new MBusClient('org.mbus.listener.js');
+				mbc = new MBusClient();
 			
 				mbc.onConnected = function () {
 					mbc.subscribe("org.mbus.server", "org.mbus.method.event.status.all", function (source, event, payload) {
