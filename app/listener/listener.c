@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #define MBUS_DEBUG_NAME	"app-listener"
 
@@ -92,27 +93,44 @@ static void listener_status_server_subscribed (struct mbus_client *client, const
 
 int main (int argc, char *argv[])
 {
+	int c;
 	int rc;
+	int all;
 	struct mbus_client *client;
 	client = mbus_client_create(MBUS_APP_LISTENER_NAME, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
-	rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
-	if (rc != 0) {
-		mbus_errorf("can not subscribe to events");
-		goto bail;
+	all = 1;
+	while ((c = getopt(argc, argv, "s:")) != -1) {
+		switch (c) {
+			case 's':
+				rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, optarg, listener_event_all_all, NULL);
+				if (rc != 0) {
+					mbus_errorf("can not subscribe to events");
+					goto bail;
+				}
+				all = 0;
+				break;
+		}
 	}
-	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, listener_status_server_connected, NULL);
-	if (rc != 0) {
-		mbus_errorf("can not subscribe to events");
-		goto bail;
-	}
-	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, listener_status_server_subscribed, NULL);
-	if (rc != 0) {
-		mbus_errorf("can not subscribe to events");
-		goto bail;
+	if (all == 1) {
+		rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
+		if (rc != 0) {
+			mbus_errorf("can not subscribe to events");
+			goto bail;
+		}
+		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, listener_status_server_connected, NULL);
+		if (rc != 0) {
+			mbus_errorf("can not subscribe to events");
+			goto bail;
+		}
+		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, listener_status_server_subscribed, NULL);
+		if (rc != 0) {
+			mbus_errorf("can not subscribe to events");
+			goto bail;
+		}
 	}
 	rc = mbus_client_run(client);
 	if (rc != 0) {

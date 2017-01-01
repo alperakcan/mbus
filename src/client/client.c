@@ -1382,7 +1382,7 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, struct mbus_json *event)
+int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
 {
 	int rc;
 	struct mbus_json *data;
@@ -1472,7 +1472,7 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-int mbus_client_event (struct mbus_client *client, const char *identifier, struct mbus_json *event)
+int mbus_client_event (struct mbus_client *client, const char *identifier, const struct mbus_json *event)
 {
 	return mbus_client_event_to(client, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, identifier, event);
 }
