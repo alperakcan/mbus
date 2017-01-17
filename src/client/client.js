@@ -110,7 +110,7 @@ function MBusClientCallback (source, event, callback)
 	this._callback = callback;
 }
 
-function MBusClient (name, options) {
+function MBusClient (name = "", options = {} ) {
 	if (this instanceof MBusClient == false) {
 		return new MBusClient(name, options);
 	}
@@ -121,10 +121,6 @@ function MBusClient (name, options) {
 	this.onSubscribed = function (source, event) { };
 	this.onDisconnected = function () { };
 	
-	if (typeof name !== 'string') {
-		console.log('name:', name, 'is invalid, using empty name. server will generate a random name for us.');
-		name = "";
-	}
 	this._name = name;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
 	this._socket = null;
@@ -259,8 +255,8 @@ function MBusClient (name, options) {
 	}
 }
 
-MBusClient.prototype.connect = function () {
-	this._socket = new WebSocket("ws://127.0.0.1:9000", 'mbus');
+MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
+	this._socket = new WebSocket(address, 'mbus');
 	this._socket.binaryType = 'arraybuffer';
 
 	this._socket.onopen = this._scope(function open() {
