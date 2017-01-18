@@ -8,6 +8,8 @@
 	<body>
 	 	<script language="javascript" type="text/javascript">
 			var output;
+
+			var url;
 	  		var mbc;
 
 			function init()
@@ -28,7 +30,15 @@
 					})
 				};
 			 
-				mbc.connect("ws://127.0.0.1:9000");
+				if (typeof window.location.hostname !== 'string' ||
+				    window.location.hostname === '') {
+					url = "ws://localhost:9000";
+				} else {
+					url = "ws://" + window.location.hostname + ":9000";
+				}
+				
+				console.log("connecting to: " + url);
+				mbc.connect(url);
 			}
 		
 			function writeToScreen(message)
@@ -41,7 +51,9 @@
 		
 			window.addEventListener("load", init, false);
 		</script>
+		
 		<h2>org.mbus.listener</h2>
-    	<div id="output"></div>
+		
+    		<div id="output"></div>
 	</body>
 </html>
