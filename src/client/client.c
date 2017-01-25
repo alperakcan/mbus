@@ -668,101 +668,53 @@ bail:
 	return NULL;
 }
 
-struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv[])
+struct mbus_client * mbus_client_create_with_options (const struct mbus_client_options *_options)
 {
-	int a;
-	int ch;
 	int rc;
-	char **argv;
 	struct mbus_client *client;
-
-	int o_optind;
-
-	int server_port;
-	const char *server_address;
-	const char *server_protocol;
-	const char *client_name;
+	struct mbus_client_options options;
 
 	enum mbus_socket_type socket_type;
 	enum mbus_socket_domain socket_domain;
 
-	o_optind = optind;
-
-	argv = NULL;
 	client = NULL;
-	server_port = -1;
-	server_address = NULL;
-	server_protocol = NULL;
-
-	if (name == NULL) {
-		mbus_errorf("name is null");
-		goto bail;
+	memset(&options, 0, sizeof(struct mbus_client_options));
+	if (_options != NULL) {
+		memcpy(&options, _options, sizeof(struct mbus_client_options));
 	}
 
-	client_name = name;
-
-	argv = malloc(sizeof(char *) * (argc + 1));
-	if (argv == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
+	if (options.client.name == NULL) {
+		options.client.name = "";
 	}
-	for (a = 0; a < argc; a++) {
-		argv[a] = _argv[a];
-	}
-	argv[a] = NULL;
 
-	optind = 1;
-	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
-		switch (ch) {
-			case OPTION_DEBUG_LEVEL:
-				mbus_debug_level = mbus_debug_level_from_string(optarg);
-				break;
-			case OPTION_SERVER_PROTOCOL:
-				server_protocol = optarg;
-				break;
-			case OPTION_SERVER_ADDRESS:
-				server_address = optarg;
-				break;
-			case OPTION_SERVER_PORT:
-				server_port = atoi(optarg);
-				break;
-			case OPTION_CLIENT_NAME:
-				client_name = optarg;
-				break;
-			case OPTION_HELP:
-				mbus_client_usage();
-				goto bail;
+	if (options.server.protocol == NULL) {
+		options.server.protocol = MBUS_SERVER_PROTOCOL;
+	}
+
+	if (strcmp(options.server.protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
+		if (options.server.port <= 0) {
+			options.server.port = MBUS_SERVER_TCP_PORT;
 		}
-	}
-
-	if (server_protocol == NULL) {
-		server_protocol = MBUS_SERVER_PROTOCOL;
-	}
-
-	if (strcmp(server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
-		if (server_port == -1) {
-			server_port = MBUS_SERVER_TCP_PORT;
-		}
-		if (server_address == NULL) {
-			server_address = MBUS_SERVER_TCP_ADDRESS;
+		if (options.server.address == NULL) {
+			options.server.address = MBUS_SERVER_TCP_ADDRESS;
 		}
 		socket_domain = mbus_socket_domain_af_inet;
 		socket_type = mbus_socket_type_sock_stream;
-	} else if (strcmp(server_protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
-		if (server_port == -1) {
-			server_port = MBUS_SERVER_UDS_PORT;
+	} else if (strcmp(options.server.protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
+		if (options.server.port <= 0) {
+			options.server.port = MBUS_SERVER_UDS_PORT;
 		}
-		if (server_address == NULL) {
-			server_address = MBUS_SERVER_UDS_ADDRESS;
+		if (options.server.address == NULL) {
+			options.server.address = MBUS_SERVER_UDS_ADDRESS;
 		}
 		socket_domain = mbus_socket_domain_af_unix;
 		socket_type = mbus_socket_type_sock_stream;
 	} else {
-		mbus_errorf("invalid server protocol: %s", server_protocol);
+		mbus_errorf("invalid server protocol: %s", options.server.protocol);
 		goto bail;
 	}
 
-	mbus_infof("creating client: '%s'", client_name);
+	mbus_infof("creating client: '%s'", options.client.name);
 
 	client = malloc(sizeof(struct mbus_client));
 	if (client == NULL) {
@@ -779,7 +731,7 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 	TAILQ_INIT(&client->commands);
 	pthread_mutex_init(&client->mutex, NULL);
 	pthread_cond_init(&client->cond, NULL);
-	client->name = strdup(client_name);
+	client->name = strdup(options.client.name);
 	if (client->name == NULL) {
 		mbus_errorf("can not allocate memory");
 		goto bail;
@@ -794,10 +746,10 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		mbus_errorf("can not reuse event");
 		goto bail;
 	}
-	mbus_infof("connecting to server: '%s:%s:%d'", server_protocol, server_address, server_port);
-	rc = mbus_socket_connect(client->socket, server_address, server_port);
+	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
+	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {
-		mbus_errorf("can not connect to server: '%s:%s:%d'", server_protocol, server_address, server_port);
+		mbus_errorf("can not connect to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 		goto bail;
 	}
 	{
@@ -828,17 +780,17 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 			request_destroy(request);
 			goto bail;
 		}
-		client_name = mbus_json_get_string_value(method_get_payload(method), "name");
-		if (client_name == NULL) {
+		options.client.name = mbus_json_get_string_value(method_get_payload(method), "name");
+		if (options.client.name == NULL) {
 			mbus_errorf("can not get name value");
 			free(string);
 			method_destroy(method);
 			request_destroy(request);
 			goto bail;
 		}
-		if (strcmp(client->name, client_name) != 0) {
+		if (strcmp(client->name, options.client.name) != 0) {
 			free(client->name);
-			client->name = strdup(client_name);
+			client->name = strdup(options.client.name);
 			if (client->name == NULL) {
 				mbus_errorf("can not allocate memory");
 				free(string);
@@ -858,6 +810,75 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	pthread_mutex_unlock(&client->mutex);
+	return client;
+bail:	if (client != NULL) {
+		mbus_client_destroy(client);
+	}
+	return NULL;
+}
+
+struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv[])
+{
+	int a;
+	int ch;
+	char **argv;
+	struct mbus_client *client;
+	struct mbus_client_options options;
+
+	int o_optind;
+
+	o_optind = optind;
+
+	argv = NULL;
+	client = NULL;
+	memset(&options, 0, sizeof(struct mbus_client_options));
+
+	options.client.name = name;
+	if (name == NULL) {
+		options.client.name = "";
+		goto bail;
+	}
+
+	argv = malloc(sizeof(char *) * (argc + 1));
+	if (argv == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	for (a = 0; a < argc; a++) {
+		argv[a] = _argv[a];
+	}
+	argv[a] = NULL;
+
+	optind = 1;
+	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
+		switch (ch) {
+			case OPTION_DEBUG_LEVEL:
+				mbus_debug_level = mbus_debug_level_from_string(optarg);
+				break;
+			case OPTION_SERVER_PROTOCOL:
+				options.server.protocol = optarg;
+				break;
+			case OPTION_SERVER_ADDRESS:
+				options.server.address = optarg;
+				break;
+			case OPTION_SERVER_PORT:
+				options.server.port = atoi(optarg);
+				break;
+			case OPTION_CLIENT_NAME:
+				options.client.name = optarg;
+				break;
+			case OPTION_HELP:
+				mbus_client_usage();
+				goto bail;
+		}
+	}
+
+	client = mbus_client_create_with_options(&options);
+	if (client == NULL) {
+		mbus_errorf("can not create client with options");
+		goto bail;
+	}
+
 	free(argv);
 	optind = o_optind;
 	return client;
@@ -926,6 +947,15 @@ void mbus_client_destroy (struct mbus_client *client)
 		command_destroy(command);
 	}
 	free(client);
+}
+
+const char * mbus_client_name (struct mbus_client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return NULL;
+	}
+	return client->name;
 }
 
 static int __pthread_cond_timedwait (pthread_cond_t *cond, pthread_mutex_t *mutex, int msec)
@@ -1316,19 +1346,28 @@ int mbus_client_register (struct mbus_client *client, const char *command, int (
 		mbus_errorf("event is null");
 		goto bail;
 	}
+	pthread_mutex_lock(&client->mutex);
+	TAILQ_FOREACH(callback, &client->commands, commands) {
+		if (strcmp(command, command_get_identifier(callback)) == 0) {
+			mbus_errorf("command is already registered");
+			pthread_mutex_unlock(&client->mutex);
+			goto bail;
+		}
+	}
 	callback = command_create(command, function, data);
 	if (callback == NULL) {
 		mbus_errorf("can not create callback");
+		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
 	mbus_infof("register client: '%s', command: '%s'", client->name, command);
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create command payload");
+		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
 	mbus_json_add_item_to_object_cs(payload, "command", mbus_json_create_string(command));
-	pthread_mutex_lock(&client->mutex);
 	if (client->error != 0) {
 		mbus_errorf("client is in error state");
 		pthread_mutex_unlock(&client->mutex);

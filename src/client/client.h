@@ -28,12 +28,27 @@
 
 #define MBUS_CLIENT_DEFAULT_TIMEOUT	250
 
+struct mbus_client_options {
+	struct {
+		const char *protocol;
+		const char *address;
+		int port;
+	} server;
+	struct {
+		const char *name;
+	} client;
+
+};
+
 struct mbus_client;
 
 void mbus_client_usage (void);
 
 struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[]);
+struct mbus_client * mbus_client_create_with_options (const struct mbus_client_options *options);
 void mbus_client_destroy (struct mbus_client *client);
+
+const char * mbus_client_name (struct mbus_client *client);
 
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event, void (*function) (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data), void *data);
 int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data), void *data);
