@@ -1,4 +1,7 @@
 
+target.a-y = \
+	libmbus-json-cJSON.a
+
 target.so-y = \
 	libmbus-json-cJSON.so
 
@@ -8,11 +11,15 @@ libmbus-json-cJSON.so_files-y = \
 libmbus-json-cJSON.so_ldflags-y = \
 	-lm
 
+libmbus-json-cJSON.a_files-y = \
+	${libmbus-json-cJSON.so_files-y}
+
 distdir = ../../../dist
 
 dist.base = mbus
 
 dist.lib-y = \
+	libmbus-json-cJSON.a \
 	libmbus-json-cJSON.so
 
 include ../../../Makefile.lib

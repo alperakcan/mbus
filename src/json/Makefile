@@ -2,6 +2,9 @@
 subdir-y = \
 	cJSON
 
+target.a-y = \
+	libmbus-json.a
+
 target.so-y = \
 	libmbus-json.so
 
@@ -21,6 +24,12 @@ libmbus-json.so_ldflags-y = \
 libmbus-json.so_depends-y = \
 	cJSON
 
+libmbus-json.a_includes-y = \
+	${libmbus-json.so_includes-y}
+
+libmbus-json.a_files-y = \
+	${libmbus-json.so_files-y}
+
 distdir = ../../dist
 
 dist.base = mbus
@@ -29,6 +38,7 @@ dist.include-y = \
 	json.h
 
 dist.lib-y = \
+	libmbus-json.a \
 	libmbus-json.so
 
 include ../../Makefile.lib
