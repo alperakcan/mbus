@@ -170,7 +170,6 @@ static struct mbus_server *g_server;
 #define OPTION_SERVER_WEBSOCKET_ADDRESS	0x109
 #define OPTION_SERVER_WEBSOCKET_PORT	0x110
 static struct option longopts[] = {
-	{ "help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
 	{ "mbus-server-tcp-enable",		required_argument,	NULL,	OPTION_SERVER_TCP_ENABLE },
@@ -2570,6 +2569,7 @@ void mbus_server_destroy (struct mbus_server *server)
 struct mbus_server * mbus_server_create (int argc, char *_argv[])
 {
 	int a;
+	int o;
 	int ch;
 	int rc;
 	char **argv;
@@ -2612,7 +2612,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 	argv[a] = NULL;
 
-	optind = 1;
+	o = optind;
 	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
 			case OPTION_DEBUG_LEVEL:
@@ -2647,9 +2647,11 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 				break;
 			case OPTION_HELP:
 				usage();
+				optind = o;
 				goto bail;
 		}
 	}
+	optind = o;
 
 	if (server->socket.tcp.enabled == 0 &&
 	    server->socket.uds.enabled == 0 &&

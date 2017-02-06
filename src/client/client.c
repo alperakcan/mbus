@@ -125,7 +125,6 @@ struct mbus_client {
 #define OPTION_SERVER_PORT	0x104
 #define OPTION_CLIENT_NAME	0x105
 static struct option longopts[] = {
-	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
 	{ "mbus-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
