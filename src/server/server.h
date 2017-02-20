@@ -33,7 +33,7 @@
 
 #define MBUS_SERVER_UDS_ENABLE			1
 #define MBUS_SERVER_UDS_PROTOCOL		"uds"
-#define MBUS_SERVER_UDS_PORT			-1
+#define MBUS_SERVER_UDS_PORT			0
 #define MBUS_SERVER_UDS_ADDRESS			"/tmp/mbus-server"
 
 #define MBUS_SERVER_WEBSOCKET_ENABLE		1
@@ -232,3 +232,15 @@ void mbus_server_destroy (struct mbus_server *server);
 
 int mbus_server_run (struct mbus_server *server);
 int mbus_server_run_timeout (struct mbus_server *server, int milliseconds);
+
+int mbus_server_tcp_enabled (struct mbus_server *server);
+const char * mbus_server_tcp_address (struct mbus_server *server);
+int mbus_server_tcp_port (struct mbus_server *server);
+
+int mbus_server_uds_enabled (struct mbus_server *server);
+const char * mbus_server_uds_address (struct mbus_server *server);
+int mbus_server_uds_port (struct mbus_server *server);
+
+int mbus_server_websocket_enabled (struct mbus_server *server);
+const char * mbus_server_websocket_address (struct mbus_server *server);
+int mbus_server_websocket_port (struct mbus_server *server);

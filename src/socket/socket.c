@@ -249,7 +249,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
 	} else if (socket->domain == AF_UNIX) {
 		sockaddr_un.sun_family = socket->domain;
-		strncpy(sockaddr_un.sun_path, address, sizeof(sockaddr_un.sun_path) - 1);
+		snprintf(sockaddr_un.sun_path, sizeof(sockaddr_un.sun_path) - 1, "%s:%d", address, port);
 		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
 	} else {
 		mbus_errorf("unknown socket domain");
@@ -283,9 +283,9 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 		rc = bind(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
 	} else if (socket->domain == AF_UNIX) {
 		sockaddr_un.sun_family = socket->domain;
-		strncpy(sockaddr_un.sun_path, address, sizeof(sockaddr_un.sun_path) - 1);
+		snprintf(sockaddr_un.sun_path, sizeof(sockaddr_un.sun_path) - 1, "%s:%d", address, port);
 		if (mbus_socket_get_reuseaddr(socket) == 1) {
-			unlink(address);
+			unlink(sockaddr_un.sun_path);
 		}
 		rc = bind(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
 	} else {

@@ -2732,3 +2732,93 @@ bail:	mbus_server_destroy(server);
 	}
 	return NULL;
 }
+
+int mbus_server_tcp_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.tcp.enabled;
+bail:	return -1;
+}
+
+const char * mbus_server_tcp_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.tcp.address;
+bail:	return NULL;
+}
+
+int mbus_server_tcp_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.tcp.port;
+bail:	return -1;
+}
+
+int mbus_server_uds_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.uds.enabled;
+bail:	return -1;
+}
+
+const char * mbus_server_uds_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.uds.address;
+bail:	return NULL;
+}
+
+int mbus_server_uds_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.uds.port;
+bail:	return -1;
+}
+
+int mbus_server_websocket_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.websocket.enabled;
+bail:	return -1;
+}
+
+const char * mbus_server_websocket_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.websocket.address;
+bail:	return NULL;
+}
+
+int mbus_server_websocket_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->socket.websocket.port;
+bail:	return -1;
+}
