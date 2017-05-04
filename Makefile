@@ -47,6 +47,9 @@ install: app src test
 	install -m 0644 dist/lib/libmbus-server.a /usr/local/lib/libmbus-server.a
 	install -m 0644 dist/lib/libmbus-socket.a /usr/local/lib/libmbus-socket.a
 
+	install -d /usr/local/lib/pkgconfig
+	install -m 0644 libmbus-client.pc /usr/local/lib/pkgconfig/libmbus-client.pc
+
 uninstall:
 	rm -f /usr/local/bin/mbus-cli
 	rm -f /usr/local/bin/mbus-controller
@@ -77,3 +80,5 @@ uninstall:
 	rm -f /usr/local/lib/libmbus-json-cJSON.a
 	rm -f /usr/local/lib/libmbus-server.a
 	rm -f /usr/local/lib/libmbus-socket.a
+
+	rm -f /usr/local/lib/pkgconfig/libmbus-client.pc

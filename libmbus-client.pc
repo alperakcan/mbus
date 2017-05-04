@@ -1,0 +1,14 @@
+#libmbus-client pkg-config source file
+
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libmbus-client
+Description: mBus is a lightweight messaging system
+Version: 1.0.0
+Requires:
+Conflicts:
+Libs: -L${libdir} -lmbus-client
+Cflags: -I${includedir}
