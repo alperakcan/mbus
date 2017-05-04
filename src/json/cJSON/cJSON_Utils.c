@@ -113,11 +113,11 @@ static void cJSONUtils_PointerEncodedstrcpy(char *d, const char *s)
     *d = '\0';
 }
 
-char *cJSONUtils_FindPointerFromObjectTo(cJSON *object, cJSON *target)
+char *cJSONUtils_FindPointerFromObjectTo(mbus_cJSON *object, mbus_cJSON *target)
 {
     int type = object->type;
     int c = 0;
-    cJSON *obj = 0;
+    mbus_cJSON *obj = 0;
 
     if (object == target)
     {
@@ -131,7 +131,7 @@ char *cJSONUtils_FindPointerFromObjectTo(cJSON *object, cJSON *target)
         char *found = cJSONUtils_FindPointerFromObjectTo(obj, target);
         if (found)
         {
-            if ((type & 0xFF) == cJSON_Array)
+            if ((type & 0xFF) == mbus_cJSON_Array)
             {
                 /* reserve enough memory for a 64 bit integer + '/' and '\0' */
                 char *ret = (char*)malloc(strlen(found) + 23);
@@ -140,7 +140,7 @@ char *cJSONUtils_FindPointerFromObjectTo(cJSON *object, cJSON *target)
 
                 return ret;
             }
-            else if ((type & 0xFF) == cJSON_Object)
+            else if ((type & 0xFF) == mbus_cJSON_Object)
             {
                 char *ret = (char*)malloc(strlen(found) + cJSONUtils_PointerEncodedstrlen(obj->string) + 2);
                 *ret = '/';
@@ -161,12 +161,12 @@ char *cJSONUtils_FindPointerFromObjectTo(cJSON *object, cJSON *target)
     return NULL;
 }
 
-cJSON *cJSONUtils_GetPointer(cJSON *object, const char *pointer)
+mbus_cJSON *cJSONUtils_GetPointer(mbus_cJSON *object, const char *pointer)
 {
     /* follow path of the pointer */
     while ((*pointer++ == '/') && object)
     {
-        if ((object->type & 0xFF) == cJSON_Array)
+        if ((object->type & 0xFF) == mbus_cJSON_Array)
         {
             int which = 0;
             /* parse array index */
@@ -179,9 +179,9 @@ cJSON *cJSONUtils_GetPointer(cJSON *object, const char *pointer)
                 /* not end of string or new path token */
                 return NULL;
             }
-            object = cJSON_GetArrayItem(object, which);
+            object = mbus_cJSON_GetArrayItem(object, which);
         }
-        else if ((object->type & 0xFF) == cJSON_Object)
+        else if ((object->type & 0xFF) == mbus_cJSON_Object)
         {
             object = object->child;
             /* GetObjectItem. */
@@ -220,12 +220,12 @@ static void cJSONUtils_InplaceDecodePointerString(char *string)
     *s2 = '\0';
 }
 
-static cJSON *cJSONUtils_PatchDetach(cJSON *object, const char *path)
+static mbus_cJSON *cJSONUtils_PatchDetach(mbus_cJSON *object, const char *path)
 {
     char *parentptr = NULL;
     char *childptr = NULL;
-    cJSON *parent = NULL;
-    cJSON *ret = NULL;
+    mbus_cJSON *parent = NULL;
+    mbus_cJSON *ret = NULL;
 
     /* copy path and split it in parent and child */
     parentptr = cJSONUtils_strdup(path);
@@ -243,13 +243,13 @@ static cJSON *cJSONUtils_PatchDetach(cJSON *object, const char *path)
         /* Couldn't find object to remove child from. */
         ret = NULL;
     }
-    else if ((parent->type & 0xFF) == cJSON_Array)
+    else if ((parent->type & 0xFF) == mbus_cJSON_Array)
     {
-        ret = cJSON_DetachItemFromArray(parent, atoi(childptr));
+        ret = mbus_cJSON_DetachItemFromArray(parent, atoi(childptr));
     }
-    else if ((parent->type & 0xFF) == cJSON_Object)
+    else if ((parent->type & 0xFF) == mbus_cJSON_Object)
     {
-        ret = cJSON_DetachItemFromObject(parent, childptr);
+        ret = mbus_cJSON_DetachItemFromObject(parent, childptr);
     }
     free(parentptr);
 
@@ -257,7 +257,7 @@ static cJSON *cJSONUtils_PatchDetach(cJSON *object, const char *path)
     return ret;
 }
 
-static int cJSONUtils_Compare(cJSON *a, cJSON *b)
+static int cJSONUtils_Compare(mbus_cJSON *a, mbus_cJSON *b)
 {
     if ((a->type & 0xFF) != (b->type & 0xFF))
     {
@@ -266,13 +266,13 @@ static int cJSONUtils_Compare(cJSON *a, cJSON *b)
     }
     switch (a->type & 0xFF)
     {
-        case cJSON_Number:
+        case mbus_cJSON_Number:
             /* numeric mismatch. */
             return ((a->valueint != b->valueint) || (a->valuedouble != b->valuedouble)) ? -2 : 0;
-        case cJSON_String:
+        case mbus_cJSON_String:
             /* string mismatch. */
             return (strcmp(a->valuestring, b->valuestring) != 0) ? -3 : 0;
-        case cJSON_Array:
+        case mbus_cJSON_Array:
             for (a = a->child, b = b->child; a && b; a = a->next, b = b->next)
             {
                 int err = cJSONUtils_Compare(a, b);
@@ -283,7 +283,7 @@ static int cJSONUtils_Compare(cJSON *a, cJSON *b)
             }
             /* array size mismatch? (one of both children is not NULL) */
             return (a || b) ? -4 : 0;
-        case cJSON_Object:
+        case mbus_cJSON_Object:
             cJSONUtils_SortObject(a);
             cJSONUtils_SortObject(b);
             a = a->child;
@@ -315,18 +315,18 @@ static int cJSONUtils_Compare(cJSON *a, cJSON *b)
     return 0;
 }
 
-static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
+static int cJSONUtils_ApplyPatch(mbus_cJSON *object, mbus_cJSON *patch)
 {
-    cJSON *op = NULL;
-    cJSON *path = NULL;
-    cJSON *value = NULL;
-    cJSON *parent = NULL;
+    mbus_cJSON *op = NULL;
+    mbus_cJSON *path = NULL;
+    mbus_cJSON *value = NULL;
+    mbus_cJSON *parent = NULL;
     int opcode = 0;
     char *parentptr = NULL;
     char *childptr = NULL;
 
-    op = cJSON_GetObjectItem(patch, "op");
-    path = cJSON_GetObjectItem(patch, "path");
+    op = mbus_cJSON_GetObjectItem(patch, "op");
+    path = mbus_cJSON_GetObjectItem(patch, "path");
     if (!op || !path)
     {
         /* malformed patch. */
@@ -357,7 +357,7 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
     else if (!strcmp(op->valuestring, "test"))
     {
         /* compare value: {...} with the given path */
-        return cJSONUtils_Compare(cJSONUtils_GetPointer(object, path->valuestring), cJSON_GetObjectItem(patch, "value"));
+        return cJSONUtils_Compare(cJSONUtils_GetPointer(object, path->valuestring), mbus_cJSON_GetObjectItem(patch, "value"));
     }
     else
     {
@@ -369,7 +369,7 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
     if ((opcode == 1) || (opcode == 2))
     {
         /* Get rid of old. */
-        cJSON_Delete(cJSONUtils_PatchDetach(object, path->valuestring));
+        mbus_cJSON_Delete(cJSONUtils_PatchDetach(object, path->valuestring));
         if (opcode == 1)
         {
             /* For Remove, this is job done. */
@@ -380,7 +380,7 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
     /* Copy/Move uses "from". */
     if ((opcode == 3) || (opcode == 4))
     {
-        cJSON *from = cJSON_GetObjectItem(patch, "from");
+        mbus_cJSON *from = mbus_cJSON_GetObjectItem(patch, "from");
         if (!from)
         {
             /* missing "from" for copy/move. */
@@ -404,7 +404,7 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
         }
         if (opcode == 4)
         {
-            value = cJSON_Duplicate(value, 1);
+            value = mbus_cJSON_Duplicate(value, 1);
         }
         if (!value)
         {
@@ -414,13 +414,13 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
     }
     else /* Add/Replace uses "value". */
     {
-        value = cJSON_GetObjectItem(patch, "value");
+        value = mbus_cJSON_GetObjectItem(patch, "value");
         if (!value)
         {
             /* missing "value" for add/replace. */
             return 7;
         }
-        value = cJSON_Duplicate(value, 1);
+        value = mbus_cJSON_Duplicate(value, 1);
         if (!value)
         {
             /* out of memory for add/replace. */
@@ -445,38 +445,38 @@ static int cJSONUtils_ApplyPatch(cJSON *object, cJSON *patch)
     {
         /* Couldn't find object to add to. */
         free(parentptr);
-        cJSON_Delete(value);
+        mbus_cJSON_Delete(value);
         return 9;
     }
-    else if ((parent->type & 0xFF) == cJSON_Array)
+    else if ((parent->type & 0xFF) == mbus_cJSON_Array)
     {
         if (!strcmp(childptr, "-"))
         {
-            cJSON_AddItemToArray(parent, value);
+            mbus_cJSON_AddItemToArray(parent, value);
         }
         else
         {
-            cJSON_InsertItemInArray(parent, atoi(childptr), value);
+            mbus_cJSON_InsertItemInArray(parent, atoi(childptr), value);
         }
     }
-    else if ((parent->type & 0xFF) == cJSON_Object)
+    else if ((parent->type & 0xFF) == mbus_cJSON_Object)
     {
-        cJSON_DeleteItemFromObject(parent, childptr);
-        cJSON_AddItemToObject(parent, childptr, value);
+        mbus_cJSON_DeleteItemFromObject(parent, childptr);
+        mbus_cJSON_AddItemToObject(parent, childptr, value);
     }
     else
     {
-        cJSON_Delete(value);
+        mbus_cJSON_Delete(value);
     }
     free(parentptr);
 
     return 0;
 }
 
-int cJSONUtils_ApplyPatches(cJSON *object, cJSON *patches)
+int cJSONUtils_ApplyPatches(mbus_cJSON *object, mbus_cJSON *patches)
 {
     int err = 0;
-    if ((patches->type & 0xFF) != cJSON_Array)
+    if ((patches->type & 0xFF) != mbus_cJSON_Array)
     {
         /* malformed patches. */
         return 1;
@@ -497,34 +497,34 @@ int cJSONUtils_ApplyPatches(cJSON *object, cJSON *patches)
     return 0;
 }
 
-static void cJSONUtils_GeneratePatch(cJSON *patches, const char *op, const char *path, const char *suffix, cJSON *val)
+static void cJSONUtils_GeneratePatch(mbus_cJSON *patches, const char *op, const char *path, const char *suffix, mbus_cJSON *val)
 {
-    cJSON *patch = cJSON_CreateObject();
-    cJSON_AddItemToObject(patch, "op", cJSON_CreateString(op));
+    mbus_cJSON *patch = mbus_cJSON_CreateObject();
+    mbus_cJSON_AddItemToObject(patch, "op", mbus_cJSON_CreateString(op));
     if (suffix)
     {
         char *newpath = (char*)malloc(strlen(path) + cJSONUtils_PointerEncodedstrlen(suffix) + 2);
         cJSONUtils_PointerEncodedstrcpy(newpath + sprintf(newpath, "%s/", path), suffix);
-        cJSON_AddItemToObject(patch, "path", cJSON_CreateString(newpath));
+        mbus_cJSON_AddItemToObject(patch, "path", mbus_cJSON_CreateString(newpath));
         free(newpath);
     }
     else
     {
-        cJSON_AddItemToObject(patch, "path", cJSON_CreateString(path));
+        mbus_cJSON_AddItemToObject(patch, "path", mbus_cJSON_CreateString(path));
     }
     if (val)
     {
-        cJSON_AddItemToObject(patch, "value", cJSON_Duplicate(val, 1));
+        mbus_cJSON_AddItemToObject(patch, "value", mbus_cJSON_Duplicate(val, 1));
     }
-    cJSON_AddItemToArray(patches, patch);
+    mbus_cJSON_AddItemToArray(patches, patch);
 }
 
-void cJSONUtils_AddPatchToArray(cJSON *array, const char *op, const char *path, cJSON *val)
+void cJSONUtils_AddPatchToArray(mbus_cJSON *array, const char *op, const char *path, mbus_cJSON *val)
 {
     cJSONUtils_GeneratePatch(array, op, path, 0, val);
 }
 
-static void cJSONUtils_CompareToPatch(cJSON *patches, const char *path, cJSON *from, cJSON *to)
+static void cJSONUtils_CompareToPatch(mbus_cJSON *patches, const char *path, mbus_cJSON *from, mbus_cJSON *to)
 {
     if ((from->type & 0xFF) != (to->type & 0xFF))
     {
@@ -534,21 +534,21 @@ static void cJSONUtils_CompareToPatch(cJSON *patches, const char *path, cJSON *f
 
     switch ((from->type & 0xFF))
     {
-        case cJSON_Number:
+        case mbus_cJSON_Number:
             if ((from->valueint != to->valueint) || (from->valuedouble != to->valuedouble))
             {
                 cJSONUtils_GeneratePatch(patches, "replace", path, 0, to);
             }
             return;
 
-        case cJSON_String:
+        case mbus_cJSON_String:
             if (strcmp(from->valuestring, to->valuestring) != 0)
             {
                 cJSONUtils_GeneratePatch(patches, "replace", path, 0, to);
             }
             return;
 
-        case cJSON_Array:
+        case mbus_cJSON_Array:
         {
             int c = 0;
             char *newpath = (char*)malloc(strlen(path) + 23); /* Allow space for 64bit int. */
@@ -573,10 +573,10 @@ static void cJSONUtils_CompareToPatch(cJSON *patches, const char *path, cJSON *f
             return;
         }
 
-        case cJSON_Object:
+        case mbus_cJSON_Object:
         {
-            cJSON *a = NULL;
-            cJSON *b = NULL;
+            mbus_cJSON *a = NULL;
+            mbus_cJSON *b = NULL;
             cJSONUtils_SortObject(from);
             cJSONUtils_SortObject(to);
 
@@ -618,20 +618,20 @@ static void cJSONUtils_CompareToPatch(cJSON *patches, const char *path, cJSON *f
     }
 }
 
-cJSON* cJSONUtils_GeneratePatches(cJSON *from, cJSON *to)
+mbus_cJSON* cJSONUtils_GeneratePatches(mbus_cJSON *from, mbus_cJSON *to)
 {
-    cJSON *patches = cJSON_CreateArray();
+    mbus_cJSON *patches = mbus_cJSON_CreateArray();
     cJSONUtils_CompareToPatch(patches, "", from, to);
 
     return patches;
 }
 
 /* sort lists using mergesort */
-static cJSON *cJSONUtils_SortList(cJSON *list)
+static mbus_cJSON *cJSONUtils_SortList(mbus_cJSON *list)
 {
-    cJSON *first = list;
-    cJSON *second = list;
-    cJSON *ptr = list;
+    mbus_cJSON *first = list;
+    mbus_cJSON *second = list;
+    mbus_cJSON *ptr = list;
 
     if (!list || !list->next)
     {
@@ -733,55 +733,55 @@ static cJSON *cJSONUtils_SortList(cJSON *list)
     return list;
 }
 
-void cJSONUtils_SortObject(cJSON *object)
+void cJSONUtils_SortObject(mbus_cJSON *object)
 {
     object->child = cJSONUtils_SortList(object->child);
 }
 
-cJSON* cJSONUtils_MergePatch(cJSON *target, cJSON *patch)
+mbus_cJSON* cJSONUtils_MergePatch(mbus_cJSON *target, mbus_cJSON *patch)
 {
-    if (!patch || ((patch->type & 0xFF) != cJSON_Object))
+    if (!patch || ((patch->type & 0xFF) != mbus_cJSON_Object))
     {
         /* scalar value, array or NULL, just duplicate */
-        cJSON_Delete(target);
-        return cJSON_Duplicate(patch, 1);
+        mbus_cJSON_Delete(target);
+        return mbus_cJSON_Duplicate(patch, 1);
     }
 
-    if (!target || ((target->type & 0xFF) != cJSON_Object))
+    if (!target || ((target->type & 0xFF) != mbus_cJSON_Object))
     {
-        cJSON_Delete(target);
-        target = cJSON_CreateObject();
+        mbus_cJSON_Delete(target);
+        target = mbus_cJSON_CreateObject();
     }
 
     patch = patch->child;
     while (patch)
     {
-        if ((patch->type & 0xFF) == cJSON_NULL)
+        if ((patch->type & 0xFF) == mbus_cJSON_NULL)
         {
             /* NULL is the indicator to remove a value, see RFC7396 */
-            cJSON_DeleteItemFromObject(target, patch->string);
+            mbus_cJSON_DeleteItemFromObject(target, patch->string);
         }
         else
         {
-            cJSON *replaceme = cJSON_DetachItemFromObject(target, patch->string);
-            cJSON_AddItemToObject(target, patch->string, cJSONUtils_MergePatch(replaceme, patch));
+            mbus_cJSON *replaceme = mbus_cJSON_DetachItemFromObject(target, patch->string);
+            mbus_cJSON_AddItemToObject(target, patch->string, cJSONUtils_MergePatch(replaceme, patch));
         }
         patch = patch->next;
     }
     return target;
 }
 
-cJSON *cJSONUtils_GenerateMergePatch(cJSON *from, cJSON *to)
+mbus_cJSON *cJSONUtils_GenerateMergePatch(mbus_cJSON *from, mbus_cJSON *to)
 {
-    cJSON *patch = NULL;
+    mbus_cJSON *patch = NULL;
     if (!to)
     {
         /* patch to delete everything */
-        return cJSON_CreateNull();
+        return mbus_cJSON_CreateNull();
     }
-    if (((to->type & 0xFF) != cJSON_Object) || !from || ((from->type & 0xFF) != cJSON_Object))
+    if (((to->type & 0xFF) != mbus_cJSON_Object) || !from || ((from->type & 0xFF) != mbus_cJSON_Object))
     {
-        return cJSON_Duplicate(to, 1);
+        return mbus_cJSON_Duplicate(to, 1);
     }
 
     cJSONUtils_SortObject(from);
@@ -789,20 +789,20 @@ cJSON *cJSONUtils_GenerateMergePatch(cJSON *from, cJSON *to)
 
     from = from->child;
     to = to->child;
-    patch = cJSON_CreateObject();
+    patch = mbus_cJSON_CreateObject();
     while (from || to)
     {
         int compare = from ? (to ? strcmp(from->string, to->string) : -1) : 1;
         if (compare < 0)
         {
             /* from has a value that to doesn't have -> remove */
-            cJSON_AddItemToObject(patch, from->string, cJSON_CreateNull());
+            mbus_cJSON_AddItemToObject(patch, from->string, mbus_cJSON_CreateNull());
             from = from->next;
         }
         else if (compare > 0)
         {
             /* to has a value that from doesn't have -> add to patch */
-            cJSON_AddItemToObject(patch, to->string, cJSON_Duplicate(to, 1));
+            mbus_cJSON_AddItemToObject(patch, to->string, mbus_cJSON_Duplicate(to, 1));
             to = to->next;
         }
         else
@@ -811,7 +811,7 @@ cJSON *cJSONUtils_GenerateMergePatch(cJSON *from, cJSON *to)
             if (cJSONUtils_Compare(from, to))
             {
                 /* not identical --> generate a patch */
-                cJSON_AddItemToObject(patch, to->string, cJSONUtils_GenerateMergePatch(from, to));
+                mbus_cJSON_AddItemToObject(patch, to->string, cJSONUtils_GenerateMergePatch(from, to));
             }
             /* next key in the object */
             from = from->next;
@@ -820,7 +820,7 @@ cJSON *cJSONUtils_GenerateMergePatch(cJSON *from, cJSON *to)
     }
     if (!patch->child)
     {
-        cJSON_Delete(patch);
+        mbus_cJSON_Delete(patch);
         return NULL;
     }
 

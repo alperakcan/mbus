@@ -53,7 +53,7 @@ typedef int cjbool;
 
 static const char *global_ep = NULL;
 
-const char *cJSON_GetErrorPtr(void)
+const char *mbus_cJSON_GetErrorPtr(void)
 {
     return global_ep;
 }
@@ -98,7 +98,7 @@ static char* cJSON_strdup(const char* str)
     return copy;
 }
 
-void cJSON_InitHooks(cJSON_Hooks* hooks)
+void mbus_cJSON_InitHooks(mbus_cJSON_Hooks* hooks)
 {
     if (!hooks)
     {
@@ -113,33 +113,33 @@ void cJSON_InitHooks(cJSON_Hooks* hooks)
 }
 
 /* Internal constructor. */
-static cJSON *cJSON_New_Item(void)
+static mbus_cJSON *cJSON_New_Item(void)
 {
-    cJSON* node = (cJSON*)cJSON_malloc(sizeof(cJSON));
+    mbus_cJSON* node = (mbus_cJSON*)cJSON_malloc(sizeof(mbus_cJSON));
     if (node)
     {
-        memset(node, '\0', sizeof(cJSON));
+        memset(node, '\0', sizeof(mbus_cJSON));
     }
 
     return node;
 }
 
 /* Delete a cJSON structure. */
-void cJSON_Delete(cJSON *c)
+void mbus_cJSON_Delete(mbus_cJSON *c)
 {
-    cJSON *next = NULL;
+    mbus_cJSON *next = NULL;
     while (c)
     {
         next = c->next;
-        if (!(c->type & cJSON_IsReference) && c->child)
+        if (!(c->type & mbus_cJSON_IsReference) && c->child)
         {
-            cJSON_Delete(c->child);
+            mbus_cJSON_Delete(c->child);
         }
-        if (!(c->type & cJSON_IsReference) && c->valuestring)
+        if (!(c->type & mbus_cJSON_IsReference) && c->valuestring)
         {
             cJSON_free(c->valuestring);
         }
-        if (!(c->type & cJSON_StringIsConst) && c->string)
+        if (!(c->type & mbus_cJSON_StringIsConst) && c->string)
         {
             cJSON_free(c->string);
         }
@@ -149,7 +149,7 @@ void cJSON_Delete(cJSON *c)
 }
 
 /* Parse the input text to generate a number, and populate the result into item. */
-static const char *parse_number(cJSON *item, const char *num)
+static const char *parse_number(mbus_cJSON *item, const char *num)
 {
     double n = 0;
     double sign = 1;
@@ -213,7 +213,7 @@ static const char *parse_number(cJSON *item, const char *num)
 
     item->valuedouble = n;
     item->valueint = (int)n;
-    item->type = cJSON_Number;
+    item->type = mbus_cJSON_Number;
 
     return num;
 }
@@ -301,7 +301,7 @@ static int update(const printbuffer *p)
 }
 
 /* Render the number nicely from the given item into a string. */
-static char *print_number(const cJSON *item, printbuffer *p)
+static char *print_number(const mbus_cJSON *item, printbuffer *p)
 {
     char *str = NULL;
     double d = item->valuedouble;
@@ -474,7 +474,7 @@ static const unsigned char firstByteMark[7] =
 };
 
 /* Parse the input text into an unescaped cstring, and populate item. */
-static const char *parse_string(cJSON *item, const char *str, const char **ep)
+static const char *parse_string(mbus_cJSON *item, const char *str, const char **ep)
 {
     const char *ptr = str + 1;
     const char *end_ptr =str + 1;
@@ -512,7 +512,7 @@ static const char *parse_string(cJSON *item, const char *str, const char **ep)
         return NULL;
     }
     item->valuestring = out; /* assign here so out will be deleted during cJSON_Delete() later */
-    item->type = cJSON_String;
+    item->type = mbus_cJSON_String;
 
     ptr = str + 1;
     ptr2 = out;
@@ -797,18 +797,18 @@ static char *print_string_ptr(const char *str, printbuffer *p)
 }
 
 /* Invoke print_string_ptr (which is useful) on an item. */
-static char *print_string(const cJSON *item, printbuffer *p)
+static char *print_string(const mbus_cJSON *item, printbuffer *p)
 {
     return print_string_ptr(item->valuestring, p);
 }
 
 /* Predeclare these prototypes. */
-static const char *parse_value(cJSON *item, const char *value, const char **ep);
-static char *print_value(const cJSON *item, int depth, cjbool fmt, printbuffer *p);
-static const char *parse_array(cJSON *item, const char *value, const char **ep);
-static char *print_array(const cJSON *item, int depth, cjbool fmt, printbuffer *p);
-static const char *parse_object(cJSON *item, const char *value, const char **ep);
-static char *print_object(const cJSON *item, int depth, cjbool fmt, printbuffer *p);
+static const char *parse_value(mbus_cJSON *item, const char *value, const char **ep);
+static char *print_value(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p);
+static const char *parse_array(mbus_cJSON *item, const char *value, const char **ep);
+static char *print_array(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p);
+static const char *parse_object(mbus_cJSON *item, const char *value, const char **ep);
+static char *print_object(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p);
 
 /* Utility to jump whitespace and cr/lf */
 static const char *skip(const char *in)
@@ -822,12 +822,12 @@ static const char *skip(const char *in)
 }
 
 /* Parse an object - create a new root, and populate. */
-cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cjbool require_null_terminated)
+mbus_cJSON *mbus_cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cjbool require_null_terminated)
 {
     const char *end = NULL;
     /* use global error pointer if no specific one was given */
     const char **ep = return_parse_end ? return_parse_end : &global_ep;
-    cJSON *c = cJSON_New_Item();
+    mbus_cJSON *c = cJSON_New_Item();
     *ep = NULL;
     if (!c) /* memory fail */
     {
@@ -838,7 +838,7 @@ cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cjb
     if (!end)
     {
         /* parse failure. ep is set. */
-        cJSON_Delete(c);
+        mbus_cJSON_Delete(c);
         return NULL;
     }
 
@@ -848,7 +848,7 @@ cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cjb
         end = skip(end);
         if (*end)
         {
-            cJSON_Delete(c);
+            mbus_cJSON_Delete(c);
             *ep = end;
             return NULL;
         }
@@ -862,23 +862,23 @@ cJSON *cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cjb
 }
 
 /* Default options for cJSON_Parse */
-cJSON *cJSON_Parse(const char *value)
+mbus_cJSON *mbus_cJSON_Parse(const char *value)
 {
-    return cJSON_ParseWithOpts(value, 0, 0);
+    return mbus_cJSON_ParseWithOpts(value, 0, 0);
 }
 
 /* Render a cJSON item/entity/structure to text. */
-char *cJSON_Print(const cJSON *item)
+char *mbus_cJSON_Print(const mbus_cJSON *item)
 {
     return print_value(item, 0, 1, 0);
 }
 
-char *cJSON_PrintUnformatted(const cJSON *item)
+char *mbus_cJSON_PrintUnformatted(const mbus_cJSON *item)
 {
     return print_value(item, 0, 0, 0);
 }
 
-char *cJSON_PrintBuffered(const cJSON *item, int prebuffer, cjbool fmt)
+char *mbus_cJSON_PrintBuffered(const mbus_cJSON *item, int prebuffer, cjbool fmt)
 {
     printbuffer p;
     p.buffer = (char*)cJSON_malloc(prebuffer);
@@ -893,7 +893,7 @@ char *cJSON_PrintBuffered(const cJSON *item, int prebuffer, cjbool fmt)
     return print_value(item, 0, fmt, &p);
 }
 
-int cJSON_PrintPreallocated(cJSON *item,char *buf, const int len, const cjbool fmt)
+int mbus_cJSON_PrintPreallocated(mbus_cJSON *item,char *buf, const int len, const cjbool fmt)
 {
     printbuffer p;
     p.buffer = buf;
@@ -904,7 +904,7 @@ int cJSON_PrintPreallocated(cJSON *item,char *buf, const int len, const cjbool f
 }
 
 /* Parser core - when encountering text, process appropriately. */
-static const char *parse_value(cJSON *item, const char *value, const char **ep)
+static const char *parse_value(mbus_cJSON *item, const char *value, const char **ep)
 {
     if (!value)
     {
@@ -915,17 +915,17 @@ static const char *parse_value(cJSON *item, const char *value, const char **ep)
     /* parse the different types of values */
     if (!strncmp(value, "null", 4))
     {
-        item->type = cJSON_NULL;
+        item->type = mbus_cJSON_NULL;
         return value + 4;
     }
     if (!strncmp(value, "false", 5))
     {
-        item->type = cJSON_False;
+        item->type = mbus_cJSON_False;
         return value + 5;
     }
     if (!strncmp(value, "true", 4))
     {
-        item->type = cJSON_True;
+        item->type = mbus_cJSON_True;
         item->valueint = 1;
         return value + 4;
     }
@@ -952,7 +952,7 @@ static const char *parse_value(cJSON *item, const char *value, const char **ep)
 }
 
 /* Render a value to text. */
-static char *print_value(const cJSON *item, int depth, cjbool fmt, printbuffer *p)
+static char *print_value(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p)
 {
     char *out = NULL;
 
@@ -964,37 +964,37 @@ static char *print_value(const cJSON *item, int depth, cjbool fmt, printbuffer *
     {
         switch ((item->type) & 0xFF)
         {
-            case cJSON_NULL:
+            case mbus_cJSON_NULL:
                 out = ensure(p, 5);
                 if (out)
                 {
                     strcpy(out, "null");
                 }
                 break;
-            case cJSON_False:
+            case mbus_cJSON_False:
                 out = ensure(p, 6);
                 if (out)
                 {
                     strcpy(out, "false");
                 }
                 break;
-            case cJSON_True:
+            case mbus_cJSON_True:
                 out = ensure(p, 5);
                 if (out)
                 {
                     strcpy(out, "true");
                 }
                 break;
-            case cJSON_Number:
+            case mbus_cJSON_Number:
                 out = print_number(item, p);
                 break;
-            case cJSON_String:
+            case mbus_cJSON_String:
                 out = print_string(item, p);
                 break;
-            case cJSON_Array:
+            case mbus_cJSON_Array:
                 out = print_array(item, depth, fmt, p);
                 break;
-            case cJSON_Object:
+            case mbus_cJSON_Object:
                 out = print_object(item, depth, fmt, p);
                 break;
         }
@@ -1003,25 +1003,25 @@ static char *print_value(const cJSON *item, int depth, cjbool fmt, printbuffer *
     {
         switch ((item->type) & 0xFF)
         {
-            case cJSON_NULL:
+            case mbus_cJSON_NULL:
                 out = cJSON_strdup("null");
                 break;
-            case cJSON_False:
+            case mbus_cJSON_False:
                 out = cJSON_strdup("false");
                 break;
-            case cJSON_True:
+            case mbus_cJSON_True:
                 out = cJSON_strdup("true");
                 break;
-            case cJSON_Number:
+            case mbus_cJSON_Number:
                 out = print_number(item, 0);
                 break;
-            case cJSON_String:
+            case mbus_cJSON_String:
                 out = print_string(item, 0);
                 break;
-            case cJSON_Array:
+            case mbus_cJSON_Array:
                 out = print_array(item, depth, fmt, 0);
                 break;
-            case cJSON_Object:
+            case mbus_cJSON_Object:
                 out = print_object(item, depth, fmt, 0);
                 break;
         }
@@ -1031,9 +1031,9 @@ static char *print_value(const cJSON *item, int depth, cjbool fmt, printbuffer *
 }
 
 /* Build an array from input text. */
-static const char *parse_array(cJSON *item,const char *value,const char **ep)
+static const char *parse_array(mbus_cJSON *item,const char *value,const char **ep)
 {
-    cJSON *child = NULL;
+    mbus_cJSON *child = NULL;
     if (*value != '[')
     {
         /* not an array! */
@@ -1041,7 +1041,7 @@ static const char *parse_array(cJSON *item,const char *value,const char **ep)
         return NULL;
     }
 
-    item->type = cJSON_Array;
+    item->type = mbus_cJSON_Array;
     value = skip(value + 1);
     if (*value == ']')
     {
@@ -1065,7 +1065,7 @@ static const char *parse_array(cJSON *item,const char *value,const char **ep)
     /* loop through the comma separated array elements */
     while (*value == ',')
     {
-        cJSON *new_item = NULL;
+        mbus_cJSON *new_item = NULL;
         if (!(new_item = cJSON_New_Item()))
         {
             /* memory fail */
@@ -1098,14 +1098,14 @@ static const char *parse_array(cJSON *item,const char *value,const char **ep)
 }
 
 /* Render an array to text */
-static char *print_array(const cJSON *item, int depth, cjbool fmt, printbuffer *p)
+static char *print_array(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p)
 {
     char **entries;
     char *out = NULL;
     char *ptr = NULL;
     char *ret = NULL;
     int len = 5;
-    cJSON *child = item->child;
+    mbus_cJSON *child = item->child;
     int numentries = 0;
     int i = 0;
     cjbool fail = false;
@@ -1267,9 +1267,9 @@ static char *print_array(const cJSON *item, int depth, cjbool fmt, printbuffer *
 }
 
 /* Build an object from the text. */
-static const char *parse_object(cJSON *item, const char *value, const char **ep)
+static const char *parse_object(mbus_cJSON *item, const char *value, const char **ep)
 {
-    cJSON *child = NULL;
+    mbus_cJSON *child = NULL;
     if (*value != '{')
     {
         /* not an object! */
@@ -1277,7 +1277,7 @@ static const char *parse_object(cJSON *item, const char *value, const char **ep)
         return NULL;
     }
 
-    item->type = cJSON_Object;
+    item->type = mbus_cJSON_Object;
     value = skip(value + 1);
     if (*value == '}')
     {
@@ -1316,7 +1316,7 @@ static const char *parse_object(cJSON *item, const char *value, const char **ep)
 
     while (*value == ',')
     {
-        cJSON *new_item = NULL;
+        mbus_cJSON *new_item = NULL;
         if (!(new_item = cJSON_New_Item()))
         {
             /* memory fail */
@@ -1362,7 +1362,7 @@ static const char *parse_object(cJSON *item, const char *value, const char **ep)
 }
 
 /* Render an object to text. */
-static char *print_object(const cJSON *item, int depth, cjbool fmt, printbuffer *p)
+static char *print_object(const mbus_cJSON *item, int depth, cjbool fmt, printbuffer *p)
 {
     char **entries = NULL;
     char **names = NULL;
@@ -1373,7 +1373,7 @@ static char *print_object(const cJSON *item, int depth, cjbool fmt, printbuffer 
     int len = 7;
     int i = 0;
     int j = 0;
-    cJSON *child = item->child;
+    mbus_cJSON *child = item->child;
     int numentries = 0;
     cjbool fail = false;
     size_t tmplen = 0;
@@ -1643,9 +1643,9 @@ static char *print_object(const cJSON *item, int depth, cjbool fmt, printbuffer 
 }
 
 /* Get Array size/item / object item. */
-int    cJSON_GetArraySize(const cJSON *array)
+int    mbus_cJSON_GetArraySize(const mbus_cJSON *array)
 {
-    cJSON *c = array->child;
+    mbus_cJSON *c = array->child;
     int i = 0;
     while(c)
     {
@@ -1655,9 +1655,9 @@ int    cJSON_GetArraySize(const cJSON *array)
     return i;
 }
 
-cJSON *cJSON_GetArrayItem(const cJSON *array, int item)
+mbus_cJSON *mbus_cJSON_GetArrayItem(const mbus_cJSON *array, int item)
 {
-    cJSON *c = array ? array->child : NULL;
+    mbus_cJSON *c = array ? array->child : NULL;
     while (c && item > 0)
     {
         item--;
@@ -1667,9 +1667,9 @@ cJSON *cJSON_GetArrayItem(const cJSON *array, int item)
     return c;
 }
 
-cJSON *cJSON_GetObjectItem(const cJSON *object, const char *string)
+mbus_cJSON *mbus_cJSON_GetObjectItem(const mbus_cJSON *object, const char *string)
 {
-    cJSON *c = object ? object->child : NULL;
+    mbus_cJSON *c = object ? object->child : NULL;
     while (c && cJSON_strcasecmp(c->string, string))
     {
         c = c->next;
@@ -1677,37 +1677,37 @@ cJSON *cJSON_GetObjectItem(const cJSON *object, const char *string)
     return c;
 }
 
-cjbool cJSON_HasObjectItem(const cJSON *object,const char *string)
+cjbool mbus_cJSON_HasObjectItem(const mbus_cJSON *object,const char *string)
 {
-    return cJSON_GetObjectItem(object, string) ? 1 : 0;
+    return mbus_cJSON_GetObjectItem(object, string) ? 1 : 0;
 }
 
 /* Utility for array list handling. */
-static void suffix_object(cJSON *prev, cJSON *item)
+static void suffix_object(mbus_cJSON *prev, mbus_cJSON *item)
 {
     prev->next = item;
     item->prev = prev;
 }
 
 /* Utility for handling references. */
-static cJSON *create_reference(const cJSON *item)
+static mbus_cJSON *create_reference(const mbus_cJSON *item)
 {
-    cJSON *ref = cJSON_New_Item();
+    mbus_cJSON *ref = cJSON_New_Item();
     if (!ref)
     {
         return NULL;
     }
-    memcpy(ref, item, sizeof(cJSON));
+    memcpy(ref, item, sizeof(mbus_cJSON));
     ref->string = NULL;
-    ref->type |= cJSON_IsReference;
+    ref->type |= mbus_cJSON_IsReference;
     ref->next = ref->prev = NULL;
     return ref;
 }
 
 /* Add item to array/object. */
-void   cJSON_AddItemToArray(cJSON *array, cJSON *item)
+void   mbus_cJSON_AddItemToArray(mbus_cJSON *array, mbus_cJSON *item)
 {
-    cJSON *c = array->child;
+    mbus_cJSON *c = array->child;
     if (!item)
     {
         return;
@@ -1728,7 +1728,7 @@ void   cJSON_AddItemToArray(cJSON *array, cJSON *item)
     }
 }
 
-void   cJSON_AddItemToObject(cJSON *object, const char *string, cJSON *item)
+void   mbus_cJSON_AddItemToObject(mbus_cJSON *object, const char *string, mbus_cJSON *item)
 {
     if (!item)
     {
@@ -1742,38 +1742,38 @@ void   cJSON_AddItemToObject(cJSON *object, const char *string, cJSON *item)
     }
     item->string = cJSON_strdup(string);
 
-    cJSON_AddItemToArray(object,item);
+    mbus_cJSON_AddItemToArray(object,item);
 }
 
 /* Add an item to an object with constant string as key */
-void   cJSON_AddItemToObjectCS(cJSON *object, const char *string, cJSON *item)
+void   mbus_cJSON_AddItemToObjectCS(mbus_cJSON *object, const char *string, mbus_cJSON *item)
 {
     if (!item)
     {
         return;
     }
-    if (!(item->type & cJSON_StringIsConst) && item->string)
+    if (!(item->type & mbus_cJSON_StringIsConst) && item->string)
     {
         cJSON_free(item->string);
     }
     item->string = (char*)string;
-    item->type |= cJSON_StringIsConst;
-    cJSON_AddItemToArray(object, item);
+    item->type |= mbus_cJSON_StringIsConst;
+    mbus_cJSON_AddItemToArray(object, item);
 }
 
-void cJSON_AddItemReferenceToArray(cJSON *array, cJSON *item)
+void mbus_cJSON_AddItemReferenceToArray(mbus_cJSON *array, mbus_cJSON *item)
 {
-    cJSON_AddItemToArray(array, create_reference(item));
+    mbus_cJSON_AddItemToArray(array, create_reference(item));
 }
 
-void cJSON_AddItemReferenceToObject(cJSON *object, const char *string, cJSON *item)
+void mbus_cJSON_AddItemReferenceToObject(mbus_cJSON *object, const char *string, mbus_cJSON *item)
 {
-    cJSON_AddItemToObject(object, string, create_reference(item));
+    mbus_cJSON_AddItemToObject(object, string, create_reference(item));
 }
 
-cJSON *cJSON_DetachItemFromArray(cJSON *array, int which)
+mbus_cJSON *mbus_cJSON_DetachItemFromArray(mbus_cJSON *array, int which)
 {
-    cJSON *c = array->child;
+    mbus_cJSON *c = array->child;
     while (c && (which > 0))
     {
         c = c->next;
@@ -1803,15 +1803,15 @@ cJSON *cJSON_DetachItemFromArray(cJSON *array, int which)
     return c;
 }
 
-void cJSON_DeleteItemFromArray(cJSON *array, int which)
+void mbus_cJSON_DeleteItemFromArray(mbus_cJSON *array, int which)
 {
-    cJSON_Delete(cJSON_DetachItemFromArray(array, which));
+    mbus_cJSON_Delete(mbus_cJSON_DetachItemFromArray(array, which));
 }
 
-cJSON *cJSON_DetachItemFromObject(cJSON *object, const char *string)
+mbus_cJSON *mbus_cJSON_DetachItemFromObject(mbus_cJSON *object, const char *string)
 {
     int i = 0;
-    cJSON *c = object->child;
+    mbus_cJSON *c = object->child;
     while (c && cJSON_strcasecmp(c->string,string))
     {
         i++;
@@ -1819,21 +1819,21 @@ cJSON *cJSON_DetachItemFromObject(cJSON *object, const char *string)
     }
     if (c)
     {
-        return cJSON_DetachItemFromArray(object, i);
+        return mbus_cJSON_DetachItemFromArray(object, i);
     }
 
     return NULL;
 }
 
-void cJSON_DeleteItemFromObject(cJSON *object, const char *string)
+void mbus_cJSON_DeleteItemFromObject(mbus_cJSON *object, const char *string)
 {
-    cJSON_Delete(cJSON_DetachItemFromObject(object, string));
+    mbus_cJSON_Delete(mbus_cJSON_DetachItemFromObject(object, string));
 }
 
 /* Replace array/object items with new ones. */
-void cJSON_InsertItemInArray(cJSON *array, int which, cJSON *newitem)
+void mbus_cJSON_InsertItemInArray(mbus_cJSON *array, int which, mbus_cJSON *newitem)
 {
-    cJSON *c = array->child;
+    mbus_cJSON *c = array->child;
     while (c && (which > 0))
     {
         c = c->next;
@@ -1841,7 +1841,7 @@ void cJSON_InsertItemInArray(cJSON *array, int which, cJSON *newitem)
     }
     if (!c)
     {
-        cJSON_AddItemToArray(array, newitem);
+        mbus_cJSON_AddItemToArray(array, newitem);
         return;
     }
     newitem->next = c;
@@ -1857,9 +1857,9 @@ void cJSON_InsertItemInArray(cJSON *array, int which, cJSON *newitem)
     }
 }
 
-void cJSON_ReplaceItemInArray(cJSON *array, int which, cJSON *newitem)
+void mbus_cJSON_ReplaceItemInArray(mbus_cJSON *array, int which, mbus_cJSON *newitem)
 {
-    cJSON *c = array->child;
+    mbus_cJSON *c = array->child;
     while (c && (which > 0))
     {
         c = c->next;
@@ -1884,13 +1884,13 @@ void cJSON_ReplaceItemInArray(cJSON *array, int which, cJSON *newitem)
         newitem->prev->next = newitem;
     }
     c->next = c->prev = NULL;
-    cJSON_Delete(c);
+    mbus_cJSON_Delete(c);
 }
 
-void cJSON_ReplaceItemInObject(cJSON *object, const char *string, cJSON *newitem)
+void mbus_cJSON_ReplaceItemInObject(mbus_cJSON *object, const char *string, mbus_cJSON *newitem)
 {
     int i = 0;
-    cJSON *c = object->child;
+    mbus_cJSON *c = object->child;
     while(c && cJSON_strcasecmp(c->string, string))
     {
         i++;
@@ -1899,67 +1899,67 @@ void cJSON_ReplaceItemInObject(cJSON *object, const char *string, cJSON *newitem
     if(c)
     {
         /* free the old string if not const */
-        if (!(newitem->type & cJSON_StringIsConst) && newitem->string)
+        if (!(newitem->type & mbus_cJSON_StringIsConst) && newitem->string)
         {
              cJSON_free(newitem->string);
         }
 
         newitem->string = cJSON_strdup(string);
-        cJSON_ReplaceItemInArray(object, i, newitem);
+        mbus_cJSON_ReplaceItemInArray(object, i, newitem);
     }
 }
 
 /* Create basic types: */
-cJSON *cJSON_CreateNull(void)
+mbus_cJSON *mbus_cJSON_CreateNull(void)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = cJSON_NULL;
+        item->type = mbus_cJSON_NULL;
     }
 
     return item;
 }
 
-cJSON *cJSON_CreateTrue(void)
+mbus_cJSON *mbus_cJSON_CreateTrue(void)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = cJSON_True;
+        item->type = mbus_cJSON_True;
     }
 
     return item;
 }
 
-cJSON *cJSON_CreateFalse(void)
+mbus_cJSON *mbus_cJSON_CreateFalse(void)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = cJSON_False;
+        item->type = mbus_cJSON_False;
     }
 
     return item;
 }
 
-cJSON *cJSON_CreateBool(cjbool b)
+mbus_cJSON *mbus_cJSON_CreateBool(cjbool b)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = b ? cJSON_True : cJSON_False;
+        item->type = b ? mbus_cJSON_True : mbus_cJSON_False;
     }
 
     return item;
 }
 
-cJSON *cJSON_CreateNumber(double num)
+mbus_cJSON *mbus_cJSON_CreateNumber(double num)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = cJSON_Number;
+        item->type = mbus_cJSON_Number;
         item->valuedouble = num;
         item->valueint = (int)num;
     }
@@ -1967,16 +1967,16 @@ cJSON *cJSON_CreateNumber(double num)
     return item;
 }
 
-cJSON *cJSON_CreateString(const char *string)
+mbus_cJSON *mbus_cJSON_CreateString(const char *string)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type = cJSON_String;
+        item->type = mbus_cJSON_String;
         item->valuestring = cJSON_strdup(string);
         if(!item->valuestring)
         {
-            cJSON_Delete(item);
+            mbus_cJSON_Delete(item);
             return NULL;
         }
     }
@@ -1984,41 +1984,41 @@ cJSON *cJSON_CreateString(const char *string)
     return item;
 }
 
-cJSON *cJSON_CreateArray(void)
+mbus_cJSON *mbus_cJSON_CreateArray(void)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if(item)
     {
-        item->type=cJSON_Array;
+        item->type=mbus_cJSON_Array;
     }
 
     return item;
 }
 
-cJSON *cJSON_CreateObject(void)
+mbus_cJSON *mbus_cJSON_CreateObject(void)
 {
-    cJSON *item = cJSON_New_Item();
+    mbus_cJSON *item = cJSON_New_Item();
     if (item)
     {
-        item->type = cJSON_Object;
+        item->type = mbus_cJSON_Object;
     }
 
     return item;
 }
 
 /* Create Arrays: */
-cJSON *cJSON_CreateIntArray(const int *numbers, int count)
+mbus_cJSON *mbus_cJSON_CreateIntArray(const int *numbers, int count)
 {
     int i = 0;
-    cJSON *n = NULL;
-    cJSON *p = NULL;
-    cJSON *a = cJSON_CreateArray();
+    mbus_cJSON *n = NULL;
+    mbus_cJSON *p = NULL;
+    mbus_cJSON *a = mbus_cJSON_CreateArray();
     for(i = 0; a && (i < count); i++)
     {
-        n = cJSON_CreateNumber(numbers[i]);
+        n = mbus_cJSON_CreateNumber(numbers[i]);
         if (!n)
         {
-            cJSON_Delete(a);
+            mbus_cJSON_Delete(a);
             return NULL;
         }
         if(!i)
@@ -2035,18 +2035,18 @@ cJSON *cJSON_CreateIntArray(const int *numbers, int count)
     return a;
 }
 
-cJSON *cJSON_CreateFloatArray(const float *numbers, int count)
+mbus_cJSON *mbus_cJSON_CreateFloatArray(const float *numbers, int count)
 {
     int i = 0;
-    cJSON *n = NULL;
-    cJSON *p = NULL;
-    cJSON *a = cJSON_CreateArray();
+    mbus_cJSON *n = NULL;
+    mbus_cJSON *p = NULL;
+    mbus_cJSON *a = mbus_cJSON_CreateArray();
     for(i = 0; a && (i < count); i++)
     {
-        n = cJSON_CreateNumber(numbers[i]);
+        n = mbus_cJSON_CreateNumber(numbers[i]);
         if(!n)
         {
-            cJSON_Delete(a);
+            mbus_cJSON_Delete(a);
             return NULL;
         }
         if(!i)
@@ -2063,18 +2063,18 @@ cJSON *cJSON_CreateFloatArray(const float *numbers, int count)
     return a;
 }
 
-cJSON *cJSON_CreateDoubleArray(const double *numbers, int count)
+mbus_cJSON *mbus_cJSON_CreateDoubleArray(const double *numbers, int count)
 {
     int i = 0;
-    cJSON *n = NULL;
-    cJSON *p = NULL;
-    cJSON *a = cJSON_CreateArray();
+    mbus_cJSON *n = NULL;
+    mbus_cJSON *p = NULL;
+    mbus_cJSON *a = mbus_cJSON_CreateArray();
     for(i = 0;a && (i < count); i++)
     {
-        n = cJSON_CreateNumber(numbers[i]);
+        n = mbus_cJSON_CreateNumber(numbers[i]);
         if(!n)
         {
-            cJSON_Delete(a);
+            mbus_cJSON_Delete(a);
             return NULL;
         }
         if(!i)
@@ -2091,18 +2091,18 @@ cJSON *cJSON_CreateDoubleArray(const double *numbers, int count)
     return a;
 }
 
-cJSON *cJSON_CreateStringArray(const char **strings, int count)
+mbus_cJSON *mbus_cJSON_CreateStringArray(const char **strings, int count)
 {
     int i = 0;
-    cJSON *n = NULL;
-    cJSON *p = NULL;
-    cJSON *a = cJSON_CreateArray();
+    mbus_cJSON *n = NULL;
+    mbus_cJSON *p = NULL;
+    mbus_cJSON *a = mbus_cJSON_CreateArray();
     for (i = 0; a && (i < count); i++)
     {
-        n = cJSON_CreateString(strings[i]);
+        n = mbus_cJSON_CreateString(strings[i]);
         if(!n)
         {
-            cJSON_Delete(a);
+            mbus_cJSON_Delete(a);
             return NULL;
         }
         if(!i)
@@ -2120,12 +2120,12 @@ cJSON *cJSON_CreateStringArray(const char **strings, int count)
 }
 
 /* Duplication */
-cJSON *cJSON_Duplicate(const cJSON *item, cjbool recurse)
+mbus_cJSON *mbus_cJSON_Duplicate(const mbus_cJSON *item, cjbool recurse)
 {
-    cJSON *newitem = NULL;
-    cJSON *cptr = NULL;
-    cJSON *nptr = NULL;
-    cJSON *newchild = NULL;
+    mbus_cJSON *newitem = NULL;
+    mbus_cJSON *cptr = NULL;
+    mbus_cJSON *nptr = NULL;
+    mbus_cJSON *newchild = NULL;
 
     /* Bail on bad ptr */
     if (!item)
@@ -2139,7 +2139,7 @@ cJSON *cJSON_Duplicate(const cJSON *item, cjbool recurse)
         return NULL;
     }
     /* Copy over all vars */
-    newitem->type = item->type & (~cJSON_IsReference);
+    newitem->type = item->type & (~mbus_cJSON_IsReference);
     newitem->valueint = item->valueint;
     newitem->valuedouble = item->valuedouble;
     if (item->valuestring)
@@ -2147,16 +2147,16 @@ cJSON *cJSON_Duplicate(const cJSON *item, cjbool recurse)
         newitem->valuestring = cJSON_strdup(item->valuestring);
         if (!newitem->valuestring)
         {
-            cJSON_Delete(newitem);
+            mbus_cJSON_Delete(newitem);
             return NULL;
         }
     }
     if (item->string)
     {
-        newitem->string = (item->type&cJSON_StringIsConst) ? item->string : cJSON_strdup(item->string);
+        newitem->string = (item->type&mbus_cJSON_StringIsConst) ? item->string : cJSON_strdup(item->string);
         if (!newitem->string)
         {
-            cJSON_Delete(newitem);
+            mbus_cJSON_Delete(newitem);
             return NULL;
         }
     }
@@ -2169,10 +2169,10 @@ cJSON *cJSON_Duplicate(const cJSON *item, cjbool recurse)
     cptr = item->child;
     while (cptr)
     {
-        newchild = cJSON_Duplicate(cptr, 1); /* Duplicate (with recurse) each item in the ->next chain */
+        newchild = mbus_cJSON_Duplicate(cptr, 1); /* Duplicate (with recurse) each item in the ->next chain */
         if (!newchild)
         {
-            cJSON_Delete(newitem);
+            mbus_cJSON_Delete(newitem);
             return NULL;
         }
         if (nptr)
@@ -2193,7 +2193,7 @@ cJSON *cJSON_Duplicate(const cJSON *item, cjbool recurse)
     return newitem;
 }
 
-void cJSON_Minify(char *json)
+void mbus_cJSON_Minify(char *json)
 {
     char *into = json;
     while (*json)
@@ -2257,40 +2257,40 @@ void cJSON_Minify(char *json)
     *into = '\0';
 }
 
-const char * cJSON_GetStringValue (cJSON *object,const char *string)
+const char * mbus_cJSON_GetStringValue (mbus_cJSON *object,const char *string)
 {
-	cJSON *item;
-	item = cJSON_GetObjectItem(object, string);
+	mbus_cJSON *item;
+	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
 		return NULL;
 	}
-	if (item->type != cJSON_String) {
+	if (item->type != mbus_cJSON_String) {
 		return NULL;
 	}
 	return item->valuestring;
 }
 
-int cJSON_GetIntValue (cJSON *object,const char *string)
+int mbus_cJSON_GetIntValue (mbus_cJSON *object,const char *string)
 {
-	cJSON *item;
-	item = cJSON_GetObjectItem(object, string);
+	mbus_cJSON *item;
+	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
 		return -1;
 	}
-	if (item->type != cJSON_Number) {
+	if (item->type != mbus_cJSON_Number) {
 		return -1;
 	}
 	return item->valueint;
 }
 
-int cJSON_GetNumberValue (cJSON *object,const char *string)
+int mbus_cJSON_GetNumberValue (mbus_cJSON *object,const char *string)
 {
-	cJSON *item;
-	item = cJSON_GetObjectItem(object, string);
+	mbus_cJSON *item;
+	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
 		return -1;
 	}
-	if (item->type != cJSON_Number) {
+	if (item->type != mbus_cJSON_Number) {
 		return -1;
 	}
 	return item->valuedouble;
