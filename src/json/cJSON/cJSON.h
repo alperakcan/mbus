@@ -146,7 +146,7 @@ The item->next and ->prev pointers are always zero on return from Duplicate. */
 /* If you supply a ptr in return_parse_end and parsing fails, then return_parse_end will contain a pointer to the error. If not, then cJSON_GetErrorPtr() does the job. */
 extern mbus_cJSON *mbus_cJSON_ParseWithOpts(const char *value, const char **return_parse_end, int require_null_terminated);
 
-extern void cJSON_Minify(char *json);
+extern void mbus_cJSON_Minify(char *json);
 
 /* Macros for creating things quickly. */
 #define mbus_cJSON_AddNullToObject(object,name) mbus_cJSON_AddItemToObject(object, name, mbus_cJSON_CreateNull())
