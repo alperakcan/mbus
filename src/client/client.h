@@ -40,6 +40,7 @@ struct mbus_client_options {
 
 };
 
+struct mbus_json;
 struct mbus_client;
 
 void mbus_client_usage (void);
