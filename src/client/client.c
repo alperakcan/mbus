@@ -1096,6 +1096,10 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 	     (client->incommand == 1))) {
 		__pthread_cond_timedwait(&client->cond, &client->mutex, msec);
 	}
+	if (client->error != 0) {
+		pthread_mutex_unlock(&client->mutex);
+		return -1;
+	}
 	if (client->running == 0) {
 		pthread_mutex_unlock(&client->mutex);
 		return 1;
