@@ -10,5 +10,5 @@ Description: mBus is a lightweight messaging system
 Version: 1.0.0
 Requires:
 Conflicts:
-Libs: -L${libdir} -lmbus-client -lmbus-json
+Libs: -L${libdir} -lmbus-client -lmbus-json -lmbus-json-cJSON -lm -lpthread
 Cflags: -I${includedir}
