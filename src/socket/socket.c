@@ -34,6 +34,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <errno.h>
 
@@ -224,6 +225,146 @@ int mbus_socket_get_reuseaddr (struct mbus_socket *socket)
 	rc = getsockopt(socket->fd, SOL_SOCKET, SO_REUSEADDR, &opt, &optlen);
 	if (rc < 0) {
 		mbus_errorf("setsockopt reuseaddr failed");
+		return -1;
+	}
+	return opt;
+}
+
+int mbus_socket_set_keepalive (struct mbus_socket *socket, int on)
+{
+	int rc;
+	int opt;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	opt = !!on;
+	rc = setsockopt(socket->fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepalive failed");
+		return -1;
+	}
+	return 0;
+}
+
+int mbus_socket_get_keepalive (struct mbus_socket *socket)
+{
+	int rc;
+	int opt;
+	socklen_t optlen;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	optlen = sizeof(opt);
+	rc = getsockopt(socket->fd, SOL_SOCKET, SO_KEEPALIVE, &opt, &optlen);
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepalive failed");
+		return -1;
+	}
+	return opt;
+}
+
+int mbus_socket_set_keepcnt (struct mbus_socket *socket, int value)
+{
+	int rc;
+	int opt;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	opt = value;
+	rc = setsockopt(socket->fd, SOL_SOCKET, TCP_KEEPCNT, &opt, sizeof(opt));
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepcnt failed");
+		return -1;
+	}
+	return 0;
+}
+
+int mbus_socket_get_keepcnt (struct mbus_socket *socket)
+{
+	int rc;
+	int opt;
+	socklen_t optlen;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	optlen = sizeof(opt);
+	rc = getsockopt(socket->fd, SOL_SOCKET, TCP_KEEPCNT, &opt, &optlen);
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepcnt failed");
+		return -1;
+	}
+	return opt;
+}
+
+int mbus_socket_set_keepidle (struct mbus_socket *socket, int value)
+{
+	int rc;
+	int opt;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	opt = value;
+	rc = setsockopt(socket->fd, SOL_SOCKET, TCP_KEEPIDLE, &opt, sizeof(opt));
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepidle failed");
+		return -1;
+	}
+	return 0;
+}
+
+int mbus_socket_get_keepidle (struct mbus_socket *socket)
+{
+	int rc;
+	int opt;
+	socklen_t optlen;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	optlen = sizeof(opt);
+	rc = getsockopt(socket->fd, SOL_SOCKET, TCP_KEEPIDLE, &opt, &optlen);
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepidle failed");
+		return -1;
+	}
+	return opt;
+}
+
+int mbus_socket_set_keepintvl (struct mbus_socket *socket, int value)
+{
+	int rc;
+	int opt;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	opt = value;
+	rc = setsockopt(socket->fd, SOL_SOCKET, TCP_KEEPINTVL, &opt, sizeof(opt));
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepintvl failed");
+		return -1;
+	}
+	return 0;
+}
+
+int mbus_socket_get_keepintvl (struct mbus_socket *socket)
+{
+	int rc;
+	int opt;
+	socklen_t optlen;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	optlen = sizeof(opt);
+	rc = getsockopt(socket->fd, SOL_SOCKET, TCP_KEEPINTVL, &opt, &optlen);
+	if (rc < 0) {
+		mbus_errorf("setsockopt keepintvl failed");
 		return -1;
 	}
 	return opt;

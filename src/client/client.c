@@ -745,6 +745,13 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not reuse event");
 		goto bail;
 	}
+	if (socket_domain == mbus_socket_domain_af_inet &&
+	    socket_type == mbus_socket_type_sock_stream) {
+		mbus_socket_set_keepalive(client->socket, 1);
+		mbus_socket_set_keepcnt(client->socket, 20);
+		mbus_socket_set_keepidle(client->socket, 180);
+		mbus_socket_set_keepintvl(client->socket, 60);
+	}
 	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {

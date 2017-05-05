@@ -66,6 +66,18 @@ int mbus_socket_get_fd (struct mbus_socket *socket);
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on);
 int mbus_socket_get_reuseaddr (struct mbus_socket *socket);
 
+int mbus_socket_set_keepalive (struct mbus_socket *socket, int value);
+int mbus_socket_get_keepalive (struct mbus_socket *socket);
+
+int mbus_socket_set_keepcnt (struct mbus_socket *socket, int value);
+int mbus_socket_get_keepcnt (struct mbus_socket *socket);
+
+int mbus_socket_set_keepidle (struct mbus_socket *socket, int value);
+int mbus_socket_get_keepidle (struct mbus_socket *socket);
+
+int mbus_socket_set_keepintvl (struct mbus_socket *socket, int value);
+int mbus_socket_get_keepintvl (struct mbus_socket *socket);
+
 int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned short port);
 int mbus_socket_listen (struct mbus_socket *socket, int backlog);
 struct mbus_socket * mbus_socket_accept (struct mbus_socket *socket);
