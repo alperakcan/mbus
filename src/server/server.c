@@ -2671,10 +2671,12 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			mbus_errorf("can not reuse socket");
 			goto bail;
 		}
+#if 0
 		mbus_socket_set_keepalive(server->socket.tcp.socket, 1);
 		mbus_socket_set_keepcnt(server->socket.tcp.socket, 20);
 		mbus_socket_set_keepidle(server->socket.tcp.socket, 180);
 		mbus_socket_set_keepintvl(server->socket.tcp.socket, 60);
+#endif
 		rc = mbus_socket_bind(server->socket.tcp.socket, server->socket.tcp.address, server->socket.tcp.port);
 		if (rc != 0) {
 			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", server->socket.tcp.address, server->socket.tcp.port);
