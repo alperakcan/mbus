@@ -2077,7 +2077,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 					expected |= *ptr++ << 0x18;
 					expected = ntohl(expected);
 					mbus_debugf("%d", expected);
-					if (end - ptr < expected) {
+					if (end - ptr < (int32_t) expected) {
 						break;
 					}
 					mbus_debugf("message: '%.*s'", expected, ptr);
@@ -2126,7 +2126,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				ptr = data->buffer.out.buffer;
 				end = ptr + data->buffer.out.length;
 				expected = end - ptr;
-				if (end - ptr < expected) {
+				if (end - ptr < (int32_t) expected) {
 					break;
 				}
 				mbus_debugf("write");
