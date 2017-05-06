@@ -2160,6 +2160,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(server->socket.tcp.socket);
 		n += 1;
 	}
+	mbus_debugf("  prepare polling");
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
@@ -2169,7 +2170,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
 			server->socket.pollfds.pollfds[n].revents = 0;
 			server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
+			mbus_debugf("    in : %s", client_get_name(client));
 			if (mbus_buffer_length(client->buffer.out) > 0) {
+				mbus_debugf("    out: %s", client_get_name(client));
 				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
 			n += 1;
@@ -2177,6 +2180,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			struct websocket_client_data *data;
 			data = (struct websocket_client_data *) client_get_socket(client);
 			if (mbus_buffer_length(client->buffer.out) > 0) {
+				mbus_debugf("    out: %s", client_get_name(client));
 				lws_callback_on_writable(data->wsi);
 			}
 		}
