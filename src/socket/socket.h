@@ -66,6 +66,9 @@ int mbus_socket_get_fd (struct mbus_socket *socket);
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on);
 int mbus_socket_get_reuseaddr (struct mbus_socket *socket);
 
+int mbus_socket_set_blocking (struct mbus_socket *socket, int on);
+int mbus_socket_get_blocking (struct mbus_socket *socket);
+
 int mbus_socket_set_keepalive (struct mbus_socket *socket, int value);
 int mbus_socket_get_keepalive (struct mbus_socket *socket);
 

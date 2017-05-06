@@ -35,6 +35,7 @@
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <errno.h>
 
@@ -228,6 +229,43 @@ int mbus_socket_get_reuseaddr (struct mbus_socket *socket)
 		return -1;
 	}
 	return opt;
+}
+
+int mbus_socket_set_blocking (struct mbus_socket *socket, int on)
+{
+	int rc;
+	int flags;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	flags = fcntl(socket->fd, F_GETFL, 0);
+	if (flags < 0) {
+		mbus_errorf("can not get flags");
+		return -1;
+	}
+	flags = on ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+	rc = fcntl(socket->fd, F_SETFL, flags);
+	if (rc != 0) {
+		mbus_errorf("can not set flags");
+		return -1;
+	}
+	return 0;
+}
+
+int mbus_socket_get_blocking (struct mbus_socket *socket)
+{
+	int flags;
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	flags = fcntl(socket->fd, F_GETFL, 0);
+	if (flags < 0) {
+		mbus_errorf("can not get flags");
+		return -1;
+	}
+	return flags & O_NONBLOCK;
 }
 
 int mbus_socket_set_keepalive (struct mbus_socket *socket, int on)
@@ -491,6 +529,10 @@ int mbus_socket_read (struct mbus_socket *socket, void *vptr, int n)
 		if ((nread = read(socket->fd, ptr, nleft)) < 0 ){
 			if (errno == EINTR) {
 				nread = 0;
+			} else if (errno == EAGAIN) {
+				break;
+			} else if (errno == EWOULDBLOCK) {
+				break;
 			} else {
 				return -1;
 			}
