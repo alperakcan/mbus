@@ -1,7 +1,8 @@
 
 subdir-y = \
-	cli \
+	command \
 	controller \
+	event \
 	launcher \
 	listener
 

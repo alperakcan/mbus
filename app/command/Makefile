@@ -1,17 +1,17 @@
 
 target-y = \
-	mbus-cli
+	mbus-command
 
-mbus-cli_includes-y = \
+mbus-command_includes-y = \
 	../../dist/include
 
-mbus-cli_libraries-y = \
+mbus-command_libraries-y = \
 	../../dist/lib
 
-mbus-cli_files-y = \
-	cli.c
+mbus-command_files-y = \
+	command.c
 
-mbus-cli_ldflags-y = \
+mbus-command_ldflags-y = \
 	-lmbus-debug \
 	-lmbus-client \
 	-lmbus-json
@@ -19,6 +19,6 @@ mbus-cli_ldflags-y = \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-cli
+	mbus-command
 
 include ../../Makefile.lib

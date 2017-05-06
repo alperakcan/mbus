@@ -26,4 +26,4 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define MBUS_APP_CLI_NAME			"org.mbus.app.cli"
+#define MBUS_APP_EVENT_NAME			""

@@ -15,8 +15,9 @@ include Makefile.lib
 
 install: app src test
 	install -d ${DESTDIR}/usr/local/bin
-	install -m 0755 dist/bin/mbus-cli ${DESTDIR}/usr/local/bin/mbus-cli
+	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
 	install -m 0755 dist/bin/mbus-controller ${DESTDIR}/usr/local/bin/mbus-controller
+	install -m 0755 dist/bin/mbus-event ${DESTDIR}/usr/local/bin/mbus-event
 	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
@@ -54,8 +55,9 @@ install: app src test
 	install -m 0644 libmbus-client.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 
 uninstall:
-	rm -f ${DESTDIR}/usr/local/bin/mbus-cli
+	rm -f ${DESTDIR}/usr/local/bin/mbus-command
 	rm -f ${DESTDIR}/usr/local/bin/mbus-controller
+	rm -f ${DESTDIR}/usr/local/bin/mbus-event
 	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
 	
 	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h

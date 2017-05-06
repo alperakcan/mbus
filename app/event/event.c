@@ -32,64 +32,53 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MBUS_DEBUG_NAME	"app-cli"
+#define MBUS_DEBUG_NAME	"app-event"
 
 #include "mbus/debug.h"
 #include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
-#include "cli.h"
+#include "event.h"
 
 #define OPTION_HELP		0x100
 #define OPTION_DESTINATION	0x101
-#define OPTION_COMMAND		0x102
+#define OPTION_EVENT		0x102
 #define OPTION_PAYLOAD		0x103
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
-	{ "command",			required_argument,	NULL,	OPTION_COMMAND },
+	{ "event",			required_argument,	NULL,	OPTION_EVENT },
 	{ "payload",			required_argument,	NULL,	OPTION_PAYLOAD },
 	{ NULL,				0,			NULL,	0 },
 };
 
 static void usage (void)
 {
-	fprintf(stdout, "mbus cli arguments:\n");
+	fprintf(stdout, "mbus event arguments:\n");
 	fprintf(stdout, "  --destination            : destination identifier\n");
-	fprintf(stdout, "  --command                : command identifier\n");
-	fprintf(stdout, "  --payload                : json payload\n");
+	fprintf(stdout, "  --event                  : event identifier\n");
+	fprintf(stdout, "  --payload                : payload json\n");
 }
 
 struct arg {
 	const char *destination;
-	const char *command;
+	const char *event;
 	struct mbus_json *payload;
 	int finished;
 	int result;
 };
 
-static void cli_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
+static void event_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
 {
 	int rc;
 	struct arg *arg = data;
-	char *string;
-	struct mbus_json *result;
 	(void) source;
 	(void) status;
 	(void) payload;
-	rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, &result);
+	rc = mbus_client_event_to(client, arg->destination, arg->event, arg->payload);
 	if (rc != 0) {
-		mbus_errorf("can not call command");
-	}
-	if (result != NULL) {
-		string = mbus_json_print(result);
-		if (string == NULL) {
-			return;
-		}
-		fprintf(stdout, "%s.%s: %s\n", arg->destination, arg->command, string);
-		free(string);
-		mbus_json_delete(result);
+		mbus_errorf("can not call event");
 	}
 	arg->result = rc;
 	arg->finished = 1;
@@ -103,19 +92,20 @@ int main (int argc, char *argv[])
 	struct mbus_client *client;
 	client = NULL;
 	memset(&arg, 0, sizeof(struct arg));
-	client = mbus_client_create(MBUS_APP_CLI_NAME, argc, argv);
+	client = mbus_client_create(MBUS_APP_EVENT_NAME, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
+	arg.destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
 	optind = 1;
 	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
 			case OPTION_DESTINATION:
 				arg.destination = optarg;
 				break;
-			case OPTION_COMMAND:
-				arg.command = optarg;
+			case OPTION_EVENT:
+				arg.event = optarg;
 				break;
 			case OPTION_PAYLOAD:
 				arg.payload = mbus_json_parse(optarg);
@@ -133,11 +123,11 @@ int main (int argc, char *argv[])
 		mbus_errorf("destination is null");
 		goto bail;
 	}
-	if (arg.command == NULL) {
-		mbus_errorf("command is null");
+	if (arg.event == NULL) {
+		mbus_errorf("event is null");
 		goto bail;
 	}
-	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, cli_status_server_connected, &arg);
+	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, event_status_server_connected, &arg);
 	if (rc != 0) {
 		mbus_errorf("can not subscribe to events");
 		goto bail;
