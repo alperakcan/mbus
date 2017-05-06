@@ -2382,7 +2382,8 @@ out:	lws_service(server->socket.websocket.context, 0);
 		}
 		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
 			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
-				if (strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination"), client_get_name(client)) == 0) {
+				if (client_get_name(client) != NULL &&
+				    strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination"), client_get_name(client)) == 0) {
 					TAILQ_REMOVE(&wclient->waits, method, methods);
 					method_set_result_code(method, -1);
 					client_push_result(wclient, method);
