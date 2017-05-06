@@ -77,7 +77,7 @@ struct command {
 };
 TAILQ_HEAD(commands, command);
 
-struct websocket_client_data_buffer {
+struct client_data_buffer {
 	unsigned int length;
 	unsigned int size;
 	uint8_t *buffer;
@@ -86,14 +86,11 @@ struct websocket_client_data_buffer {
 struct websocket_client_data {
 	struct lws *wsi;
 	struct client *client;
-	struct {
-		struct websocket_client_data_buffer in;
-		struct websocket_client_data_buffer out;
-	} buffer;
 };
 
 enum client_status {
-	client_status_connected		= 0x00000001,
+	client_status_accepted		= 0x00000001,
+	client_status_connected		= 0x00000002,
 };
 
 enum client_link {
@@ -109,6 +106,10 @@ struct client {
 	enum client_link link;
 	enum client_status status;
 	struct mbus_socket *socket;
+	struct {
+		struct client_data_buffer in;
+		struct client_data_buffer out;
+	} buffer;
 	struct subscriptions subscriptions;
 	struct commands commands;
 	struct methods requests;
@@ -559,6 +560,118 @@ bail:	if (method != NULL) {
 	return NULL;
 }
 
+static void client_data_buffer_uninit (struct client_data_buffer *buffer)
+{
+	if (buffer->buffer != NULL) {
+		free(buffer->buffer);
+	}
+	memset(buffer, 0, sizeof(struct client_data_buffer));
+}
+
+static void client_data_buffer_init (struct client_data_buffer *buffer)
+{
+	client_data_buffer_uninit(buffer);
+	memset(buffer, 0, sizeof(struct client_data_buffer));
+}
+
+static unsigned int client_data_buffer_size (struct client_data_buffer *buffer)
+{
+	return buffer->size;
+}
+
+static unsigned int client_data_buffer_length (struct client_data_buffer *buffer)
+{
+	return buffer->length;
+}
+
+static int client_data_buffer_set_length (struct client_data_buffer *buffer, unsigned int length)
+{
+	if (length > buffer->size) {
+		return -1;
+	}
+	buffer->length = length;
+	return 0;
+}
+
+static uint8_t * client_data_buffer_base (struct client_data_buffer *buffer)
+{
+	return buffer->buffer;
+}
+
+static int client_data_buffer_reserve (struct client_data_buffer *buffer, unsigned int length)
+{
+	uint8_t *tmp;
+	if (buffer->size >= length) {
+		return 0;
+	}
+	while (buffer->size < length) {
+		buffer->size += 1024;
+	}
+	tmp = realloc(buffer->buffer, buffer->size);
+	if (tmp == NULL) {
+		tmp = malloc(buffer->size);
+		if (tmp == NULL) {
+			mbus_errorf("can not allocate memory");
+			return -1;
+		}
+		memcpy(tmp, buffer->buffer, buffer->length);
+		free(buffer->buffer);
+	}
+	buffer->buffer = tmp;
+	return 0;
+}
+
+static int client_data_buffer_push (struct client_data_buffer *buffer, const void *data, unsigned int length)
+{
+	int rc;
+	rc = client_data_buffer_reserve(buffer, buffer->length + length);
+	if (rc != 0) {
+		mbus_errorf("can not reserve buffer");
+		return -1;
+	}
+	memcpy(buffer->buffer + buffer->length, data, length);
+	buffer->length += length;
+	return 0;
+}
+
+static int client_data_buffer_push_string (struct client_data_buffer *buffer, const char *string)
+{
+	int rc;
+	uint32_t length;
+	if (string == NULL) {
+		mbus_errorf("string is invalid");
+		return -1;
+	}
+	length = strlen(string);
+	length = htonl(length);
+	rc = client_data_buffer_push(buffer, &length, sizeof(length));
+	if (rc != 0) {
+		mbus_errorf("can not push length");
+		return -1;
+	}
+	length = ntohl(length);
+	rc = client_data_buffer_push(buffer, string, length);
+	if (rc != 0) {
+		mbus_errorf("can not push string");
+		return -1;
+	}
+	return 0;
+}
+
+static int client_data_buffer_shift (struct client_data_buffer *buffer, unsigned int length)
+{
+	if (length == 0) {
+		return 0;
+	}
+	if (length > buffer->length) {
+		mbus_errorf("invalid length");
+		return -1;
+	}
+	memmove(buffer->buffer, buffer->buffer + length, buffer->length - length);
+	buffer->length -= length;
+	return 0;
+}
+
 static int client_set_socket (struct client *client, struct mbus_socket *socket)
 {
 	if (client == NULL) {
@@ -618,6 +731,28 @@ static enum client_status client_get_status (struct client *client)
 		return 0;
 	}
 	return client->status;
+}
+
+static int client_set_name (struct client *client, const char *name)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	if (name == NULL) {
+		mbus_errorf("name is null");
+		goto bail;
+	}
+	if (client->name != NULL) {
+		free(client->name);
+	}
+	client->name = strdup(name);
+	if (client->name == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	return 0;
+bail:	return -1;
 }
 
 static const char * client_get_name (struct client *client)
@@ -862,17 +997,15 @@ static void client_destroy (struct client *client)
 		TAILQ_REMOVE(&client->waits, client->waits.tqh_first, methods);
 		method_destroy(wait);
 	}
+	client_data_buffer_uninit(&client->buffer.in);
+	client_data_buffer_uninit(&client->buffer.out);
 	free(client);
 }
 
-static struct client * client_create (const char *name, enum client_link link)
+static struct client * client_accept (enum client_link link)
 {
 	struct client *client;
 	client = NULL;
-	if (name == NULL) {
-		mbus_errorf("name is null");
-		goto bail;
-	}
 	client = malloc(sizeof(struct client));
 	if (client == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -885,15 +1018,12 @@ static struct client * client_create (const char *name, enum client_link link)
 	TAILQ_INIT(&client->results);
 	TAILQ_INIT(&client->events);
 	TAILQ_INIT(&client->waits);
-	client->name = strdup(name);
-	if (client->name == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
 	client->status = 0;
 	client->link = link;
 	client->ssequence = MBUS_METHOD_SEQUENCE_START;
 	client->esequence = MBUS_METHOD_SEQUENCE_START;
+	client_data_buffer_init(&client->buffer.in);
+	client_data_buffer_init(&client->buffer.out);
 	return client;
 bail:	client_destroy(client);
 	return NULL;
@@ -907,6 +1037,9 @@ static struct client * server_find_client_by_name (struct mbus_server *server, c
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_name(client) == NULL) {
+			continue;
+		}
 		if (strcmp(client_get_name(client), name) == 0) {
 			return client;
 		}
@@ -1269,14 +1402,8 @@ bail:	if (payload != NULL) {
 static int server_accept_client (struct mbus_server *server, struct mbus_socket *from)
 {
 	int rc;
-	char *string;
-	char rname[64];
-	const char *name;
-	struct method *method;
 	struct client *client;
 	struct mbus_socket *socket;
-	string = NULL;
-	method = NULL;
 	client = NULL;
 	socket = NULL;
 	if (server == NULL) {
@@ -1288,26 +1415,49 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("can not accept new socket connection");
 		goto bail;
 	}
-	string = mbus_socket_read_string(socket);
-	if (string == NULL) {
-		mbus_errorf("can not read name");
+	rc = mbus_socket_set_blocking(socket, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set socket to nonblocking");
 		goto bail;
 	}
-	method = method_create_from_string(NULL, string);
+	client = client_accept(client_link_tcp);
+	if (client == NULL) {
+		mbus_errorf("can not create client");
+		goto bail;
+	}
+	rc = client_set_socket(client, socket);
+	if (rc != 0) {
+		mbus_errorf("can not set client socket");
+		goto bail;
+	}
+	TAILQ_INSERT_TAIL(&server->clients, client, clients);
+	return 0;
+bail:	if (socket != NULL) {
+		mbus_socket_destroy(socket);
+	}
+	if (client != NULL) {
+		client_destroy(client);
+	}
+	return -1;
+}
+
+static int server_handle_command_create (struct mbus_server *server, struct method *method)
+{
+	int rc;
+	char rname[64];
+	const char *name;
+	struct client *client;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
 	if (method == NULL) {
-		mbus_errorf("can not create method");
+		mbus_errorf("method is null");
 		goto bail;
 	}
-	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
-		mbus_errorf("invalid type: %s", method_get_request_type(method));
-		goto bail;
-	}
-	if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
-		mbus_errorf("invalid destination: %s", method_get_request_destination(method));
-		goto bail;
-	}
-	if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
-		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
+	name = client_get_name(method_get_source(method));
+	if (name != NULL) {
+		mbus_errorf("invalid client state");
 		goto bail;
 	}
 	name = method_get_request_source(method);
@@ -1325,61 +1475,22 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 	client = server_find_client_by_name(server, name);
 	if (client != NULL) {
 		mbus_errorf("client with name: %s already exists", name);
-		client = NULL;
-		goto exists;
-	}
-	client = client_create(name, client_link_tcp);
-	if (client == NULL) {
-		mbus_errorf("can not create client");
 		goto bail;
 	}
-	rc = client_set_socket(client, socket);
+	rc = client_set_name(method_get_source(method), name);
 	if (rc != 0) {
-		mbus_errorf("can not set client socket");
+		mbus_errorf("can not set client name");
 		goto bail;
 	}
-	mbus_infof("client: '%s' accepted", client_get_name(client));
+	mbus_debugf("client: '%s' created", client_get_name(method_get_source(method)));
+	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
 	rc = method_set_result_code(method, 0);
 	if (rc != 0) {
 		mbus_errorf("can not set method result code");
 		goto bail;
 	}
-	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(client));
-	rc = mbus_socket_write_string(socket, method_get_result_string(method));
-	if (rc != 0) {
-		mbus_errorf("can not write string");
-		goto bail;
-	}
-	method_destroy(method);
-	free(string);
-	TAILQ_INSERT_TAIL(&server->clients, client, clients);
 	return 0;
-bail:	if (socket != NULL) {
-		mbus_socket_destroy(socket);
-	}
-	if (client != NULL) {
-		client_destroy(client);
-	}
-	if (method != NULL) {
-		method_destroy(method);
-	}
-	if (string != NULL) {
-		free(string);
-	}
-	return -1;
-exists:	if (socket != NULL) {
-		mbus_socket_destroy(socket);
-	}
-	if (client != NULL) {
-		client_destroy(client);
-	}
-	if (method != NULL) {
-		method_destroy(method);
-	}
-	if (string != NULL) {
-		free(string);
-	}
-	return -2;
+bail:	return -1;
 }
 
 static int server_handle_command_subscribe (struct mbus_server *server, struct method *method)
@@ -1673,8 +1784,11 @@ static int server_handle_methods (struct mbus_server *server)
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 		rc = -1;
 		response = 1;
+		mbus_debugf("handle method: %s, %s", method_get_request_destination(method), method_get_request_identifier(method));
 		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
-			if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+			if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
+				rc = server_handle_command_create(server, method);
+			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
 				rc = server_handle_command_subscribe(server, method);
 			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 				rc = server_handle_command_register(server, method);
@@ -1698,9 +1812,11 @@ static int server_handle_methods (struct mbus_server *server)
 			TAILQ_REMOVE(&server->methods, method, methods);
 		}
 		if (response == 1 || rc != 0) {
+			mbus_debugf("  push to result");
 			method_set_result_code(method, rc);
 			client_push_result(method_get_source(method), method);
 		} else {
+			mbus_debugf("  push to wait");
 			TAILQ_INSERT_TAIL(&method_get_source(method)->waits, method, methods);
 		}
 	}
@@ -1736,165 +1852,6 @@ static int server_handle_method (struct mbus_server *server, struct client *clie
 	return 0;
 bail:	if (method != NULL) {
 		method_destroy(method);
-	}
-	return -1;
-}
-
-static void websocket_client_data_buffer_uninit (struct websocket_client_data_buffer *buffer)
-{
-	if (buffer->buffer != NULL) {
-		free(buffer->buffer);
-	}
-	memset(buffer, 0, sizeof(struct websocket_client_data_buffer));
-}
-
-static void websocket_client_data_buffer_init (struct websocket_client_data_buffer *buffer)
-{
-	websocket_client_data_buffer_uninit(buffer);
-	memset(buffer, 0, sizeof(struct websocket_client_data_buffer));
-}
-
-static unsigned int websocket_client_data_buffer_length (struct websocket_client_data_buffer *buffer)
-{
-	return buffer->length;
-}
-
-static int websocket_client_data_buffer_push (struct websocket_client_data_buffer *buffer, const void *data, unsigned int length)
-{
-	if (buffer->size < buffer->length + length) {
-		uint8_t *tmp;
-		while (buffer->size < buffer->length + length) {
-			buffer->size += 1024;
-		}
-		tmp = realloc(buffer->buffer, buffer->size);
-		if (tmp == NULL) {
-			tmp = malloc(buffer->size);
-			if (tmp == NULL) {
-				mbus_errorf("can not allocate memory");
-				return -1;
-			}
-			memcpy(tmp, buffer->buffer, buffer->length);
-			free(buffer->buffer);
-		}
-		buffer->buffer = tmp;
-	}
-	memcpy(buffer->buffer + buffer->length, data, length);
-	buffer->length += length;
-	return 0;
-}
-
-static int websocket_client_data_buffer_push_string (struct websocket_client_data_buffer *buffer, const char *string)
-{
-	int rc;
-	uint32_t length;
-	if (string == NULL) {
-		mbus_errorf("string is invalid");
-		return -1;
-	}
-	length = strlen(string);
-	length = htonl(length);
-	rc = websocket_client_data_buffer_push(buffer, &length, sizeof(length));
-	if (rc != 0) {
-		mbus_errorf("can not push length");
-		return -1;
-	}
-	length = ntohl(length);
-	rc = websocket_client_data_buffer_push(buffer, string, length);
-	if (rc != 0) {
-		mbus_errorf("can not push string");
-		return -1;
-	}
-	return 0;
-}
-
-static int websocket_client_data_buffer_shift (struct websocket_client_data_buffer *buffer, unsigned int length)
-{
-	if (length == 0) {
-		return 0;
-	}
-	if (length > buffer->length) {
-		mbus_errorf("invalid length");
-		return -1;
-	}
-	memmove(buffer->buffer, buffer->buffer + length, buffer->length - length);
-	buffer->length -= length;
-	return 0;
-}
-
-static int websocket_accept_client (struct mbus_server *server, struct websocket_client_data *data, const char *string)
-{
-	int rc;
-	char rname[64];
-	const char *name;
-	struct client *client;
-	struct method *method;
-	method = NULL;
-	method = method_create_from_string(NULL, string);
-	if (method == NULL) {
-		mbus_errorf("can not create method");
-		goto bail;
-	}
-	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) != 0) {
-		mbus_errorf("invalid type: %s", method_get_request_type(method));
-		goto bail;
-	}
-	if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) != 0) {
-		mbus_errorf("invalid destination: %s", method_get_request_destination(method));
-		goto bail;
-	}
-	if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) != 0) {
-		mbus_errorf("invalid identifier: %s", method_get_request_identifier(method));
-		goto bail;
-	}
-	name = method_get_request_source(method);
-	if (strlen(name) == 0) {
-		mbus_infof("empty name, creating a random name for client");
-		while (1) {
-			snprintf(rname, sizeof(rname), "org.mbus.client-random-%08x", rand());
-			client = server_find_client_by_name(server, rname);
-			if (client == NULL) {
-				break;
-			}
-		}
-		name = rname;
-	}
-	client = server_find_client_by_name(server, name);
-	if (client != NULL) {
-		mbus_errorf("client with name: %s already exists", name);
-		goto bail;
-	}
-	data->client = client_create(name, client_link_websocket);
-	if (data->client == NULL) {
-		mbus_errorf("can not create client");
-		goto bail;
-	}
-	rc = client_set_socket(data->client, (struct mbus_socket *) data);
-	if (rc != 0) {
-		mbus_errorf("can not set client socket");
-		goto bail;
-	}
-	mbus_debugf("client: '%s' accepted", client_get_name(data->client));
-	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(data->client));
-	rc = method_set_result_code(method, 0);
-	if (rc != 0) {
-		mbus_errorf("can not set method result code");
-		goto bail;
-	}
-	rc = websocket_client_data_buffer_push_string(&data->buffer.out, method_get_result_string(method));
-	if (rc != 0) {
-		mbus_errorf("can not write string");
-		goto bail;
-	}
-	lws_callback_on_writable(data->wsi);
-	method_destroy(method);
-	TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
-	return 0;
-bail:	if (method != NULL) {
-		method_destroy(method);
-	}
-	if (data->client != NULL) {
-		client_destroy(data->client);
-		data->client = NULL;
 	}
 	return -1;
 }
@@ -2006,9 +1963,22 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_ESTABLISHED:
 			mbus_debugf("  established");
+			memset(data, 0, sizeof(struct websocket_client_data));
 			data->wsi = wsi;
-			websocket_client_data_buffer_init(&data->buffer.in);
-			websocket_client_data_buffer_init(&data->buffer.out);
+			data->client = client_accept(client_link_websocket);
+			if (data->client == NULL) {
+				mbus_errorf("can not accept client");
+				return -1;
+			}
+			rc = client_set_socket(data->client, (struct mbus_socket *) data);
+			if (rc != 0) {
+				mbus_errorf("can not set client socket");
+				client_destroy(data->client);
+				data->client = NULL;
+				return -1;
+			}
+			TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
+			lws_callback_on_writable(data->wsi);
 			break;
 		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
 			mbus_debugf("  http drop protocol");
@@ -2027,8 +1997,6 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			break;
 		case LWS_CALLBACK_CLOSED:
 			mbus_debugf("  closed");
-			websocket_client_data_buffer_uninit(&data->buffer.in);
-			websocket_client_data_buffer_uninit(&data->buffer.out);
 			if (data->client != NULL) {
 				client_set_socket(data->client, NULL);
 				data->client = NULL;
@@ -2036,23 +2004,28 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			data->wsi = NULL;
 			break;
 		case LWS_CALLBACK_RECEIVE:
-			mbus_debugf("  receive");
+			mbus_debugf("  server receive");
+			if (data->client == NULL ||
+			    client_get_socket(data->client) == NULL) {
+				mbus_debugf("client is closed");
+				return -1;
+			}
 			mbus_debugf("    data: %p", data);
 			mbus_debugf("      wsi   : %p", data->wsi);
 			mbus_debugf("      client: %p", data->client);
 			mbus_debugf("      buffer:");
 			mbus_debugf("        in:");
-			mbus_debugf("          length  : %d", data->buffer.in.length);
-			mbus_debugf("          size    : %d", data->buffer.in.size);
+			mbus_debugf("          length  : %d", data->client->buffer.in.length);
+			mbus_debugf("          size    : %d", data->client->buffer.in.size);
 			mbus_debugf("        out:");
-			mbus_debugf("          length  : %d", data->buffer.out.length);
-			mbus_debugf("          size    : %d", data->buffer.out.size);
+			mbus_debugf("          length  : %d", data->client->buffer.out.length);
+			mbus_debugf("          size    : %d", data->client->buffer.out.size);
 			mbus_debugf("    in: %p", in);
 			mbus_debugf("    len: %zd", len);
 			if (data->wsi == NULL &&
 			    data->client == NULL) {
 			}
-			rc = websocket_client_data_buffer_push(&data->buffer.in, in, len);
+			rc = client_data_buffer_push(&data->client->buffer.in, in, len);
 			if (rc != 0) {
 				mbus_errorf("can not push in");
 				return -1;
@@ -2062,12 +2035,12 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				uint8_t *end;
 				uint32_t expected;
 				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", data->buffer.in.length);
-				mbus_debugf("        size    : %d", data->buffer.in.size);
+				mbus_debugf("        length  : %d", data->client->buffer.in.length);
+				mbus_debugf("        size    : %d", data->client->buffer.in.size);
 				while (1) {
 					char *string;
-					ptr = data->buffer.in.buffer;
-					end = ptr + data->buffer.in.length;
+					ptr = data->client->buffer.in.buffer;
+					end = ptr + data->client->buffer.in.length;
 					if (end - ptr < 4) {
 						break;
 					}
@@ -2086,23 +2059,15 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						mbus_errorf("can not allocate memory");
 						return -1;
 					}
-					if (data->client == NULL) {
-						rc = websocket_accept_client(server, data, string);
-						if (rc != 0) {
-							mbus_errorf("can not accept client");
-							lws_callback_on_writable(data->wsi);
-						}
-					} else {
-						mbus_debugf("new request from client: '%s', '%s'", client_get_name(data->client), string);
-						rc = server_handle_method(server, data->client, string);
-						if (rc != 0) {
-							mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(data->client));
-							free(string);
-							return -1;
-						}
+					mbus_debugf("new request from client: '%s', '%s'", client_get_name(data->client), string);
+					rc = server_handle_method(server, data->client, string);
+					if (rc != 0) {
+						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(data->client));
+						free(string);
+						return -1;
 					}
 					free(string);
-					rc = websocket_client_data_buffer_shift(&data->buffer.in, sizeof(uint32_t) + expected);
+					rc = client_data_buffer_shift(&data->client->buffer.in, sizeof(uint32_t) + expected);
 					if (rc != 0) {
 						mbus_errorf("can not shift in");
 						return -1;
@@ -2117,14 +2082,14 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				mbus_debugf("client is closed");
 				return -1;
 			}
-			while (websocket_client_data_buffer_length(&data->buffer.out) > 0 &&
+			while (client_data_buffer_length(&data->client->buffer.out) > 0 &&
 			       lws_send_pipe_choked(data->wsi) == 0) {
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
 				uint8_t *payload;
-				ptr = data->buffer.out.buffer;
-				end = ptr + data->buffer.out.length;
+				ptr = data->client->buffer.out.buffer;
+				end = ptr + data->client->buffer.out.length;
 				expected = end - ptr;
 				if (end - ptr < (int32_t) expected) {
 					break;
@@ -2140,7 +2105,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				mbus_debugf("payload: %d, %.*s", expected - 4, expected - 4, ptr + 4);
 				rc = lws_write(data->wsi, payload + LWS_PRE, expected, LWS_WRITE_BINARY);
 				mbus_debugf("expected: %d, rc: %d", expected, rc);
-				rc = websocket_client_data_buffer_shift(&data->buffer.out, rc);
+				rc = client_data_buffer_shift(&data->client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not shift in");
 					free(payload);
@@ -2149,7 +2114,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				free(payload);
 				break;
 			}
-			if (websocket_client_data_buffer_length(&data->buffer.out) > 0) {
+			if (client_data_buffer_length(&data->client->buffer.out) > 0) {
 				lws_callback_on_writable(data->wsi);
 			}
 			break;
@@ -2223,6 +2188,50 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("can not handle methods");
 		goto bail;
 	}
+	mbus_debugf("  prepare out buffer");
+	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+		mbus_debugf("    client: %s", client_get_name(client));
+		if (client_get_socket(client) == NULL) {
+			continue;
+		}
+		if (client_get_results_count(client) > 0) {
+			method = client_pop_result(client);
+			if (method == NULL) {
+				mbus_errorf("could not pop result from client");
+				continue;
+			}
+			string = method_get_result_string(method);
+		} else if (client_get_requests_count(client) > 0) {
+			method = client_pop_request(client);
+			if (method == NULL) {
+				mbus_errorf("could not pop request from client");
+				continue;
+			}
+			string = method_get_request_string(method);
+		} else if (client_get_events_count(client) > 0) {
+			method = client_pop_event(client);
+			if (method == NULL) {
+				mbus_errorf("could not pop event from client");
+				continue;
+			}
+			string = method_get_request_string(method);
+		} else {
+			continue;
+		}
+		if (string == NULL) {
+			mbus_errorf("can not build string from method event");
+			method_destroy(method);
+			goto bail;
+		}
+		mbus_debugf("send method to client: %s, %s", client_get_name(client), string);
+		rc = client_data_buffer_push_string(&client->buffer.out, string);
+		if (rc != 0) {
+			mbus_errorf("can not push string");
+			method_destroy(method);
+			goto bail;
+		}
+		method_destroy(method);
+	}
 	n  = 3;
 	n += server->clients.count;
 	n += server->socket.websocket.pollfds.length;
@@ -2265,26 +2274,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
 			server->socket.pollfds.pollfds[n].revents = 0;
 			server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
-			if (client_get_requests_count(client) != 0) {
-				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
-			}
-			if (client_get_results_count(client) != 0) {
-				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
-			}
-			if (client_get_events_count(client) != 0) {
+			if (client_data_buffer_length(&client->buffer.out) > 0) {
 				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
 			n += 1;
 		} else if (client_get_link(client) == client_link_websocket) {
 			struct websocket_client_data *data;
 			data = (struct websocket_client_data *) client_get_socket(client);
-			if (client_get_requests_count(client) != 0) {
-				lws_callback_on_writable(data->wsi);
-			}
-			if (client_get_results_count(client) != 0) {
-				lws_callback_on_writable(data->wsi);
-			}
-			if (client_get_events_count(client) != 0) {
+			if (client_data_buffer_length(&client->buffer.out) > 0) {
 				lws_callback_on_writable(data->wsi);
 			}
 		}
@@ -2342,65 +2339,96 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			continue;
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
-			string = mbus_socket_read_string(client->socket);
-			if (string == NULL) {
-				mbus_debugf("can not read string from client");
+			rc = client_data_buffer_reserve(&client->buffer.in, client_data_buffer_length(&client->buffer.in) + 1024);
+			if (rc != 0) {
+				mbus_errorf("can not reserve client buffer");
+				client_set_socket(client, NULL);
+				break;
+			}
+			mbus_errorf("read");
+			rc = mbus_socket_read(client->socket,
+					client_data_buffer_base(&client->buffer.in) + client_data_buffer_length(&client->buffer.in),
+					client_data_buffer_size(&client->buffer.in) - client_data_buffer_length(&client->buffer.in));
+			mbus_errorf("read: %d", rc);
+			if (rc <= 0) {
+				mbus_debugf("can not read data from client");
 				client_set_socket(client, NULL);
 				mbus_infof("client: '%s' connection reset by peer", client_get_name(client));
 				break;
 			} else {
-				mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
-				rc = server_handle_method(server, client, string);
+				uint8_t *ptr;
+				uint8_t *end;
+				uint32_t expected;
+				rc = client_data_buffer_set_length(&client->buffer.in, client_data_buffer_length(&client->buffer.in) + rc);
 				if (rc != 0) {
-					mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
+					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
 					client_set_socket(client, NULL);
+					break;
 				}
-			}
-			if (string != NULL) {
-				free(string);
+				mbus_debugf("      buffer.in:");
+				mbus_debugf("        length  : %d", client_data_buffer_length(&client->buffer.in));
+				mbus_debugf("        size    : %d", client_data_buffer_size(&client->buffer.in));
+				while (1) {
+					char *string;
+					ptr = client_data_buffer_base(&client->buffer.in);
+					end = ptr + client_data_buffer_length(&client->buffer.in);
+					if (end - ptr < 4) {
+						break;
+					}
+					expected  = *ptr++ << 0x00;
+					expected |= *ptr++ << 0x08;
+					expected |= *ptr++ << 0x10;
+					expected |= *ptr++ << 0x18;
+					expected = ntohl(expected);
+					mbus_debugf("expected: %d", expected);
+					if (end - ptr < (int32_t) expected) {
+						break;
+					}
+					mbus_debugf("message: '%.*s'", expected, ptr);
+					string = strndup((char *) ptr, expected);
+					if (string == NULL) {
+						mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_name(client));
+						client_set_socket(client, NULL);
+						break;
+					}
+					mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
+					rc = server_handle_method(server, client, string);
+					if (rc != 0) {
+						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
+						client_set_socket(client, NULL);
+						free(string);
+						break;
+					}
+					rc = client_data_buffer_shift(&client->buffer.in, sizeof(uint32_t) + expected);
+					if (rc != 0) {
+						mbus_errorf("can not shift in, closing client: '%s' connection", client_get_name(client));
+						client_set_socket(client, NULL);
+						free(string);
+						break;
+					}
+					free(string);
+				}
 			}
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_out) {
-			if (client_get_results_count(client) > 0) {
-				method = client_pop_result(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop result from client");
-					break;
-				}
-				string = method_get_result_string(method);
-			} else if (client_get_requests_count(client) > 0) {
-				method = client_pop_request(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop request from client");
-					break;
-				}
-				string = method_get_request_string(method);
-			} else if (client_get_events_count(client) > 0) {
-				method = client_pop_event(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop event from client");
-					break;
-				}
-				string = method_get_request_string(method);
-			} else {
+			if (client_data_buffer_length(&client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			if (string == NULL) {
-				mbus_errorf("can not build string from method event");
-				method_destroy(method);
-				goto bail;
-			}
-			mbus_debugf("send method to client: %s", string);
-			rc = mbus_socket_write_string(client_get_socket(client), string);
-			if (rc != 0) {
-				method_destroy(method);
+			rc = mbus_socket_write(client_get_socket(client), client_data_buffer_base(&client->buffer.out), client_data_buffer_length(&client->buffer.out));
+			if (rc <= 0) {
 				mbus_debugf("can not write string to client");
 				client_set_socket(client, NULL);
 				mbus_infof("client: '%s' connection reset by server", client_get_name(client));
 				break;
+			} else {
+				rc = client_data_buffer_shift(&client->buffer.out, rc);
+				if (rc != 0) {
+					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
+					client_set_socket(client, NULL);
+					break;
+				}
 			}
-			method_destroy(method);
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_err) {
 			client_set_socket(client, NULL);
@@ -2411,6 +2439,22 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 out:	lws_service(server->socket.websocket.context, 0);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
+			continue;
+		}
+		if ((client_get_status(client) & client_status_accepted) != 0) {
+			continue;
+		}
+		client_set_status(client, client_get_status(client) | client_status_accepted);
+		mbus_infof("client: '%s' accepted to server", client_get_name(client));
+	}
+	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_socket(client) == NULL) {
+			continue;
+		}
+		if (client_get_name(client) == NULL) {
+			continue;
+		}
+		if ((client_get_status(client) & client_status_accepted) == 0) {
 			continue;
 		}
 		if ((client_get_status(client) & client_status_connected) != 0) {
@@ -2454,56 +2498,6 @@ out:	lws_service(server->socket.websocket.context, 0);
 			}
 		}
 		client_destroy(client);
-	}
-	{
-		TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
-			struct websocket_client_data *data;
-			if (client_get_socket(client) == NULL) {
-				continue;
-			}
-			if (client_get_link(client) != client_link_websocket) {
-				continue;
-			}
-			if (client_get_results_count(client) > 0) {
-				method = client_pop_result(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop result from client");
-					continue;
-				}
-				string = method_get_result_string(method);
-			} else if (client_get_requests_count(client) > 0) {
-				method = client_pop_request(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop request from client");
-					continue;
-				}
-				string = method_get_request_string(method);
-			} else if (client_get_events_count(client) > 0) {
-				method = client_pop_event(client);
-				if (method == NULL) {
-					mbus_errorf("could not pop event from client");
-					continue;
-				}
-				string = method_get_request_string(method);
-			} else {
-				continue;
-			}
-			if (string == NULL) {
-				mbus_errorf("can not build string from method event");
-				method_destroy(method);
-				goto bail;
-			}
-			data = (struct websocket_client_data *) client_get_socket(client);
-			mbus_debugf("push: %s", string);
-			rc = websocket_client_data_buffer_push_string(&data->buffer.out, string);
-			if (rc != 0) {
-				mbus_errorf("can not push string");
-				method_destroy(method);
-				return -1;
-			}
-			lws_callback_on_writable(data->wsi);
-			method_destroy(method);
-		}
 	}
 	return (server->running == 0) ? 1 : 0;
 bail:	return -1;
