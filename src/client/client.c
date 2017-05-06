@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <getopt.h>
 #include <errno.h>
 #include <pthread.h>
@@ -38,6 +39,7 @@
 
 #include "mbus/json.h"
 #include "mbus/debug.h"
+#include "mbus/buffer.h"
 #include "mbus/tailq.h"
 #include "mbus/method.h"
 #include "mbus/socket.h"
@@ -101,6 +103,10 @@ TAILQ_HEAD(commands, command);
 
 struct mbus_client {
 	char *name;
+	struct {
+		struct mbus_buffer *in;
+		struct mbus_buffer *out;
+	} buffer;
 	int sequence;
 	struct mbus_socket *socket;
 	struct methods methods;
@@ -740,6 +746,16 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not create event socket");
 		goto bail;
 	}
+	client->buffer.in = mbus_buffer_create();
+	if (client->buffer.in == NULL) {
+		mbus_errorf("can not create buffer");
+		goto bail;
+	}
+	client->buffer.out = mbus_buffer_create();
+	if (client->buffer.out == NULL) {
+		mbus_errorf("can not create buffer");
+		goto bail;
+	}
 	rc = mbus_socket_set_reuseaddr(client->socket, 1);
 	if (rc != 0) {
 		mbus_errorf("can not reuse event");
@@ -953,6 +969,12 @@ void mbus_client_destroy (struct mbus_client *client)
 		command = client->commands.tqh_first;
 		TAILQ_REMOVE(&client->commands, client->commands.tqh_first, commands);
 		command_destroy(command);
+	}
+	if (client->buffer.in != NULL) {
+		mbus_buffer_destroy(client->buffer.in);
+	}
+	if (client->buffer.out != NULL) {
+		mbus_buffer_destroy(client->buffer.out);
 	}
 	free(client);
 }

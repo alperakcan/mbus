@@ -880,8 +880,12 @@ static void client_destroy (struct client *client)
 		TAILQ_REMOVE(&client->waits, client->waits.tqh_first, methods);
 		method_destroy(wait);
 	}
-	mbus_buffer_destroy(client->buffer.in);
-	mbus_buffer_destroy(client->buffer.out);
+	if (client->buffer.in != NULL) {
+		mbus_buffer_destroy(client->buffer.in);
+	}
+	if (client->buffer.out != NULL) {
+		mbus_buffer_destroy(client->buffer.out);
+	}
 	free(client);
 }
 
