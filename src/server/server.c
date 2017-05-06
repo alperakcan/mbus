@@ -1784,6 +1784,7 @@ static int server_handle_methods (struct mbus_server *server)
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 		rc = -1;
 		response = 1;
+		mbus_debugf("handle method: %s, %s", method_get_request_destination(method), method_get_request_identifier(method));
 		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
 			if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
 				rc = server_handle_command_create(server, method);
@@ -1811,9 +1812,11 @@ static int server_handle_methods (struct mbus_server *server)
 			TAILQ_REMOVE(&server->methods, method, methods);
 		}
 		if (response == 1 || rc != 0) {
+			mbus_debugf("  push to result");
 			method_set_result_code(method, rc);
 			client_push_result(method_get_source(method), method);
 		} else {
+			mbus_debugf("  push to wait");
 			TAILQ_INSERT_TAIL(&method_get_source(method)->waits, method, methods);
 		}
 	}
@@ -1974,6 +1977,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				data->client = NULL;
 				return -1;
 			}
+			TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
 			lws_callback_on_writable(data->wsi);
 			break;
 		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
@@ -2184,7 +2188,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("can not handle methods");
 		goto bail;
 	}
+	mbus_debugf("  prepare out buffer");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+		mbus_debugf("    client: %s", client_get_name(client));
 		if (client_get_socket(client) == NULL) {
 			continue;
 		}
