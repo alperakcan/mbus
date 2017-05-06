@@ -2244,11 +2244,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				client_set_socket(client, NULL);
 				break;
 			}
-			mbus_errorf("read");
 			rc = mbus_socket_read(client->socket,
 					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
-			mbus_errorf("read: %d", rc);
 			if (rc <= 0) {
 				mbus_debugf("can not read data from client");
 				client_set_socket(client, NULL);
