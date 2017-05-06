@@ -37,6 +37,7 @@
 #define MBUS_DEBUG_NAME	"mbus-server"
 
 #include "mbus/debug.h"
+#include "mbus/buffer.h"
 #include "mbus/tailq.h"
 #include "mbus/json.h"
 #include "mbus/method.h"
@@ -77,12 +78,6 @@ struct command {
 };
 TAILQ_HEAD(commands, command);
 
-struct client_data_buffer {
-	unsigned int length;
-	unsigned int size;
-	uint8_t *buffer;
-};
-
 struct websocket_client_data {
 	struct lws *wsi;
 	struct client *client;
@@ -107,8 +102,8 @@ struct client {
 	enum client_status status;
 	struct mbus_socket *socket;
 	struct {
-		struct client_data_buffer in;
-		struct client_data_buffer out;
+		struct mbus_buffer *in;
+		struct mbus_buffer *out;
 	} buffer;
 	struct subscriptions subscriptions;
 	struct commands commands;
@@ -560,118 +555,6 @@ bail:	if (method != NULL) {
 	return NULL;
 }
 
-static void client_data_buffer_uninit (struct client_data_buffer *buffer)
-{
-	if (buffer->buffer != NULL) {
-		free(buffer->buffer);
-	}
-	memset(buffer, 0, sizeof(struct client_data_buffer));
-}
-
-static void client_data_buffer_init (struct client_data_buffer *buffer)
-{
-	client_data_buffer_uninit(buffer);
-	memset(buffer, 0, sizeof(struct client_data_buffer));
-}
-
-static unsigned int client_data_buffer_size (struct client_data_buffer *buffer)
-{
-	return buffer->size;
-}
-
-static unsigned int client_data_buffer_length (struct client_data_buffer *buffer)
-{
-	return buffer->length;
-}
-
-static int client_data_buffer_set_length (struct client_data_buffer *buffer, unsigned int length)
-{
-	if (length > buffer->size) {
-		return -1;
-	}
-	buffer->length = length;
-	return 0;
-}
-
-static uint8_t * client_data_buffer_base (struct client_data_buffer *buffer)
-{
-	return buffer->buffer;
-}
-
-static int client_data_buffer_reserve (struct client_data_buffer *buffer, unsigned int length)
-{
-	uint8_t *tmp;
-	if (buffer->size >= length) {
-		return 0;
-	}
-	while (buffer->size < length) {
-		buffer->size += 1024;
-	}
-	tmp = realloc(buffer->buffer, buffer->size);
-	if (tmp == NULL) {
-		tmp = malloc(buffer->size);
-		if (tmp == NULL) {
-			mbus_errorf("can not allocate memory");
-			return -1;
-		}
-		memcpy(tmp, buffer->buffer, buffer->length);
-		free(buffer->buffer);
-	}
-	buffer->buffer = tmp;
-	return 0;
-}
-
-static int client_data_buffer_push (struct client_data_buffer *buffer, const void *data, unsigned int length)
-{
-	int rc;
-	rc = client_data_buffer_reserve(buffer, buffer->length + length);
-	if (rc != 0) {
-		mbus_errorf("can not reserve buffer");
-		return -1;
-	}
-	memcpy(buffer->buffer + buffer->length, data, length);
-	buffer->length += length;
-	return 0;
-}
-
-static int client_data_buffer_push_string (struct client_data_buffer *buffer, const char *string)
-{
-	int rc;
-	uint32_t length;
-	if (string == NULL) {
-		mbus_errorf("string is invalid");
-		return -1;
-	}
-	length = strlen(string);
-	length = htonl(length);
-	rc = client_data_buffer_push(buffer, &length, sizeof(length));
-	if (rc != 0) {
-		mbus_errorf("can not push length");
-		return -1;
-	}
-	length = ntohl(length);
-	rc = client_data_buffer_push(buffer, string, length);
-	if (rc != 0) {
-		mbus_errorf("can not push string");
-		return -1;
-	}
-	return 0;
-}
-
-static int client_data_buffer_shift (struct client_data_buffer *buffer, unsigned int length)
-{
-	if (length == 0) {
-		return 0;
-	}
-	if (length > buffer->length) {
-		mbus_errorf("invalid length");
-		return -1;
-	}
-	memmove(buffer->buffer, buffer->buffer + length, buffer->length - length);
-	buffer->length -= length;
-	return 0;
-}
-
 static int client_set_socket (struct client *client, struct mbus_socket *socket)
 {
 	if (client == NULL) {
@@ -997,8 +880,8 @@ static void client_destroy (struct client *client)
 		TAILQ_REMOVE(&client->waits, client->waits.tqh_first, methods);
 		method_destroy(wait);
 	}
-	client_data_buffer_uninit(&client->buffer.in);
-	client_data_buffer_uninit(&client->buffer.out);
+	mbus_buffer_destroy(client->buffer.in);
+	mbus_buffer_destroy(client->buffer.out);
 	free(client);
 }
 
@@ -1022,8 +905,16 @@ static struct client * client_accept (enum client_link link)
 	client->link = link;
 	client->ssequence = MBUS_METHOD_SEQUENCE_START;
 	client->esequence = MBUS_METHOD_SEQUENCE_START;
-	client_data_buffer_init(&client->buffer.in);
-	client_data_buffer_init(&client->buffer.out);
+	client->buffer.in = mbus_buffer_create();
+	if (client->buffer.in == NULL) {
+		mbus_errorf("can not create buffer");
+		goto bail;
+	}
+	client->buffer.out = mbus_buffer_create();
+	if (client->buffer.out == NULL) {
+		mbus_errorf("can not create buffer");
+		goto bail;
+	}
 	return client;
 bail:	client_destroy(client);
 	return NULL;
@@ -2015,17 +1906,17 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			mbus_debugf("      client: %p", data->client);
 			mbus_debugf("      buffer:");
 			mbus_debugf("        in:");
-			mbus_debugf("          length  : %d", data->client->buffer.in.length);
-			mbus_debugf("          size    : %d", data->client->buffer.in.size);
+			mbus_debugf("          length  : %d", mbus_buffer_length(data->client->buffer.in));
+			mbus_debugf("          size    : %d", mbus_buffer_size(data->client->buffer.in));
 			mbus_debugf("        out:");
-			mbus_debugf("          length  : %d", data->client->buffer.out.length);
-			mbus_debugf("          size    : %d", data->client->buffer.out.size);
+			mbus_debugf("          length  : %d", mbus_buffer_length(data->client->buffer.out));
+			mbus_debugf("          size    : %d", mbus_buffer_size(data->client->buffer.out));
 			mbus_debugf("    in: %p", in);
 			mbus_debugf("    len: %zd", len);
 			if (data->wsi == NULL &&
 			    data->client == NULL) {
 			}
-			rc = client_data_buffer_push(&data->client->buffer.in, in, len);
+			rc = mbus_buffer_push(data->client->buffer.in, in, len);
 			if (rc != 0) {
 				mbus_errorf("can not push in");
 				return -1;
@@ -2035,12 +1926,12 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				uint8_t *end;
 				uint32_t expected;
 				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", data->client->buffer.in.length);
-				mbus_debugf("        size    : %d", data->client->buffer.in.size);
+				mbus_debugf("        length  : %d", mbus_buffer_length(data->client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_size(data->client->buffer.in));
 				while (1) {
 					char *string;
-					ptr = data->client->buffer.in.buffer;
-					end = ptr + data->client->buffer.in.length;
+					ptr = mbus_buffer_base(data->client->buffer.in);
+					end = ptr + mbus_buffer_length(data->client->buffer.in);
 					if (end - ptr < 4) {
 						break;
 					}
@@ -2067,7 +1958,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 						return -1;
 					}
 					free(string);
-					rc = client_data_buffer_shift(&data->client->buffer.in, sizeof(uint32_t) + expected);
+					rc = mbus_buffer_shift(data->client->buffer.in, sizeof(uint32_t) + expected);
 					if (rc != 0) {
 						mbus_errorf("can not shift in");
 						return -1;
@@ -2082,14 +1973,14 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				mbus_debugf("client is closed");
 				return -1;
 			}
-			while (client_data_buffer_length(&data->client->buffer.out) > 0 &&
+			while (mbus_buffer_length(data->client->buffer.out) > 0 &&
 			       lws_send_pipe_choked(data->wsi) == 0) {
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
 				uint8_t *payload;
-				ptr = data->client->buffer.out.buffer;
-				end = ptr + data->client->buffer.out.length;
+				ptr = mbus_buffer_base(data->client->buffer.out);
+				end = ptr + mbus_buffer_length(data->client->buffer.out);
 				expected = end - ptr;
 				if (end - ptr < (int32_t) expected) {
 					break;
@@ -2105,7 +1996,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				mbus_debugf("payload: %d, %.*s", expected - 4, expected - 4, ptr + 4);
 				rc = lws_write(data->wsi, payload + LWS_PRE, expected, LWS_WRITE_BINARY);
 				mbus_debugf("expected: %d, rc: %d", expected, rc);
-				rc = client_data_buffer_shift(&data->client->buffer.out, rc);
+				rc = mbus_buffer_shift(data->client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not shift in");
 					free(payload);
@@ -2114,7 +2005,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				free(payload);
 				break;
 			}
-			if (client_data_buffer_length(&data->client->buffer.out) > 0) {
+			if (mbus_buffer_length(data->client->buffer.out) > 0) {
 				lws_callback_on_writable(data->wsi);
 			}
 			break;
@@ -2224,7 +2115,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			goto bail;
 		}
 		mbus_debugf("send method to client: %s, %s", client_get_name(client), string);
-		rc = client_data_buffer_push_string(&client->buffer.out, string);
+		rc = mbus_buffer_push_string(client->buffer.out, string);
 		if (rc != 0) {
 			mbus_errorf("can not push string");
 			method_destroy(method);
@@ -2274,14 +2165,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
 			server->socket.pollfds.pollfds[n].revents = 0;
 			server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
-			if (client_data_buffer_length(&client->buffer.out) > 0) {
+			if (mbus_buffer_length(client->buffer.out) > 0) {
 				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
 			n += 1;
 		} else if (client_get_link(client) == client_link_websocket) {
 			struct websocket_client_data *data;
 			data = (struct websocket_client_data *) client_get_socket(client);
-			if (client_data_buffer_length(&client->buffer.out) > 0) {
+			if (mbus_buffer_length(client->buffer.out) > 0) {
 				lws_callback_on_writable(data->wsi);
 			}
 		}
@@ -2339,7 +2230,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			continue;
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
-			rc = client_data_buffer_reserve(&client->buffer.in, client_data_buffer_length(&client->buffer.in) + 1024);
+			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + 1024);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
 				client_set_socket(client, NULL);
@@ -2347,8 +2238,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 			mbus_errorf("read");
 			rc = mbus_socket_read(client->socket,
-					client_data_buffer_base(&client->buffer.in) + client_data_buffer_length(&client->buffer.in),
-					client_data_buffer_size(&client->buffer.in) - client_data_buffer_length(&client->buffer.in));
+					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 			mbus_errorf("read: %d", rc);
 			if (rc <= 0) {
 				mbus_debugf("can not read data from client");
@@ -2359,19 +2250,19 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
-				rc = client_data_buffer_set_length(&client->buffer.in, client_data_buffer_length(&client->buffer.in) + rc);
+				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
 					client_set_socket(client, NULL);
 					break;
 				}
 				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", client_data_buffer_length(&client->buffer.in));
-				mbus_debugf("        size    : %d", client_data_buffer_size(&client->buffer.in));
+				mbus_debugf("        length  : %d", mbus_buffer_length(client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_size(client->buffer.in));
 				while (1) {
 					char *string;
-					ptr = client_data_buffer_base(&client->buffer.in);
-					end = ptr + client_data_buffer_length(&client->buffer.in);
+					ptr = mbus_buffer_base(client->buffer.in);
+					end = ptr + mbus_buffer_length(client->buffer.in);
 					if (end - ptr < 4) {
 						break;
 					}
@@ -2399,7 +2290,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						free(string);
 						break;
 					}
-					rc = client_data_buffer_shift(&client->buffer.in, sizeof(uint32_t) + expected);
+					rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
 					if (rc != 0) {
 						mbus_errorf("can not shift in, closing client: '%s' connection", client_get_name(client));
 						client_set_socket(client, NULL);
@@ -2411,18 +2302,18 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_out) {
-			if (client_data_buffer_length(&client->buffer.out) <= 0) {
+			if (mbus_buffer_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			rc = mbus_socket_write(client_get_socket(client), client_data_buffer_base(&client->buffer.out), client_data_buffer_length(&client->buffer.out));
+			rc = mbus_socket_write(client_get_socket(client), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 			if (rc <= 0) {
 				mbus_debugf("can not write string to client");
 				client_set_socket(client, NULL);
 				mbus_infof("client: '%s' connection reset by server", client_get_name(client));
 				break;
 			} else {
-				rc = client_data_buffer_shift(&client->buffer.out, rc);
+				rc = mbus_buffer_shift(client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
 					client_set_socket(client, NULL);

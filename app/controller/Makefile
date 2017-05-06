@@ -13,6 +13,7 @@ mbus-controller_files-y = \
 
 mbus-controller_ldflags-y = \
 	-lmbus-debug \
+	-lmbus-buffer \
 	-lmbus-server
 
 distdir = ../../dist

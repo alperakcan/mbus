@@ -20,6 +20,7 @@ install: app src test
 	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
+	install -m 0644 dist/include/mbus/buffer.h ${DESTDIR}/usr/local/include/mbus/buffer.h
 	install -m 0644 dist/include/mbus/client.h ${DESTDIR}/usr/local/include/mbus/client.h
 	install -m 0644 dist/include/mbus/debug.h ${DESTDIR}/usr/local/include/mbus/debug.h
 	install -m 0644 dist/include/mbus/exec.h ${DESTDIR}/usr/local/include/mbus/exec.h
@@ -30,6 +31,7 @@ install: app src test
 	install -m 0644 dist/include/mbus/tailq.h ${DESTDIR}/usr/local/include/mbus/tailq.h
 	
 	install -d ${DESTDIR}/usr/local/lib
+	install -m 0755 dist/lib/libmbus-buffer.so ${DESTDIR}/usr/local/lib/libmbus-buffer.so
 	install -m 0755 dist/lib/libmbus-client.so ${DESTDIR}/usr/local/lib/libmbus-client.so
 	install -m 0755 dist/lib/libmbus-debug.so ${DESTDIR}/usr/local/lib/libmbus-debug.so
 	install -m 0755 dist/lib/libmbus-exec.so ${DESTDIR}/usr/local/lib/libmbus-exec.so
@@ -39,6 +41,7 @@ install: app src test
 	install -m 0755 dist/lib/libmbus-socket.so ${DESTDIR}/usr/local/lib/libmbus-socket.so
 	
 	install -d ${DESTDIR}/usr/local/lib
+	install -m 0644 dist/lib/libmbus-buffer.a ${DESTDIR}/usr/local/lib/libmbus-buffer.a
 	install -m 0644 dist/lib/libmbus-client.a ${DESTDIR}/usr/local/lib/libmbus-client.a
 	install -m 0644 dist/lib/libmbus-debug.a ${DESTDIR}/usr/local/lib/libmbus-debug.a
 	install -m 0644 dist/lib/libmbus-exec.a ${DESTDIR}/usr/local/lib/libmbus-exec.a
@@ -55,6 +58,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-controller
 	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
 	
+	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/client.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/debug.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/exec.h
@@ -65,6 +69,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/include/mbus/tailq.h
 	rm -rf ${DESTDIR}/usr/local/include/mbus
 	
+	rm -f ${DESTDIR}/usr/local/lib/libmbus-buffer.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-client.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-debug.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-exec.so
@@ -73,6 +78,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.so
 	
+	rm -f ${DESTDIR}/usr/local/lib/libmbus-buffer.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-client.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-debug.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-exec.a

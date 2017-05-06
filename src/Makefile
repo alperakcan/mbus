@@ -1,6 +1,7 @@
 
 subdir-y = \
 	debug \
+	buffer \
 	client \
 	exec \
 	json \
@@ -9,8 +10,12 @@ subdir-y = \
 	socket \
 	queue
 
+buffer_depends-y = \
+	debug
+
 client_depends-y = \
 	debug \
+	buffer \
 	json \
 	method \
 	socket \
@@ -24,6 +29,7 @@ method_depends-y = \
 
 server_depends-y = \
 	debug \
+	buffer \
 	json \
 	method \
 	socket \

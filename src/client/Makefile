@@ -16,6 +16,7 @@ libmbus-client.so_files-y = \
 
 libmbus-client.so_ldflags-y = \
 	-lmbus-debug \
+	-lmbus-buffer \
 	-lmbus-socket \
 	-lmbus-json \
 	-lpthread
