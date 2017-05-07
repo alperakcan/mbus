@@ -2576,8 +2576,8 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			mbus_errorf("can not reuse socket");
 			goto bail;
 		}
-#if 0
 		mbus_socket_set_keepalive(server->socket.tcp.socket, 1);
+#if 0
 		mbus_socket_set_keepcnt(server->socket.tcp.socket, 20);
 		mbus_socket_set_keepidle(server->socket.tcp.socket, 180);
 		mbus_socket_set_keepintvl(server->socket.tcp.socket, 60);
