@@ -2272,10 +2272,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					if (end - ptr < 4) {
 						break;
 					}
-					expected  = *ptr++ << 0x00;
-					expected |= *ptr++ << 0x08;
-					expected |= *ptr++ << 0x10;
-					expected |= *ptr++ << 0x18;
+					memcpy(&expected, ptr, sizeof(expected));
+					ptr += sizeof(expected);
 					expected = ntohl(expected);
 					mbus_debugf("expected: %d", expected);
 					if (end - ptr < (int32_t) expected) {
