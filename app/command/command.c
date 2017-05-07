@@ -49,7 +49,7 @@ static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
 	{ "command",			required_argument,	NULL,	OPTION_COMMAND },
-	{ "",			required_argument,	NULL,	OPTION_PAYLOAD },
+	{ "payload",			required_argument,	NULL,	OPTION_PAYLOAD },
 	{ NULL,				0,			NULL,	0 },
 };
 
