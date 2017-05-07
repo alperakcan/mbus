@@ -1061,6 +1061,9 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		}
 	} else {
 		TAILQ_FOREACH(client, &server->clients, clients) {
+			if (client_get_name(client) == NULL) {
+				continue;
+			}
 			if (strcmp(client_get_name(client), destination) != 0) {
 				continue;
 			}
@@ -1108,6 +1111,9 @@ static int server_send_status_to (struct mbus_server *server, const char *destin
 		goto bail;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_name(client) == NULL) {
+			continue;
+		}
 		if (strcmp(client_get_name(client), destination) != 0) {
 			continue;
 		}
@@ -1579,6 +1585,9 @@ command_status_bail:
 				server->running = 0;
 			} else {
 				TAILQ_FOREACH(client, &server->clients, clients) {
+					if (client_get_name(client) == NULL) {
+						continue;
+					}
 					if (strcmp(client_get_name(client), source) != 0) {
 						continue;
 					}
@@ -1596,6 +1605,9 @@ command_status_bail:
 		}
 	} else {
 		TAILQ_FOREACH(client, &server->clients, clients) {
+			if (client_get_name(client) == NULL) {
+				continue;
+			}
 			if (strcmp(destination, client_get_name(client)) != 0) {
 				continue;
 			}
@@ -1642,6 +1654,9 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 	sequence = mbus_json_get_int_value(method_get_request_payload(method), "sequence");
 	rc = mbus_json_get_int_value(method_get_request_payload(method), "return");
 	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_name(client) == NULL) {
+			continue;
+		}
 		if (strcmp(client_get_name(client), destination) != 0) {
 			continue;
 		}
