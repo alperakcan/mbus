@@ -1599,6 +1599,14 @@ command_status_bail:
 					goto bail;
 				}
 			}
+		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CREATE) == 0) {
+			int rc;
+			rc = server_handle_command_create(server, method);
+			if (rc != 0) {
+				mbus_errorf("can not handle command create, closing client");
+				client_set_socket(method_get_source(method), NULL);
+				goto bail;
+			}
 		} else {
 			mbus_errorf("unknown command request: %s", identifier);
 			goto bail;
