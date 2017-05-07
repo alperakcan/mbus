@@ -2286,7 +2286,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						client_set_socket(client, NULL);
 						break;
 					}
-					mbus_debugf("new request from client: '%s', '%s' (%d)", client_get_name(client), string, strlen(string));
+					mbus_debugf("new request from client: '%s', '%s' (%d)", client_get_name(client), string, (int) strlen(string));
 					rc = server_handle_method(server, client, string);
 					if (rc != 0) {
 						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
