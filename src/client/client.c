@@ -809,11 +809,6 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not create event socket");
 		goto bail;
 	}
-	rc = mbus_socket_set_blocking(client->socket, 0);
-	if (rc != 0) {
-		mbus_errorf("can not set socket to nonblocking");
-		goto bail;
-	}
 	client->buffer.in = mbus_buffer_create();
 	if (client->buffer.in == NULL) {
 		mbus_errorf("can not create buffer");
@@ -842,6 +837,11 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {
 		mbus_errorf("can not connect to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
+		goto bail;
+	}
+	rc = mbus_socket_set_blocking(client->socket, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set socket to nonblocking");
 		goto bail;
 	}
 	pthread_mutex_lock(&client->mutex);
