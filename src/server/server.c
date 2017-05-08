@@ -1599,6 +1599,14 @@ command_status_bail:
 					goto bail;
 				}
 			}
+		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CREATE) == 0) {
+			int rc;
+			rc = server_handle_command_create(server, method);
+			if (rc != 0) {
+				mbus_errorf("can not handle command create, closing client");
+				client_set_socket(method_get_source(method), NULL);
+				goto bail;
+			}
 		} else {
 			mbus_errorf("unknown command request: %s", identifier);
 			goto bail;
@@ -2576,8 +2584,8 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			mbus_errorf("can not reuse socket");
 			goto bail;
 		}
-#if 0
 		mbus_socket_set_keepalive(server->socket.tcp.socket, 1);
+#if 0
 		mbus_socket_set_keepcnt(server->socket.tcp.socket, 20);
 		mbus_socket_set_keepidle(server->socket.tcp.socket, 180);
 		mbus_socket_set_keepintvl(server->socket.tcp.socket, 60);

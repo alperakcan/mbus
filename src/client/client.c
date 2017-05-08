@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
 
 #define MBUS_DEBUG_NAME	"mbus-client"
 
@@ -558,13 +559,39 @@ static void * client_worker (void *arg)
 			pthread_mutex_unlock(&client->mutex);
 			break;
 		}
+		if (client->requests.count > 0) {
+			request = client->requests.tqh_first;
+			TAILQ_REMOVE(&client->requests, request, requests);
+			request->state = request_state_detached;
+			pthread_cond_broadcast(&client->cond);
+		} else {
+			request = NULL;
+		}
+		pthread_mutex_unlock(&client->mutex);
+		if (request != NULL) {
+			string = request_get_string(request);
+			if (string == NULL) {
+				mbus_errorf("could not get request string");
+				goto bail;
+			}
+			mbus_debugf("request to server: %s", string);
+			rc = mbus_buffer_push_string(client->buffer.out, string);
+			if (rc != 0) {
+				mbus_errorf("could not send request string");
+				goto bail;
+			}
+			pthread_mutex_lock(&client->mutex);
+			TAILQ_INSERT_TAIL(&client->waitings, request, requests);
+			request->state = request_state_wait;
+			pthread_cond_broadcast(&client->cond);
+			pthread_mutex_unlock(&client->mutex);
+		}
 		polls[0].events = mbus_poll_event_in;
 		polls[0].revents = 0;
 		polls[0].socket = client->socket;
-		if (client->requests.count > 0) {
+		if (mbus_buffer_length(client->buffer.out) > 0) {
 			polls[0].events |= mbus_poll_event_out;
 		}
-		pthread_mutex_unlock(&client->mutex);
 		rc = mbus_socket_poll(polls, 1, 20);
 		if (rc == 0) {
 			continue;
@@ -574,83 +601,119 @@ static void * client_worker (void *arg)
 			goto bail;
 		}
 		if (polls[0].revents & mbus_poll_event_in) {
-			string = mbus_socket_read_string(polls[0].socket);
-			if (string == NULL) {
-				mbus_infof("client: '%s' connection reset by peer", client->name);
+			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + 1024);
+			if (rc != 0) {
+				mbus_errorf("can not reserve client buffer");
 				goto bail;
 			}
-			mbus_debugf("request from server: %s", string);
-			method = method_create_from_string(string);
-			if (method == NULL) {
-				mbus_errorf("method create failed");
-				free(string);
+			rc = mbus_socket_read(client->socket,
+					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+			if (rc <= 0) {
+				mbus_debugf("can not read data from client");
 				goto bail;
 			}
-			pthread_mutex_lock(&client->mutex);
-			switch (method_get_type(method)) {
-				case method_type_result:
-					TAILQ_FOREACH(waiting, &client->waitings, requests) {
-						if (request_get_sequence(waiting) != method_get_sequence(method)) {
-							continue;
-						}
-						request_set_result(waiting, method);
-						TAILQ_REMOVE(&client->waitings, waiting, requests);
-						waiting->state = request_state_detached;
-						pthread_cond_broadcast(&client->cond);
+			{
+				uint8_t *ptr;
+				uint8_t *end;
+				uint32_t expected;
+				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + rc);
+				if (rc != 0) {
+					mbus_errorf("can not set buffer length");
+					goto bail;
+				}
+				mbus_debugf("      buffer.in:");
+				mbus_debugf("        length  : %d", mbus_buffer_length(client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_size(client->buffer.in));
+				while (1) {
+					char *string;
+					ptr = mbus_buffer_base(client->buffer.in);
+					end = ptr + mbus_buffer_length(client->buffer.in);
+					if (end - ptr < 4) {
 						break;
 					}
-					if (waiting == NULL) {
-						mbus_errorf("unknown result sequence");
-						pthread_mutex_unlock(&client->mutex);
-						free(string);
-						method_destroy(method);
+					memcpy(&expected, ptr, sizeof(expected));
+					ptr += sizeof(expected);
+					expected = ntohl(expected);
+					mbus_debugf("expected: %d", expected);
+					if (end - ptr < (int32_t) expected) {
+						break;
+					}
+					mbus_debugf("message: '%.*s'", expected, ptr);
+					string = strndup((char *) ptr, expected);
+					if (string == NULL) {
+						mbus_errorf("can not allocate memory");
 						goto bail;
 					}
-					break;
-				case method_type_status:
-				case method_type_event:
-				case method_type_command:
-					TAILQ_INSERT_TAIL(&client->methods, method, methods);
-					pthread_cond_broadcast(&client->cond);
-					break;
-				default:
-					mbus_errorf("unknown method type");
+
+					mbus_debugf("request from server: %s", string);
+					method = method_create_from_string(string);
+					if (method == NULL) {
+						mbus_errorf("method create failed");
+						free(string);
+						goto bail;
+					}
+					pthread_mutex_lock(&client->mutex);
+					switch (method_get_type(method)) {
+						case method_type_result:
+							TAILQ_FOREACH(waiting, &client->waitings, requests) {
+								if (request_get_sequence(waiting) != method_get_sequence(method)) {
+									continue;
+								}
+								request_set_result(waiting, method);
+								TAILQ_REMOVE(&client->waitings, waiting, requests);
+								waiting->state = request_state_detached;
+								pthread_cond_broadcast(&client->cond);
+								break;
+							}
+							if (waiting == NULL) {
+								mbus_errorf("unknown result sequence");
+								pthread_mutex_unlock(&client->mutex);
+								free(string);
+								method_destroy(method);
+								goto bail;
+							}
+							break;
+						case method_type_status:
+						case method_type_event:
+						case method_type_command:
+							TAILQ_INSERT_TAIL(&client->methods, method, methods);
+							pthread_cond_broadcast(&client->cond);
+							break;
+						default:
+							mbus_errorf("unknown method type");
+							pthread_mutex_unlock(&client->mutex);
+							free(string);
+							method_destroy(method);
+							goto bail;
+					}
 					pthread_mutex_unlock(&client->mutex);
+
+					rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
+					if (rc != 0) {
+						mbus_errorf("can not shift in");
+						free(string);
+						goto bail;
+					}
 					free(string);
-					method_destroy(method);
-					goto bail;
+				}
 			}
-			pthread_mutex_unlock(&client->mutex);
-			free(string);
 		}
 		if (polls[0].revents & mbus_poll_event_out) {
-			pthread_mutex_lock(&client->mutex);
-			if (client->requests.count > 0) {
-				request = client->requests.tqh_first;
-				TAILQ_REMOVE(&client->requests, request, requests);
-				request->state = request_state_detached;
-				pthread_cond_broadcast(&client->cond);
-			} else {
-				request = NULL;
+			if (mbus_buffer_length(client->buffer.out) <= 0) {
+				mbus_errorf("logic error");
+				goto bail;
 			}
-			pthread_mutex_unlock(&client->mutex);
-			if (request != NULL) {
-				string = request_get_string(request);
-				if (string == NULL) {
-					mbus_errorf("could not get request string");
-					goto bail;
-				}
-				mbus_debugf("request to server: %s", string);
-				rc = mbus_socket_write_string(client->socket, string);
+			rc = mbus_socket_write(client->socket, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+			if (rc <= 0) {
+				mbus_debugf("can not write string to client");
+				goto bail;
+			} else {
+				rc = mbus_buffer_shift(client->buffer.out, rc);
 				if (rc != 0) {
-					mbus_errorf("could not send request string");
+					mbus_errorf("can not set buffer length");
 					goto bail;
 				}
-				pthread_mutex_lock(&client->mutex);
-				TAILQ_INSERT_TAIL(&client->waitings, request, requests);
-				request->state = request_state_wait;
-				pthread_cond_broadcast(&client->cond);
-				pthread_mutex_unlock(&client->mutex);
 			}
 		}
 	}
@@ -761,72 +824,25 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not reuse event");
 		goto bail;
 	}
-#if 0
 	if (socket_domain == mbus_socket_domain_af_inet &&
 	    socket_type == mbus_socket_type_sock_stream) {
 		mbus_socket_set_keepalive(client->socket, 1);
+#if 0
 		mbus_socket_set_keepcnt(client->socket, 20);
 		mbus_socket_set_keepidle(client->socket, 180);
 		mbus_socket_set_keepintvl(client->socket, 60);
-	}
 #endif
+	}
 	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {
 		mbus_errorf("can not connect to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 		goto bail;
 	}
-	{
-		char *string;
-		struct method *method;
-		struct request *request;
-		request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, client->sequence, NULL);
-		if (request == NULL) {
-			mbus_errorf("can not create request");
-			goto bail;
-		}
-		rc = mbus_socket_write_string(client->socket, request_get_string(request));
-		if (rc != 0) {
-			mbus_errorf("can not write to socket");
-			request_destroy(request);
-			goto bail;
-		}
-		string = mbus_socket_read_string(client->socket);
-		if (string == NULL) {
-			mbus_errorf("can not read result");
-			request_destroy(request);
-			goto bail;
-		}
-		method = method_create_from_string(string);
-		if (method == NULL) {
-			mbus_errorf("can not create method");
-			free(string);
-			request_destroy(request);
-			goto bail;
-		}
-		options.client.name = mbus_json_get_string_value(method_get_payload(method), "name");
-		if (options.client.name == NULL) {
-			mbus_errorf("can not get name value");
-			free(string);
-			method_destroy(method);
-			request_destroy(request);
-			goto bail;
-		}
-		if (strcmp(client->name, options.client.name) != 0) {
-			free(client->name);
-			client->name = strdup(options.client.name);
-			if (client->name == NULL) {
-				mbus_errorf("can not allocate memory");
-				free(string);
-				method_destroy(method);
-				request_destroy(request);
-				goto bail;
-			}
-		}
-
-		free(string);
-		method_destroy(method);
-		request_destroy(request);
+	rc = mbus_socket_set_blocking(client->socket, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set socket to nonblocking");
+		goto bail;
 	}
 	pthread_mutex_lock(&client->mutex);
 	pthread_create(&client->thread, NULL, client_worker, client);
@@ -834,6 +850,16 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	pthread_mutex_unlock(&client->mutex);
+
+	{
+		int rc;
+		struct mbus_json *result;
+		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, NULL, &result);
+		if (rc != 0) {
+			mbus_errorf("can not send command");
+			goto bail;
+		}
+	}
 	return client;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
