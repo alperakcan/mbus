@@ -44,10 +44,10 @@ const MBUS_SERVER_EVENT_DISCONNECTED		= "event.disconnected";
 const MBUS_SERVER_EVENT_SUBSCRIBED		= "event.subscribed";
 const MBUS_SERVER_EVENT_UNSUBSCRIBED		= "event.unsubscribed";
 
-function MBusClientRequest (type, source, destination, identifier, sequence, payload)
+function MBusClientRequest (type, source, destination, identifier, sequence, payload, callback)
 {
 	if (this instanceof MBusClientRequest == false) {
-		return new MBusClientRequest(type, source, destination, identifier, sequence, payload);
+		return new MBusClientRequest(type, source, destination, identifier, sequence, payload, callback);
 	}
 	if (typeof type !== 'string') {
 		return null;
@@ -64,7 +64,13 @@ function MBusClientRequest (type, source, destination, identifier, sequence, pay
 	if (payload === null) {
 		payload = { };
 	}
+	if (callback == null) {
+		callback = function () { };
+	}
 	if (typeof payload !== 'object') {
+		return null;
+	}
+	if (typeof callback !== 'function') {
 		return null;
 	}
 	this.type = 'MBusClientRequest';
@@ -74,6 +80,7 @@ function MBusClientRequest (type, source, destination, identifier, sequence, pay
 	this._identifier = identifier;
 	this._sequence = sequence;
 	this._payload = payload;
+	this._callback = callback;
 }
 
 MBusClientRequest.prototype.stringify = function () {
@@ -186,14 +193,25 @@ function MBusClient (name = "", options = {} ) {
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
 		    request._destination == MBUS_SERVER_NAME &&
 		    request._identifier == MBUS_SERVER_COMMAND_CREATE) {
-		    	this._name = object['payload']['name'];
+		    this._name = object['payload']['name'];
 			this.onConnected();
-		}
-		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
+		} else if (request._type == MBUS_METHOD_TYPE_COMMAND &&
 		    request._destination == MBUS_SERVER_NAME &&
 		    request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
 			this.onSubscribed(request._payload['source'], request._payload['event']);
-		}
+		} else {
+			//console.log("type:", request._type);
+			//console.log("source:", request._source);
+			//console.log("destination:", request._destination);
+			//console.log("identifier:", request._identifier);
+			//console.log("callback:", request._callback);
+			//console.log("request.payload:", request._payload);
+			//console.log("return.payload:", object['payload']);
+			//console.log("return.result:", object['result']);
+			if (request._callback !== null) {
+				request._callback(object['result'], object['payload']);
+			}
+		} 
 	}
 
 	this._handleEvent = function (object) {
@@ -342,18 +360,21 @@ MBusClient.prototype.event = function (identifier, event) {
 	this._scheduleRequests();
 }
 
-MBusClient.prototype.command = function (destination, identifier, command) {
+MBusClient.prototype.command = function (destination, identifier, command, callback) {
 	var request;
 	var payload;
 	if (command == null) {
 		command = {};
+	}
+	if (callback == null) {
+		callback = function () { };
 	}
 	payload = {
 		destination: destination,
 		identifier: identifier,
 		call: command,
 	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, this._sequence, payload, callback);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
