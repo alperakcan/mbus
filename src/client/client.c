@@ -854,10 +854,17 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	{
 		int rc;
 		struct mbus_json *result;
+		result = NULL;
 		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, NULL, &result);
 		if (rc != 0) {
 			mbus_errorf("can not send command");
+			if (result != NULL) {
+				mbus_json_delete(result);
+			}
 			goto bail;
+		}
+		if (result != NULL) {
+			mbus_json_delete(result);
 		}
 	}
 	return client;
