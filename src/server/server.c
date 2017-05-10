@@ -1439,7 +1439,9 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		if (client->ping.threshold <= 0) {
 			client->ping.threshold = 0;
 		}
-		client->ping.enabled = 1;
+		if (client->ping.interval > 0) {
+			client->ping.enabled = 1;
+		}
 		client->ping.ping_recv_tsms = mbus_clock_get();
 	}
 	mbus_debugf("client: '%s' created", client_get_name(method_get_source(method)));

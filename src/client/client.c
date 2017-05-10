@@ -980,7 +980,9 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 			mbus_errorf("can not subscribe to %s:%s", MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG);
 			goto bail;
 		}
-		client->ping.enabled = 1;
+		if (client->ping.interval > 0) {
+			client->ping.enabled = 1;
+		}
 	}
 	return client;
 bail:	if (client != NULL) {
