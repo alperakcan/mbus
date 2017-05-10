@@ -189,6 +189,22 @@
  */
 #define MBUS_SERVER_STATUS_UNSUBSCRIBED		"status.unsubscribed"
 
+/* event ping
+ *
+ * {
+ *   "source"      : "application name",
+ * }
+ */
+#define MBUS_SERVER_EVENT_PING			"event.ping"
+
+/* event pong
+ *
+ * {
+ *   "source"      : "application name",
+ * }
+ */
+#define MBUS_SERVER_EVENT_PONG			"event.pong"
+
 /* event connected
  *
  * {
