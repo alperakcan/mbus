@@ -52,6 +52,7 @@ static void listener_event_all_all (struct mbus_client *client, const char *sour
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 	} else {
+		if (0)
 		fprintf(stdout, "%s.%s: %s\n", source, event, string);
 		free(string);
 	}
@@ -76,6 +77,7 @@ static void listener_status_server_connected (struct mbus_client *client, const 
 		if (string == NULL) {
 			return;
 		}
+		if (0)
 		fprintf(stdout, "%s.%s: %s\n", MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_STATUS, string);
 		free(string);
 		mbus_json_delete(result);

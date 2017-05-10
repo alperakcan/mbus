@@ -3,6 +3,7 @@ subdir-y = \
 	debug \
 	buffer \
 	client \
+	clock \
 	exec \
 	json \
 	method \
@@ -21,6 +22,9 @@ client_depends-y = \
 	socket \
 	server
 
+clock_depends-y = \
+	debug
+
 exec_depends-y = \
 	debug
 
@@ -30,6 +34,7 @@ method_depends-y = \
 server_depends-y = \
 	debug \
 	buffer \
+	clock \
 	json \
 	method \
 	socket \

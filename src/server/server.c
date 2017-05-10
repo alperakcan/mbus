@@ -38,6 +38,7 @@
 
 #include "mbus/debug.h"
 #include "mbus/buffer.h"
+#include "mbus/clock.h"
 #include "mbus/tailq.h"
 #include "mbus/json.h"
 #include "mbus/method.h"
@@ -105,6 +106,14 @@ struct client {
 		struct mbus_buffer *in;
 		struct mbus_buffer *out;
 	} buffer;
+	struct {
+		int enabled;
+		int interval;
+		int timeout;
+		int threshold;
+		unsigned long ping_recv_tsms;
+		int ping_missed_count;
+	} ping;
 	struct subscriptions subscriptions;
 	struct commands commands;
 	struct methods requests;
@@ -524,10 +533,12 @@ static struct method * method_create (const char *type, const char *source, cons
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
+#if 0
 	if (payload == NULL) {
 		mbus_errorf("payload is null");
 		goto bail;
 	}
+#endif
 	method = malloc(sizeof(struct method));
 	if (method == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -535,7 +546,11 @@ static struct method * method_create (const char *type, const char *source, cons
 	}
 	memset(method, 0, sizeof(struct method));
 	method->request.sequence = sequence;
-	method->request.payload = mbus_json_duplicate((struct mbus_json *) payload, 1);
+	if (payload == NULL) {
+		method->request.payload = mbus_json_create_object();
+	} else {
+		method->request.payload = mbus_json_duplicate((struct mbus_json *) payload, 1);
+	}
 	if (method->request.payload == NULL) {
 		mbus_errorf("can not create method payload");
 		goto bail;
@@ -1011,11 +1026,25 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		mbus_errorf("identifier is null");
 		goto bail;
 	}
+#if 0
 	if (payload == NULL) {
 		mbus_errorf("payload is null");
 		goto bail;
 	}
-	if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_ALL) == 0) {
+#endif
+	if (strcmp(destination, MBUS_SERVER_NAME) == 0) {
+		if (strcmp(identifier, MBUS_SERVER_EVENT_PING) == 0) {
+			client = server_find_client_by_name(server, source);
+			if (client != NULL) {
+				client->ping.ping_recv_tsms = mbus_clock_get();
+			}
+			rc = server_send_event_to(server, MBUS_SERVER_NAME, source, MBUS_SERVER_EVENT_PONG, NULL);
+			if (rc != 0) {
+				mbus_errorf("can not send pong to: %s", source);
+				goto bail;
+			}
+		}
+	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_ALL) == 0) {
 		TAILQ_FOREACH(client, &server->clients, clients) {
 			method = method_create(MBUS_METHOD_TYPE_EVENT, source, client_get_name(client), identifier, client->esequence, payload);
 			if (method == NULL) {
@@ -1388,6 +1417,31 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		mbus_errorf("can not set client name");
 		goto bail;
 	}
+	client = server_find_client_by_name(server, name);
+	if (client == NULL) {
+		mbus_errorf("client name logic error");
+		goto bail;
+	}
+	{
+		struct mbus_json *call;
+		struct mbus_json *ping;
+		call = mbus_json_get_object_item(method_get_request_payload(method), "call");
+		ping = mbus_json_get_object_item(call, "ping");
+		client->ping.interval = mbus_json_get_int_value(ping, "interval");
+		client->ping.timeout = mbus_json_get_int_value(ping, "timeout");
+		client->ping.threshold = mbus_json_get_int_value(ping, "threshold");
+		if (client->ping.interval <= 0) {
+			client->ping.interval = 0;
+		}
+		if (client->ping.timeout > (client->ping.interval * 2) / 3) {
+			client->ping.timeout = (client->ping.interval * 2) / 3;
+		}
+		if (client->ping.threshold <= 0) {
+			client->ping.threshold = 0;
+		}
+		client->ping.enabled = 1;
+		client->ping.ping_recv_tsms = mbus_clock_get();
+	}
 	mbus_debugf("client: '%s' created", client_get_name(method_get_source(method)));
 	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
 	rc = method_set_result_code(method, 0);
@@ -1707,7 +1761,7 @@ static int server_handle_methods (struct mbus_server *server)
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 		rc = -1;
 		response = 1;
-		mbus_debugf("handle method: %s, %s", method_get_request_destination(method), method_get_request_identifier(method));
+		mbus_debugf("handle method: %s, %s, %s", method_get_request_type(method), method_get_request_identifier(method), method_get_request_destination(method));
 		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
 			if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
 				rc = server_handle_command_create(server, method);
@@ -1727,6 +1781,9 @@ static int server_handle_methods (struct mbus_server *server)
 					rc = 0;
 				}
 			}
+		}
+		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+			response = 0;
 		}
 		if (rc != 0) {
 			mbus_errorf("can not execute method type: '%s', identifier: '%s'", method_get_request_type(method), method_get_request_identifier(method));
@@ -1753,6 +1810,12 @@ static int server_handle_method_command (struct mbus_server *server, struct meth
 	return 0;
 }
 
+static int server_handle_method_event (struct mbus_server *server, struct method *method)
+{
+	TAILQ_INSERT_TAIL(&server->methods, method, methods);
+	return 0;
+}
+
 static int server_handle_method (struct mbus_server *server, struct client *client, const char *string)
 {
 	int rc;
@@ -1764,6 +1827,8 @@ static int server_handle_method (struct mbus_server *server, struct client *clie
 	}
 	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
 		rc = server_handle_method_command(server, method);
+	} else if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+		rc = server_handle_method_event(server, method);
 	} else {
 		mbus_errorf("invalid method");
 		goto bail;
@@ -2092,12 +2157,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	char *string;
 	unsigned int c;
 	unsigned int n;
+	unsigned long current;
 	struct client *client;
 	struct client *nclient;
 	struct client *wclient;
 	struct client *nwclient;
 	struct method *method;
 	struct method *nmethod;
+	current = mbus_clock_get();
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		return -1;
@@ -2110,6 +2177,31 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	if (rc != 0) {
 		mbus_errorf("can not handle methods");
 		goto bail;
+	}
+	if (milliseconds < 0 || milliseconds > MBUS_SERVER_DEFAULT_TIMEOUT) {
+		milliseconds = MBUS_SERVER_DEFAULT_TIMEOUT;
+	}
+	mbus_debugf("  check ping timeout");
+	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+		mbus_debugf("    client: %s", client_get_name(client));
+		if (client_get_socket(client) == NULL) {
+			continue;
+		}
+		if (client->ping.interval <= 0) {
+			continue;
+		}
+		if (client->ping.enabled == 0) {
+			continue;
+		}
+		if (mbus_clock_after(current, client->ping.ping_recv_tsms + client->ping.interval + client->ping.timeout)) {
+			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_name(client), current, client->ping.ping_recv_tsms, client->ping.interval, client->ping.timeout);
+			client->ping.ping_missed_count += 1;
+			client->ping.ping_recv_tsms = current + client->ping.interval + client->ping.timeout;
+		}
+		if (client->ping.ping_missed_count > client->ping.threshold) {
+			mbus_errorf("missed too many pings, %d > %d. closing connection", client->ping.ping_missed_count, client->ping.threshold);
+			client_set_socket(client, NULL);
+		}
 	}
 	mbus_debugf("  prepare out buffer");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {

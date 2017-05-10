@@ -45,6 +45,8 @@
 #define MBUS_SERVER_ADDRESS			MBUS_SERVER_TCP_ADDRESS
 #define MBUS_SERVER_PORT			MBUS_SERVER_TCP_PORT
 
+#define MBUS_SERVER_DEFAULT_TIMEOUT		10000
+
 #define MBUS_SERVER_NAME			"org.mbus.server"
 
 /* command create

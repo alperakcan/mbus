@@ -41,6 +41,7 @@
 #include "mbus/json.h"
 #include "mbus/debug.h"
 #include "mbus/buffer.h"
+#include "mbus/clock.h"
 #include "mbus/tailq.h"
 #include "mbus/method.h"
 #include "mbus/socket.h"
@@ -82,6 +83,7 @@ struct request {
 	char *string;
 	struct method *result;
 	enum request_state state;
+	int async;
 };
 TAILQ_HEAD(requests, request);
 
@@ -108,6 +110,16 @@ struct mbus_client {
 		struct mbus_buffer *in;
 		struct mbus_buffer *out;
 	} buffer;
+	struct {
+		int enabled;
+		int interval;
+		int timeout;
+		int threshold;
+		unsigned long ping_send_tsms;
+		unsigned long pong_recv_tsms;
+		int ping_wait_pong;
+		int pong_missed_count;
+	} ping;
 	int sequence;
 	struct mbus_socket *socket;
 	struct methods methods;
@@ -118,19 +130,24 @@ struct mbus_client {
 	int incommand;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
-	pthread_t thread;
-	int started;
-	int running;
-	int stopped;
+	struct {
+		pthread_t thread;
+		int started;
+		int running;
+		int stopped;
+	} worker;
 	int error;
 };
 
 #define OPTION_HELP		0x100
 #define OPTION_DEBUG_LEVEL	0x101
-#define OPTION_SERVER_PROTOCOL	0x102
-#define OPTION_SERVER_ADDRESS	0x103
-#define OPTION_SERVER_PORT	0x104
-#define OPTION_CLIENT_NAME	0x105
+#define OPTION_SERVER_PROTOCOL	0x201
+#define OPTION_SERVER_ADDRESS	0x202
+#define OPTION_SERVER_PORT	0x203
+#define OPTION_CLIENT_NAME	0x301
+#define OPTION_PING_INTERVAL	0x401
+#define OPTION_PING_TIMEOUT	0x402
+#define OPTION_PING_THRESHOLD	0x403
 static struct option longopts[] = {
 	{ "mbus-help",			no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",		required_argument,	NULL,	OPTION_DEBUG_LEVEL },
@@ -138,6 +155,9 @@ static struct option longopts[] = {
 	{ "mbus-server-address",	required_argument,	NULL,	OPTION_SERVER_ADDRESS },
 	{ "mbus-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
 	{ "mbus-client-name",		required_argument,	NULL,	OPTION_CLIENT_NAME },
+	{ "mbus-ping-interval",		required_argument,	NULL,	OPTION_PING_INTERVAL },
+	{ "mbus-ping-timeout",		required_argument,	NULL,	OPTION_PING_TIMEOUT },
+	{ "mbus-ping-threshold",	required_argument,	NULL,	OPTION_PING_THRESHOLD },
 	{ NULL,				0,			NULL,	0 },
 };
 
@@ -149,6 +169,9 @@ void mbus_client_usage (void)
 	fprintf(stdout, "  --mbus-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
 	fprintf(stdout, "  --mbus-client-name     : client name (overrides api parameter)\n");
+	fprintf(stdout, "  --mbus-ping-interval   : ping interval (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
+	fprintf(stdout, "  --mbus-ping-timeout    : ping timeout (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
+	fprintf(stdout, "  --mbus-ping-threshold  : ping threshold (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
 	fprintf(stdout, "  --mbus-help            : this text\n");
 }
 
@@ -451,6 +474,14 @@ static struct method * request_get_result (struct request *request)
 	return request->result;
 }
 
+static int request_get_async (struct request *request)
+{
+	if (request == NULL) {
+		return -1;
+	}
+	return request->async;
+}
+
 static void request_destroy (struct request *request)
 {
 	if (request == NULL) {
@@ -504,6 +535,11 @@ static struct request * request_create (const char *type, const char *source, co
 		goto bail;
 	}
 	memset(request, 0, sizeof(struct request));
+	if (strcmp(type, MBUS_METHOD_TYPE_EVENT) == 0) {
+		request->async = 1;
+	} else {
+		request->async = 0;
+	}
 	request->state = request_state_detached;
 	request->sequence = sequence;
 	if (payload == NULL) {
@@ -539,6 +575,7 @@ static void * client_worker (void *arg)
 {
 	int rc;
 	char *string;
+	unsigned long current;
 	struct method *method;
 	struct request *request;
 	struct request *waiting;
@@ -546,16 +583,38 @@ static void * client_worker (void *arg)
 	struct mbus_client *client = arg;
 
 	pthread_mutex_lock(&client->mutex);
-	client->started = 1;
-	client->running = 1;
-	client->stopped = 0;
+	client->worker.started = 1;
+	client->worker.running = 1;
+	client->worker.stopped = 0;
 	pthread_cond_broadcast(&client->cond);
 	pthread_mutex_unlock(&client->mutex);
 
 	while (1) {
+		current = mbus_clock_get();
 		sched_yield();
+		if (client->ping.enabled == 1) {
+			if (mbus_clock_after(current, client->ping.ping_send_tsms + client->ping.interval)) {
+				mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping.ping_send_tsms, client->ping.interval, client->ping.timeout);
+				client->ping.ping_send_tsms = current;
+				client->ping.pong_recv_tsms = 0;
+				client->ping.ping_wait_pong = 1;
+				mbus_client_event_async_to(client, MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, NULL);
+			}
+			if (client->ping.ping_wait_pong != 0 &&
+			    client->ping.ping_send_tsms != 0 &&
+			    client->ping.pong_recv_tsms == 0 &&
+			    mbus_clock_after(current, client->ping.ping_send_tsms + client->ping.timeout)) {
+				mbus_infof("ping timeout: %ld, %ld, %d", current, client->ping.ping_send_tsms, client->ping.timeout);
+				client->ping.ping_wait_pong = 0;
+				client->ping.pong_missed_count += 1;
+			}
+			if (client->ping.pong_missed_count > client->ping.threshold) {
+				mbus_errorf("missed too many pongs, %d > %d", client->ping.pong_missed_count, client->ping.threshold);
+				goto bail;
+			}
+		}
 		pthread_mutex_lock(&client->mutex);
-		if (client->running == 0) {
+		if (client->worker.running == 0) {
 			pthread_mutex_unlock(&client->mutex);
 			break;
 		}
@@ -580,11 +639,15 @@ static void * client_worker (void *arg)
 				mbus_errorf("could not send request string");
 				goto bail;
 			}
-			pthread_mutex_lock(&client->mutex);
-			TAILQ_INSERT_TAIL(&client->waitings, request, requests);
-			request->state = request_state_wait;
-			pthread_cond_broadcast(&client->cond);
-			pthread_mutex_unlock(&client->mutex);
+			if (request_get_async(request) == 0) {
+				pthread_mutex_lock(&client->mutex);
+				TAILQ_INSERT_TAIL(&client->waitings, request, requests);
+				request->state = request_state_wait;
+				pthread_cond_broadcast(&client->cond);
+				pthread_mutex_unlock(&client->mutex);
+			} else {
+				request_destroy(request);
+			}
 		}
 		polls[0].events = mbus_poll_event_in;
 		polls[0].revents = 0;
@@ -718,22 +781,37 @@ static void * client_worker (void *arg)
 		}
 	}
 	pthread_mutex_lock(&client->mutex);
-	client->started = 1;
-	client->running = 0;
-	client->stopped = 1;
+	client->worker.started = 1;
+	client->worker.running = 0;
+	client->worker.stopped = 1;
 	pthread_cond_broadcast(&client->cond);
 	pthread_mutex_unlock(&client->mutex);
 	return NULL;
 
 bail:
 	pthread_mutex_lock(&client->mutex);
-	client->started = 1;
-	client->running = 0;
-	client->stopped = 1;
+	client->worker.started = 1;
+	client->worker.running = 0;
+	client->worker.stopped = 1;
 	client->error = 1;
 	pthread_cond_broadcast(&client->cond);
 	pthread_mutex_unlock(&client->mutex);
 	return NULL;
+}
+
+static void server_event_pong_callback (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data)
+{
+	unsigned long current;
+	(void) source;
+	(void) event;
+	(void) payload;
+	(void) data;
+	current = mbus_clock_get();
+	pthread_mutex_lock(&client->mutex);
+	client->ping.ping_wait_pong = 0;
+	client->ping.pong_recv_tsms = current;
+	client->ping.pong_missed_count = 0;
+	pthread_mutex_unlock(&client->mutex);
 }
 
 struct mbus_client * mbus_client_create_with_options (const struct mbus_client_options *_options)
@@ -757,6 +835,19 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 
 	if (options.server.protocol == NULL) {
 		options.server.protocol = MBUS_SERVER_PROTOCOL;
+	}
+
+	if (options.ping.interval == 0) {
+		options.ping.interval = MBUS_CLIENT_DEFAULT_PING_INTERVAL;
+	}
+	if (options.ping.timeout == 0) {
+		options.ping.timeout = MBUS_CLIENT_DEFAULT_PING_TIMEOUT;
+	}
+	if (options.ping.threshold == 0) {
+		options.ping.threshold = MBUS_CLIENT_DEFAULT_PING_THRESHOLD;
+	}
+	if (options.ping.timeout > (options.ping.interval * 2) / 3) {
+		options.ping.timeout = (options.ping.interval * 2) / 3;
 	}
 
 	if (strcmp(options.server.protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
@@ -797,6 +888,9 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	TAILQ_INIT(&client->waitings);
 	TAILQ_INIT(&client->callbacks);
 	TAILQ_INIT(&client->commands);
+	client->ping.interval = options.ping.interval;
+	client->ping.timeout = options.ping.timeout;
+	client->ping.threshold = options.ping.threshold;
 	pthread_mutex_init(&client->mutex, NULL);
 	pthread_cond_init(&client->cond, NULL);
 	client->name = strdup(options.client.name);
@@ -845,27 +939,48 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		goto bail;
 	}
 	pthread_mutex_lock(&client->mutex);
-	pthread_create(&client->thread, NULL, client_worker, client);
-	while (client->started == 0) {
+	pthread_create(&client->worker.thread, NULL, client_worker, client);
+	while (client->worker.started == 0) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	pthread_mutex_unlock(&client->mutex);
 
 	{
 		int rc;
+		struct mbus_json *request;
+		struct mbus_json *request_ping;
 		struct mbus_json *result;
+		request = NULL;
 		result = NULL;
-		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, NULL, &result);
+		request = mbus_json_create_object();
+		request_ping = mbus_json_create_object();
+		mbus_json_add_number_to_object_cs(request_ping, "interval", client->ping.interval);
+		mbus_json_add_number_to_object_cs(request_ping, "timeout", client->ping.timeout);
+		mbus_json_add_number_to_object_cs(request_ping, "threshold", client->ping.threshold);
+		mbus_json_add_item_to_object_cs(request, "ping", request_ping);
+		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, request, &result);
 		if (rc != 0) {
 			mbus_errorf("can not send command");
+			if (request != NULL) {
+				mbus_json_delete(request);
+			}
 			if (result != NULL) {
 				mbus_json_delete(result);
 			}
 			goto bail;
 		}
+		if (request != NULL) {
+			mbus_json_delete(request);
+		}
 		if (result != NULL) {
 			mbus_json_delete(result);
 		}
+		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, server_event_pong_callback, client);
+		if (rc != 0) {
+			mbus_errorf("can not subscribe to %s:%s", MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG);
+			goto bail;
+		}
+		client->ping.enabled = 1;
 	}
 	return client;
 bail:	if (client != NULL) {
@@ -924,6 +1039,15 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 			case OPTION_CLIENT_NAME:
 				options.client.name = optarg;
 				break;
+			case OPTION_PING_INTERVAL:
+				options.ping.interval = atoi(optarg);
+				break;
+			case OPTION_PING_TIMEOUT:
+				options.ping.timeout = atoi(optarg);
+				break;
+			case OPTION_PING_THRESHOLD:
+				options.ping.threshold = atoi(optarg);
+				break;
 			case OPTION_HELP:
 				mbus_client_usage();
 				goto bail;
@@ -961,14 +1085,14 @@ void mbus_client_destroy (struct mbus_client *client)
 	}
 	mbus_infof("destroying client: '%s'", client->name);
 	pthread_mutex_lock(&client->mutex);
-	client->running = 0;
+	client->worker.running = 0;
 	pthread_cond_broadcast(&client->cond);
-	while (client->started == 1 && client->stopped == 0) {
+	while (client->worker.started == 1 && client->worker.stopped == 0) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	pthread_mutex_unlock(&client->mutex);
-	if (client->started == 1) {
-		pthread_join(client->thread, NULL);
+	if (client->worker.started == 1) {
+		pthread_join(client->worker.thread, NULL);
 	}
 	pthread_cond_destroy(&client->cond);
 	pthread_mutex_destroy(&client->mutex);
@@ -1117,7 +1241,7 @@ static int mbus_client_result (struct mbus_client *client, struct mbus_json *pay
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (client->running == 1 && request->result == NULL) {
+	while (client->worker.running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
@@ -1155,7 +1279,7 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 		return -1;
 	}
 	pthread_mutex_lock(&client->mutex);
-	if ((client->running == 1) &&
+	if ((client->worker.running == 1) &&
 	    ((client->methods.count == 0) ||
 	     (client->incommand == 1))) {
 		__pthread_cond_timedwait(&client->cond, &client->mutex, msec);
@@ -1164,7 +1288,7 @@ int mbus_client_run_timeout (struct mbus_client *client, int msec)
 		pthread_mutex_unlock(&client->mutex);
 		return -1;
 	}
-	if (client->running == 0) {
+	if (client->worker.running == 0) {
 		pthread_mutex_unlock(&client->mutex);
 		return 1;
 	}
@@ -1361,7 +1485,7 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (client->running == 1 && request->result == NULL) {
+	while (client->worker.running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
@@ -1454,7 +1578,7 @@ int mbus_client_register (struct mbus_client *client, const char *command, int (
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (client->running == 1 && request->result == NULL) {
+	while (client->worker.running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
@@ -1544,7 +1668,7 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (client->running == 1 && request->result == NULL) {
+	while (client->worker.running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
@@ -1558,7 +1682,7 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 	result = request_get_result(request);
 	rc = method_get_result(result);
 	if (rc != 0) {
-		mbus_errorf("could not send event: %d, %d, %p", client->running, client->error, request->result);
+		mbus_errorf("could not send event: %d, %d, %p", client->worker.running, client->error, request->result);
 	}
 	client->incommand = 0;
 	pthread_cond_broadcast(&client->cond);
@@ -1581,6 +1705,79 @@ bail:	if (payload != NULL) {
 int mbus_client_event (struct mbus_client *client, const char *identifier, const struct mbus_json *event)
 {
 	return mbus_client_event_to(client, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, identifier, event);
+}
+
+int mbus_client_event_async_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
+{
+	int rc;
+	struct mbus_json *data;
+	struct mbus_json *payload;
+	struct request *request;
+	data = NULL;
+	payload = NULL;
+	request = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	if (event == NULL) {
+		data = mbus_json_create_object();
+	} else {
+		data = mbus_json_duplicate(event, 1);
+	}
+	if (data == NULL) {
+		mbus_errorf("can not create data");
+		goto bail;
+	}
+	pthread_mutex_lock(&client->mutex);
+	if (client->error != 0) {
+		mbus_errorf("client is in error state");
+		pthread_mutex_unlock(&client->mutex);
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create command payload");
+		goto bail;
+	}
+	mbus_json_add_string_to_object_cs(payload, "destination", to);
+	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
+	mbus_json_add_item_to_object_cs(payload, "event", data);
+	data = NULL;
+	request = request_create(MBUS_METHOD_TYPE_EVENT, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, payload);
+	if (request == NULL) {
+		mbus_errorf("can not create request");
+		pthread_mutex_unlock(&client->mutex);
+		goto bail;
+	}
+	client->sequence += 1;
+	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
+		client->sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	TAILQ_INSERT_TAIL(&client->requests, request, requests);
+	request->state = request_state_request;
+	mbus_json_delete(payload);
+	pthread_mutex_unlock(&client->mutex);
+	return rc;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	if (data != NULL) {
+		mbus_json_delete(data);
+	}
+	if (request != NULL) {
+		request_destroy(request);
+	}
+	return -1;
+}
+
+int mbus_client_event_async (struct mbus_client *client, const char *identifier, const struct mbus_json *event)
+{
+	return mbus_client_event_async_to(client, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, identifier, event);
 }
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **rslt)
@@ -1646,7 +1843,7 @@ int mbus_client_command (struct mbus_client *client, const char *destination, co
 	request->state = request_state_request;
 	client->incommand = 1;
 	pthread_cond_broadcast(&client->cond);
-	while (client->running == 1 && request->result == NULL) {
+	while (client->worker.running == 1 && request->result == NULL) {
 		pthread_cond_wait(&client->cond, &client->mutex);
 	}
 	if (request->state == request_state_request) {
