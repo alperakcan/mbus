@@ -387,7 +387,7 @@ static struct method * method_create_from_string (const char *string)
 	method->identifier = mbus_json_get_string_value(method->json, "identifier");
 	method->sequence = mbus_json_get_int_value(method->json, "sequence");
 	method->result = mbus_json_get_int_value(method->json, "result");
-	method->payload = mbus_json_get_object_item(method->json, "payload");
+	method->payload = mbus_json_get_object(method->json, "payload");
 	if (method->type == NULL) {
 		mbus_errorf("invalid method");
 		goto bail;

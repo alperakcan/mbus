@@ -480,7 +480,7 @@ static struct method * method_create_from_string (struct client *source, const c
 	method->request.destination = mbus_json_get_string_value(method->request.json, "destination");
 	method->request.identifier = mbus_json_get_string_value(method->request.json, "identifier");
 	method->request.sequence = mbus_json_get_int_value(method->request.json, "sequence");
-	method->request.payload = mbus_json_get_object_item(method->request.json, "payload");
+	method->request.payload = mbus_json_get_object(method->request.json, "payload");
 	if ((method->request.source == NULL) ||
 	    (method->request.destination == NULL) ||
 	    (method->request.type == NULL) ||
@@ -1425,8 +1425,8 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	{
 		struct mbus_json *call;
 		struct mbus_json *ping;
-		call = mbus_json_get_object_item(method_get_request_payload(method), "call");
-		ping = mbus_json_get_object_item(call, "ping");
+		call = mbus_json_get_object(method_get_request_payload(method), "call");
+		ping = mbus_json_get_object(call, "ping");
 		client->ping.interval = mbus_json_get_int_value(ping, "interval");
 		client->ping.timeout = mbus_json_get_int_value(ping, "timeout");
 		client->ping.threshold = mbus_json_get_int_value(ping, "threshold");
@@ -1536,7 +1536,7 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 	}
 	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination");
 	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier");
-	event = mbus_json_get_object_item(method_get_request_payload(method), "event");
+	event = mbus_json_get_object(method_get_request_payload(method), "event");
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
 	    (event == NULL)) {
@@ -1571,7 +1571,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 	}
 	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination");
 	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier");
-	call = mbus_json_get_object_item(method_get_request_payload(method), "call");
+	call = mbus_json_get_object(method_get_request_payload(method), "call");
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
 	    (call == NULL)) {
@@ -1741,7 +1741,7 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 			}
 			TAILQ_REMOVE(&client->waits, wait, methods);
 			method_set_result_code(wait, rc);
-			method_set_result_payload(wait, mbus_json_duplicate(mbus_json_get_object_item(method_get_request_payload(method), "result"), 1));
+			method_set_result_payload(wait, mbus_json_duplicate(mbus_json_get_object(method_get_request_payload(method), "result"), 1));
 			client_push_result(client, wait);
 			break;
 		}

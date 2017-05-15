@@ -242,11 +242,11 @@ static struct app * app_create (struct mbus_json *application)
 	app->io[1] = -1;
 	app->logfd = -1;
 
-	app->enable = ((object = mbus_json_get_object_item(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
+	app->enable = ((object = mbus_json_get_object(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
 	app->name = (mbus_json_get_string_value(application, "name") != NULL) ? strdup(mbus_json_get_string_value(application, "name")) : NULL;
-	app->log = ((object = mbus_json_get_object_item(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
+	app->log = ((object = mbus_json_get_object(application, "enable")) != NULL) ? (mbus_json_get_type(object) == mbus_json_type_true) : 0;
 
-	object = mbus_json_get_object_item(application, "arguments");
+	object = mbus_json_get_object(application, "arguments");
 	if (object == NULL) {
 		goto out;
 	}
@@ -408,7 +408,7 @@ static struct config * config_create (const char *file)
 	memset(config, 0, sizeof(struct config));
 	TAILQ_INIT(&config->apps);
 
-	applications = mbus_json_get_object_item(root, "applications");
+	applications = mbus_json_get_object(root, "applications");
 	if (applications == NULL || mbus_json_get_type(applications) != mbus_json_type_array) {
 		mbus_errorf("can not parse config");
 		goto bail;
