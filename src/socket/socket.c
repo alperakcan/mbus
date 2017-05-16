@@ -228,7 +228,7 @@ int mbus_socket_get_reuseaddr (struct mbus_socket *socket)
 		mbus_errorf("setsockopt reuseaddr failed");
 		return -1;
 	}
-	return opt;
+	return !!opt;
 }
 
 int mbus_socket_set_blocking (struct mbus_socket *socket, int on)

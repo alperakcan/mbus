@@ -59,6 +59,8 @@ static void usage (void)
 	fprintf(stdout, "  --destination            : destination identifier\n");
 	fprintf(stdout, "  --event                  : event identifier\n");
 	fprintf(stdout, "  --payload                : payload json\n");
+	fprintf(stdout, "  --help                   : this text\n");
+	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 }
 
 struct arg {

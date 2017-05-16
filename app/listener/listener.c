@@ -52,7 +52,6 @@ static void listener_event_all_all (struct mbus_client *client, const char *sour
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 	} else {
-		if (0)
 		fprintf(stdout, "%s.%s: %s\n", source, event, string);
 		free(string);
 	}
@@ -77,7 +76,6 @@ static void listener_status_server_connected (struct mbus_client *client, const 
 		if (string == NULL) {
 			return;
 		}
-		if (0)
 		fprintf(stdout, "%s.%s: %s\n", MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_STATUS, string);
 		free(string);
 		mbus_json_delete(result);
@@ -93,6 +91,23 @@ static void listener_status_server_subscribed (struct mbus_client *client, const
 	(void) data;
 }
 
+
+#define OPTION_HELP		0x100
+#define OPTION_SUBSCRIBE	0x101
+static struct option longopts[] = {
+	{ "help",			no_argument,		NULL,	OPTION_HELP },
+	{ "subscribe",			required_argument,	NULL,	OPTION_SUBSCRIBE },
+	{ NULL,				0,			NULL,	0 },
+};
+
+static void usage (void)
+{
+	fprintf(stdout, "mbus listener arguments:\n");
+	fprintf(stdout, "  --subscribe              : subscribe to identifier\n");
+	fprintf(stdout, "  --help                   : this text\n");
+	fprintf(stdout, "  --mbus-help              : mbus help text\n");
+}
+
 int main (int argc, char *argv[])
 {
 	int c;
@@ -105,9 +120,9 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	all = 1;
-	while ((c = getopt(argc, argv, "s:")) != -1) {
+	while ((c = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (c) {
-			case 's':
+			case OPTION_SUBSCRIBE:
 				rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, optarg, listener_event_all_all, NULL);
 				if (rc != 0) {
 					mbus_errorf("can not subscribe to events");
@@ -115,6 +130,9 @@ int main (int argc, char *argv[])
 				}
 				all = 0;
 				break;
+			case OPTION_HELP:
+				usage();
+				goto bail;
 		}
 	}
 	if (all == 1) {

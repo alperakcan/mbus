@@ -1068,7 +1068,9 @@ static const char *parse_array(mbus_cJSON *item,const char *value,const char **e
         {
             const char *str;
             str = skip(value + 1);
-            if (str == NULL || *str != '\"') {
+            if (str == NULL ||
+                *str == '}' ||
+		*str == ']') {
                 value = str;
                 break;
             }
@@ -1324,14 +1326,16 @@ static const char *parse_object(mbus_cJSON *item, const char *value, const char 
 
     while (*value == ',')
     {
-        {
-            const char *str;
-            str = skip(value + 1);
-            if (str == NULL || *str != '\"') {
-                value = str;
-                break;
-            }
-        }
+	{
+	    const char *str;
+	    str = skip(value + 1);
+	    if (str == NULL ||
+		*str == '}' ||
+		*str == ']') {
+		value = str;
+		break;
+	    }
+	}
 
         mbus_cJSON *new_item = NULL;
         if (!(new_item = cJSON_New_Item()))

@@ -378,7 +378,7 @@ static struct method * method_create_from_string (const char *string)
 	memset(method, 0, sizeof(struct method));
 	method->json = mbus_json_parse(string);
 	if (method->json == NULL) {
-		mbus_errorf("can not parse method");
+		mbus_errorf("can not parse method: '%s'", string);
 		goto bail;
 	}
 	method->type = mbus_json_get_string_value(method->json, "type");
