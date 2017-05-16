@@ -340,6 +340,7 @@ int mbus_socket_get_keepcnt (struct mbus_socket *socket)
 
 int mbus_socket_set_keepidle (struct mbus_socket *socket, int value)
 {
+#if defined(TCP_KEEPIDLE)
 	int rc;
 	int opt;
 	if (socket == NULL) {
@@ -353,10 +354,20 @@ int mbus_socket_set_keepidle (struct mbus_socket *socket, int value)
 		return -1;
 	}
 	return 0;
+#else
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	(void) value;
+	mbus_errorf("setsockopt keepidle is not supported");
+	return -1;
+#endif
 }
 
 int mbus_socket_get_keepidle (struct mbus_socket *socket)
 {
+#if defined(TCP_KEEPIDLE)
 	int rc;
 	int opt;
 	socklen_t optlen;
@@ -371,6 +382,14 @@ int mbus_socket_get_keepidle (struct mbus_socket *socket)
 		return -1;
 	}
 	return opt;
+#else
+	if (socket == NULL) {
+		mbus_errorf("socket is null");
+		return -1;
+	}
+	mbus_errorf("setsockopt keepidle is not supported");
+	return -1;
+#endif
 }
 
 int mbus_socket_set_keepintvl (struct mbus_socket *socket, int value)

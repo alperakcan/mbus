@@ -1711,7 +1711,6 @@ int mbus_client_event (struct mbus_client *client, const char *identifier, const
 
 int mbus_client_event_async_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
 {
-	int rc;
 	struct mbus_json *data;
 	struct mbus_json *payload;
 	struct request *request;
@@ -1764,7 +1763,7 @@ int mbus_client_event_async_to (struct mbus_client *client, const char *to, cons
 	request->state = request_state_request;
 	mbus_json_delete(payload);
 	pthread_mutex_unlock(&client->mutex);
-	return rc;
+	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
