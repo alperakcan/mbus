@@ -1065,6 +1065,14 @@ static const char *parse_array(mbus_cJSON *item,const char *value,const char **e
     /* loop through the comma separated array elements */
     while (*value == ',')
     {
+        {
+            const char *str;
+            str = skip(value + 1);
+            if (str == NULL || *str != '\"') {
+                value = str;
+                break;
+            }
+        }
         mbus_cJSON *new_item = NULL;
         if (!(new_item = cJSON_New_Item()))
         {
@@ -1316,6 +1324,15 @@ static const char *parse_object(mbus_cJSON *item, const char *value, const char 
 
     while (*value == ',')
     {
+        {
+            const char *str;
+            str = skip(value + 1);
+            if (str == NULL || *str != '\"') {
+                value = str;
+                break;
+            }
+        }
+
         mbus_cJSON *new_item = NULL;
         if (!(new_item = cJSON_New_Item()))
         {
