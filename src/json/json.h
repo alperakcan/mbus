@@ -45,5 +45,5 @@ int mbus_json_set_number_value (struct mbus_json *json, const char *name, double
 struct mbus_json * mbus_json_get_object (const struct mbus_json *json, const char *name);
 struct mbus_json * mbus_json_duplicate (const struct mbus_json *json, int recursive);
 
-char * mbus_json_print (struct mbus_json *json);
-char * mbus_json_print_unformatted (struct mbus_json *json);
+char * mbus_json_print (const struct mbus_json *json);
+char * mbus_json_print_unformatted (const struct mbus_json *json);

@@ -251,12 +251,12 @@ struct mbus_json * mbus_json_duplicate (const struct mbus_json *json, int recurs
 	return (struct mbus_json *) mbus_cJSON_Duplicate((mbus_cJSON *) json, recursive);
 }
 
-char * mbus_json_print (struct mbus_json *json)
+char * mbus_json_print (const struct mbus_json *json)
 {
 	return mbus_cJSON_Print((mbus_cJSON *) json);
 }
 
-char * mbus_json_print_unformatted (struct mbus_json *json)
+char * mbus_json_print_unformatted (const struct mbus_json *json)
 {
 	return mbus_cJSON_PrintUnformatted((mbus_cJSON *) json);
 }
