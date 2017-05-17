@@ -1,0 +1,14 @@
+#libmbus-json pkg-config source file
+
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libmbus-json
+Description: mBus is a lightweight messaging system json library
+Version: 1.0.0
+Requires:
+Conflicts:
+Libs: -L${libdir} -lmbus-debug -lmbus-json -lmbus-json-cJSON
+Cflags: -I${includedir}

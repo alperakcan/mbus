@@ -56,6 +56,7 @@ install: app src test
 
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
 	install -m 0644 libmbus-client.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
+	install -m 0644 libmbus-json.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
 
 uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
@@ -96,3 +97,4 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.a
 
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
+	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc

@@ -90,12 +90,12 @@ void mbus_json_delete (struct mbus_json *json)
 	mbus_cJSON_Delete((mbus_cJSON *) json);
 }
 
-struct mbus_json * mbus_json_get_child (struct mbus_json *json)
+struct mbus_json * mbus_json_get_child (const struct mbus_json *json)
 {
 	return (struct mbus_json *) (((mbus_cJSON *) json)->child);
 }
 
-struct mbus_json * mbus_json_get_next (struct mbus_json *json)
+struct mbus_json * mbus_json_get_next (const struct mbus_json *json)
 {
 	return (struct mbus_json *) (((mbus_cJSON *) json)->next);
 }
@@ -114,7 +114,7 @@ enum mbus_json_type mbus_json_get_type (const struct mbus_json *json)
 	return mbus_json_type_unknown;
 }
 
-const char * mbus_json_get_name (struct mbus_json *json)
+const char * mbus_json_get_name (const struct mbus_json *json)
 {
 	return ((mbus_cJSON *) json)->string;
 }

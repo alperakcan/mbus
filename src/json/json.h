@@ -19,10 +19,10 @@ struct mbus_json * mbus_json_create_array (void);
 struct mbus_json * mbus_json_create_string (const char *string);
 void mbus_json_delete (struct mbus_json *json);
 
-struct mbus_json * mbus_json_get_child (struct mbus_json *json);
-struct mbus_json * mbus_json_get_next (struct mbus_json *json);
+struct mbus_json * mbus_json_get_child (const struct mbus_json *json);
+struct mbus_json * mbus_json_get_next (const struct mbus_json *json);
 enum mbus_json_type mbus_json_get_type (const struct mbus_json *json);
-const char * mbus_json_get_name (struct mbus_json *json);
+const char * mbus_json_get_name (const struct mbus_json *json);
 const char * mbus_json_get_value_string (const struct mbus_json *json);
 
 int mbus_json_get_array_size (const struct mbus_json *json);
