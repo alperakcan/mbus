@@ -102,6 +102,9 @@ struct mbus_json * mbus_json_get_next (const struct mbus_json *json)
 
 enum mbus_json_type mbus_json_get_type (const struct mbus_json *json)
 {
+	if (json == NULL) {
+		return mbus_json_type_unknown;
+	}
 	switch (((mbus_cJSON *) json)->type) {
 		case mbus_cJSON_False:	return mbus_json_type_false;
 		case mbus_cJSON_True:	return mbus_json_type_true;
