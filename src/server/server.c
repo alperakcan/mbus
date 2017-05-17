@@ -1635,6 +1635,28 @@ command_status_bail:
 			if (clients != NULL) {
 				mbus_json_delete(clients);
 			}
+		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CLIENTS) == 0) {
+			mbus_debugf("command clients");
+			struct mbus_json *source;
+			struct mbus_json *clients;
+			clients = NULL;
+			clients = mbus_json_create_array();
+			if (clients == NULL) {
+				goto command_clients_bail;
+			}
+			TAILQ_FOREACH(client, &server->clients, clients) {
+				source = mbus_json_create_string(client_get_name(client));
+				if (source == NULL) {
+					goto command_clients_bail;
+				}
+				mbus_json_add_item_to_array(clients, source);
+			}
+			method_add_result_payload(method, "clients", clients);
+			goto out;
+command_clients_bail:
+			if (clients != NULL) {
+				mbus_json_delete(clients);
+			}
 		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CLOSE) == 0) {
 			const char *source;
 			source = mbus_json_get_string_value(call, "source");
