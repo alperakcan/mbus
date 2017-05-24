@@ -2285,7 +2285,7 @@ const char * mbus_cJSON_GetStringValue (mbus_cJSON *object,const char *string)
 	if (item == NULL) {
 		return NULL;
 	}
-	if (item->type != mbus_cJSON_String) {
+	if (!(item->type & mbus_cJSON_String)) {
 		return NULL;
 	}
 	return item->valuestring;
