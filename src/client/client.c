@@ -1783,12 +1783,18 @@ int mbus_client_event_async (struct mbus_client *client, const char *identifier,
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **rslt)
 {
+	return mbus_client_command_timeout(client, destination, command, call, rslt, -1);
+}
+
+int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **rslt, int timeout)
+{
 	int rc;
 	struct mbus_json *data;
 	struct mbus_json *answer;
 	struct mbus_json *payload;
 	struct method *result;
 	struct request *request;
+	(void) timeout;
 	data = NULL;
 	payload = NULL;
 	request = NULL;
