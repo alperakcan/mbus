@@ -475,11 +475,11 @@ static struct method * method_create_from_string (struct client *source, const c
 		mbus_errorf("can not parse method");
 		goto bail;
 	}
-	method->request.type = mbus_json_get_string_value(method->request.json, "type");
-	method->request.source = mbus_json_get_string_value(method->request.json, "source");
-	method->request.destination = mbus_json_get_string_value(method->request.json, "destination");
-	method->request.identifier = mbus_json_get_string_value(method->request.json, "identifier");
-	method->request.sequence = mbus_json_get_int_value(method->request.json, "sequence");
+	method->request.type = mbus_json_get_string_value(method->request.json, "type", NULL);
+	method->request.source = mbus_json_get_string_value(method->request.json, "source", NULL);
+	method->request.destination = mbus_json_get_string_value(method->request.json, "destination", NULL);
+	method->request.identifier = mbus_json_get_string_value(method->request.json, "identifier", NULL);
+	method->request.sequence = mbus_json_get_int_value(method->request.json, "sequence", -1);
 	method->request.payload = mbus_json_get_object(method->request.json, "payload");
 	if ((method->request.source == NULL) ||
 	    (method->request.destination == NULL) ||
@@ -1427,9 +1427,9 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		struct mbus_json *ping;
 		call = mbus_json_get_object(method_get_request_payload(method), "call");
 		ping = mbus_json_get_object(call, "ping");
-		client->ping.interval = mbus_json_get_int_value(ping, "interval");
-		client->ping.timeout = mbus_json_get_int_value(ping, "timeout");
-		client->ping.threshold = mbus_json_get_int_value(ping, "threshold");
+		client->ping.interval = mbus_json_get_int_value(ping, "interval", -1);
+		client->ping.timeout = mbus_json_get_int_value(ping, "timeout", -1);
+		client->ping.threshold = mbus_json_get_int_value(ping, "threshold", -1);
 		if (client->ping.interval <= 0) {
 			client->ping.interval = 0;
 		}
@@ -1468,8 +1468,8 @@ static int server_handle_command_subscribe (struct mbus_server *server, struct m
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	source = mbus_json_get_string_value(method_get_request_payload(method), "source");
-	event = mbus_json_get_string_value(method_get_request_payload(method), "event");
+	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
+	event = mbus_json_get_string_value(method_get_request_payload(method), "event", NULL);
 	if ((source == NULL) ||
 	    (event == NULL)) {
 		mbus_errorf("invalid request");
@@ -1506,7 +1506,7 @@ static int server_handle_command_register (struct mbus_server *server, struct me
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	command = mbus_json_get_string_value(method_get_request_payload(method), "command");
+	command = mbus_json_get_string_value(method_get_request_payload(method), "command", NULL);
 	if (command == NULL) {
 		mbus_errorf("invalid request");
 		goto bail;
@@ -1534,8 +1534,8 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination");
-	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier");
+	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL);
+	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier", NULL);
 	event = mbus_json_get_object(method_get_request_payload(method), "event");
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
@@ -1569,8 +1569,8 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination");
-	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier");
+	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL);
+	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier", NULL);
 	call = mbus_json_get_object(method_get_request_payload(method), "call");
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
@@ -1659,7 +1659,7 @@ command_clients_bail:
 			}
 		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CLOSE) == 0) {
 			const char *source;
-			source = mbus_json_get_string_value(call, "source");
+			source = mbus_json_get_string_value(call, "source", NULL);
 			if (source == NULL) {
 				mbus_errorf("method request source is null");
 				goto bail;
@@ -1740,10 +1740,10 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 	int sequence;
 	int rc;
 	source = client_get_name(method_get_source(method));
-	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination");
-	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier");
-	sequence = mbus_json_get_int_value(method_get_request_payload(method), "sequence");
-	rc = mbus_json_get_int_value(method_get_request_payload(method), "return");
+	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL);
+	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier", NULL);
+	sequence = mbus_json_get_int_value(method_get_request_payload(method), "sequence", -1);
+	rc = mbus_json_get_int_value(method_get_request_payload(method), "return", -1);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_name(client) == NULL) {
 			continue;
@@ -1755,10 +1755,10 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 			if (sequence != method_get_request_sequence(wait)) {
 				continue;
 			}
-			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "destination"), source) != 0) {
+			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "destination", NULL), source) != 0) {
 				continue;
 			}
-			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "identifier"), identifier) != 0) {
+			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "identifier", NULL), identifier) != 0) {
 				continue;
 			}
 			TAILQ_REMOVE(&client->waits, wait, methods);
@@ -2523,7 +2523,7 @@ out:	lws_service(server->socket.websocket.context, 0);
 		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
 			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
 				if (client_get_name(client) != NULL &&
-				    strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination"), client_get_name(client)) == 0) {
+				    strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL), client_get_name(client)) == 0) {
 					TAILQ_REMOVE(&wclient->waits, method, methods);
 					method_set_result_code(method, -1);
 					client_push_result(wclient, method);
