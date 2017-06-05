@@ -166,9 +166,9 @@ extern void mbus_cJSON_Minify(char *json);
 /* Macro for iterating over an array */
 #define mbus_cJSON_ArrayForEach(pos, head) for(pos = (head)->child; pos != NULL; pos = pos->next)
 
-extern const char * mbus_cJSON_GetStringValue (mbus_cJSON *object,const char *string);
-extern int mbus_cJSON_GetIntValue (mbus_cJSON *object,const char *string);
-extern int mbus_cJSON_GetNumberValue (mbus_cJSON *object,const char *string);
+extern const char * mbus_cJSON_GetStringValue (mbus_cJSON *object, const char *string, const char *value);
+extern int mbus_cJSON_GetIntValue (mbus_cJSON *object, const char *string, int value);
+extern double mbus_cJSON_GetNumberValue (mbus_cJSON *object,const char *string, double value);
 
 #ifdef __cplusplus
 }

@@ -38,9 +38,9 @@ int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name, double number);
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string);
 
-int mbus_json_get_int_value (struct mbus_json *json, const char *name);
-const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name);
-double mbus_json_get_number_value (struct mbus_json *json, const char *name);
+int mbus_json_get_int_value (struct mbus_json *json, const char *name, int value);
+const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value);
+double mbus_json_get_number_value (struct mbus_json *json, const char *name, double value);
 
 int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number);
 

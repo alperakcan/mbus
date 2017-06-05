@@ -2278,41 +2278,41 @@ void mbus_cJSON_Minify(char *json)
     *into = '\0';
 }
 
-const char * mbus_cJSON_GetStringValue (mbus_cJSON *object,const char *string)
+const char * mbus_cJSON_GetStringValue (mbus_cJSON *object, const char *string, const char *value)
 {
 	mbus_cJSON *item;
 	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
-		return NULL;
+		return value;
 	}
 	if (!(item->type & mbus_cJSON_String)) {
-		return NULL;
+		return value;
 	}
 	return item->valuestring;
 }
 
-int mbus_cJSON_GetIntValue (mbus_cJSON *object,const char *string)
+int mbus_cJSON_GetIntValue (mbus_cJSON *object, const char *string, int value)
 {
 	mbus_cJSON *item;
 	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
-		return -1;
+		return value;
 	}
 	if (item->type != mbus_cJSON_Number) {
-		return -1;
+		return value;
 	}
 	return item->valueint;
 }
 
-int mbus_cJSON_GetNumberValue (mbus_cJSON *object,const char *string)
+double mbus_cJSON_GetNumberValue (mbus_cJSON *object, const char *string, double value)
 {
 	mbus_cJSON *item;
 	item = mbus_cJSON_GetObjectItem(object, string);
 	if (item == NULL) {
-		return -1;
+		return value;
 	}
 	if (item->type != mbus_cJSON_Number) {
-		return -1;
+		return value;
 	}
 	return item->valuedouble;
 }

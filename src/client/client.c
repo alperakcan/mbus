@@ -381,12 +381,12 @@ static struct method * method_create_from_string (const char *string)
 		mbus_errorf("can not parse method: '%s'", string);
 		goto bail;
 	}
-	method->type = mbus_json_get_string_value(method->json, "type");
-	method->source = mbus_json_get_string_value(method->json, "source");
-	method->destination = mbus_json_get_string_value(method->json, "destination");
-	method->identifier = mbus_json_get_string_value(method->json, "identifier");
-	method->sequence = mbus_json_get_int_value(method->json, "sequence");
-	method->result = mbus_json_get_int_value(method->json, "result");
+	method->type = mbus_json_get_string_value(method->json, "type", NULL);
+	method->source = mbus_json_get_string_value(method->json, "source", NULL);
+	method->destination = mbus_json_get_string_value(method->json, "destination", NULL);
+	method->identifier = mbus_json_get_string_value(method->json, "identifier", NULL);
+	method->sequence = mbus_json_get_int_value(method->json, "sequence", -1);
+	method->result = mbus_json_get_int_value(method->json, "result", -1);
 	method->payload = mbus_json_get_object(method->json, "payload");
 	if (method->type == NULL) {
 		mbus_errorf("invalid method");

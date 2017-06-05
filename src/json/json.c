@@ -166,11 +166,6 @@ int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name,
 	return 0;
 }
 
-int mbus_json_get_int_value (struct mbus_json *json, const char *name)
-{
-	return mbus_cJSON_GetIntValue((mbus_cJSON *) json, name);
-}
-
 static struct mbus_json * mbus_json_object (const struct mbus_json *root, const char *path)
 {
 	char *str;
@@ -220,22 +215,43 @@ bail:	if (str != NULL) {
 	return NULL;
 }
 
-const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name)
+int mbus_json_get_int_value (struct mbus_json *json, const char *name, int value)
 {
 	struct mbus_cJSON *mbus_cJSON;
 	mbus_cJSON = (struct mbus_cJSON *) mbus_json_object(json, name);
 	if (mbus_cJSON == NULL) {
-		return NULL;
+		return value;
 	}
-	if (!(mbus_cJSON->type &= mbus_cJSON_String)) {
-		return NULL;
+	if (!(mbus_cJSON->type & mbus_cJSON_Number)) {
+		return value;
+	}
+	return mbus_cJSON->valueint;
+}
+
+const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value)
+{
+	struct mbus_cJSON *mbus_cJSON;
+	mbus_cJSON = (struct mbus_cJSON *) mbus_json_object(json, name);
+	if (mbus_cJSON == NULL) {
+		return value;
+	}
+	if (!(mbus_cJSON->type & mbus_cJSON_String)) {
+		return value;
 	}
 	return mbus_cJSON->valuestring;
 }
 
-double mbus_json_get_number_value (struct mbus_json *json, const char *name)
+double mbus_json_get_number_value (struct mbus_json *json, const char *name, double value)
 {
-	return mbus_cJSON_GetNumberValue((mbus_cJSON *) json, name);
+	struct mbus_cJSON *mbus_cJSON;
+	mbus_cJSON = (struct mbus_cJSON *) mbus_json_object(json, name);
+	if (mbus_cJSON == NULL) {
+		return value;
+	}
+	if (!(mbus_cJSON->type & mbus_cJSON_Number)) {
+		return value;
+	}
+	return mbus_cJSON->valuedouble;
 }
 
 int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number)
