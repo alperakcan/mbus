@@ -574,8 +574,12 @@ int mbus_socket_write (struct mbus_socket *socket, const void *vptr, int n)
 	nleft = n;
 	while (nleft > 0) {
 		if ((nwritten = write(socket->fd, ptr, nleft)) <= 0) {
-			if (errno == EINTR){
+			if (errno == EINTR) {
 				nwritten = 0;
+			} else if (errno == EAGAIN) {
+				break;
+			} else if (errno == EWOULDBLOCK) {
+				break;
 			} else {
 				return -1;
 			}
@@ -583,7 +587,7 @@ int mbus_socket_write (struct mbus_socket *socket, const void *vptr, int n)
 		nleft -= nwritten;
 		ptr   += nwritten;
 	}
-	return n;
+	return n - nleft;
 }
 
 char * mbus_socket_read_string (struct mbus_socket *socket)
