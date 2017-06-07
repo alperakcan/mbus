@@ -132,6 +132,11 @@ int mbus_json_get_value_int (const struct mbus_json *json)
 	return ((mbus_cJSON *) json)->valueint;
 }
 
+int mbus_json_get_value_bool (const struct mbus_json *json)
+{
+	return ((mbus_cJSON *) json)->valueint;
+}
+
 int mbus_json_get_array_size (const struct mbus_json *json)
 {
 	return mbus_cJSON_GetArraySize((mbus_cJSON *) json);
