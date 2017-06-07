@@ -156,6 +156,7 @@ extern void mbus_cJSON_Minify(char *json);
 #define mbus_cJSON_AddNumberToObject(object,name,n) mbus_cJSON_AddItemToObject(object, name, mbus_cJSON_CreateNumber(n))
 #define mbus_cJSON_AddStringToObject(object,name,s) mbus_cJSON_AddItemToObject(object, name, mbus_cJSON_CreateString(s))
 
+#define mbus_cJSON_AddBoolToObjectCS(object,name,n)	mbus_cJSON_AddItemToObjectCS(object, name, mbus_cJSON_CreateBool(n))
 #define mbus_cJSON_AddNumberToObjectCS(object,name,n)	mbus_cJSON_AddItemToObjectCS(object, name, mbus_cJSON_CreateNumber(n))
 #define mbus_cJSON_AddStringToObjectCS(object,name,s)	mbus_cJSON_AddItemToObjectCS(object, name, mbus_cJSON_CreateString(s))
 
