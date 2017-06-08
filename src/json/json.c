@@ -225,7 +225,7 @@ bail:	if (str != NULL) {
 	return NULL;
 }
 
-int mbus_json_get_int_value (struct mbus_json *json, const char *name, int value)
+int mbus_json_get_int_value (const struct mbus_json *json, const char *name, int value)
 {
 	struct mbus_cJSON *mbus_cJSON;
 	mbus_cJSON = (struct mbus_cJSON *) mbus_json_object(json, name);
@@ -251,7 +251,7 @@ const char * mbus_json_get_string_value (const struct mbus_json *json, const cha
 	return mbus_cJSON->valuestring;
 }
 
-double mbus_json_get_number_value (struct mbus_json *json, const char *name, double value)
+double mbus_json_get_number_value (const struct mbus_json *json, const char *name, double value)
 {
 	struct mbus_cJSON *mbus_cJSON;
 	mbus_cJSON = (struct mbus_cJSON *) mbus_json_object(json, name);
