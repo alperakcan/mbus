@@ -45,6 +45,11 @@
 #include "mbus/socket.h"
 #include "server.h"
 
+#define BUFFER_OUT_CHUNK_SIZE (128 * 1024)
+#if (BUFFER_OUT_CHUNK_SIZE < LWS_PRE)
+#error "invalid BUFFER_OUT_CHUNK_SIZE"
+#endif
+
 struct method {
 	TAILQ_ENTRY(method) methods;
 	struct {
@@ -105,6 +110,7 @@ struct client {
 	struct {
 		struct mbus_buffer *in;
 		struct mbus_buffer *out;
+		uint8_t out_chunk[BUFFER_OUT_CHUNK_SIZE];
 	} buffer;
 	struct {
 		int enabled;
@@ -2099,31 +2105,26 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
-				uint8_t *payload;
 				ptr = mbus_buffer_base(data->client->buffer.out);
 				end = ptr + mbus_buffer_length(data->client->buffer.out);
 				expected = end - ptr;
 				if (end - ptr < (int32_t) expected) {
 					break;
 				}
-				mbus_debugf("write");
-				payload = malloc(LWS_PRE + expected);
-				if (payload == NULL) {
-					mbus_errorf("can not allocate memory");
-					return -1;
+				if (expected > BUFFER_OUT_CHUNK_SIZE - LWS_PRE) {
+					expected = BUFFER_OUT_CHUNK_SIZE - LWS_PRE;
 				}
-				memset(payload, 0, LWS_PRE + expected);
-				memcpy(payload + LWS_PRE, ptr, expected);
+				mbus_debugf("write");
+				memset(data->client->buffer.out_chunk, 0, LWS_PRE + expected);
+				memcpy(data->client->buffer.out_chunk + LWS_PRE, ptr, expected);
 				mbus_debugf("payload: %d, %.*s", expected - 4, expected - 4, ptr + 4);
-				rc = lws_write(data->wsi, payload + LWS_PRE, expected, LWS_WRITE_BINARY);
+				rc = lws_write(data->wsi, data->client->buffer.out_chunk + LWS_PRE, expected, LWS_WRITE_BINARY);
 				mbus_debugf("expected: %d, rc: %d", expected, rc);
 				rc = mbus_buffer_shift(data->client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not shift in");
-					free(payload);
 					return -1;
 				}
-				free(payload);
 				break;
 			}
 			if (mbus_buffer_length(data->client->buffer.out) > 0) {
