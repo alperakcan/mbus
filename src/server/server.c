@@ -45,9 +45,14 @@
 #include "mbus/socket.h"
 #include "server.h"
 
-#define BUFFER_OUT_CHUNK_SIZE (128 * 1024)
+#define BUFFER_OUT_CHUNK_SIZE (64 * 1024)
 #if (BUFFER_OUT_CHUNK_SIZE < LWS_PRE)
 #error "invalid BUFFER_OUT_CHUNK_SIZE"
+#endif
+
+#define BUFFER_IN_CHUNK_SIZE (64 * 1024)
+#if (BUFFER_IN_CHUNK_SIZE < LWS_PRE)
+#error "invalid BUFFER_IN_CHUNK_SIZE"
 #endif
 
 struct method {
@@ -2224,7 +2229,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			client->ping.ping_recv_tsms = current + client->ping.interval + client->ping.timeout;
 		}
 		if (client->ping.ping_missed_count > client->ping.threshold) {
-			mbus_errorf("missed too many pings, %d > %d. closing connection", client->ping.ping_missed_count, client->ping.threshold);
+			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_name(client), client->ping.ping_missed_count, client->ping.threshold);
 			client_set_socket(client, NULL);
 		}
 	}
@@ -2383,7 +2388,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			continue;
 		}
 		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
-			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + 1024);
+			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
 				client_set_socket(client, NULL);

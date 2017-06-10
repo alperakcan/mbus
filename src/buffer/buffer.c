@@ -102,7 +102,7 @@ int mbus_buffer_reserve (struct mbus_buffer *buffer, unsigned int length)
 		return 0;
 	}
 	while (buffer->size < length) {
-		buffer->size += 1024;
+		buffer->size += 4096;
 	}
 	tmp = realloc(buffer->buffer, buffer->size);
 	if (tmp == NULL) {
