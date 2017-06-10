@@ -22,9 +22,12 @@ libmbus-server.so_ldflags-y = \
 	-lmbus-json
 
 libmbus-server.so_cflags-y += \
+	$(shell pkg-config --cflags libssl) \
 	$(shell pkg-config --cflags libwebsockets)
 
 libmbus-server.so_ldflags-y += \
+	$(shell pkg-config --libs libssl) \
+	$(shell pkg-config --libs libcrypto) \
 	$(shell pkg-config --libs libwebsockets)
 
 libmbus-server.a_files-y = \

@@ -14,7 +14,12 @@ libmbus-client.so_libraries-y = \
 libmbus-client.so_files-y = \
 	client.c
 
+libmbus-client.so_cflags-y += \
+	$(shell pkg-config --cflags libssl)
+
 libmbus-client.so_ldflags-y = \
+	$(shell pkg-config --libs libssl) \
+	$(shell pkg-config --libs libcrypto) \
 	-lmbus-debug \
 	-lmbus-clock \
 	-lmbus-buffer \
@@ -24,6 +29,9 @@ libmbus-client.so_ldflags-y = \
 
 libmbus-client.a_includes-y = \
 	${libmbus-client.so_includes-y}
+
+libmbus-client.a_cflags-y = \
+	${libmbus-client.so_cflags-y}
 
 libmbus-client.a_files-y = \
 	${libmbus-client.so_files-y}

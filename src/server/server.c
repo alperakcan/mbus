@@ -32,6 +32,10 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <getopt.h>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #include <libwebsockets.h>
 
 #define MBUS_DEBUG_NAME	"mbus-server"
@@ -125,6 +129,10 @@ struct client {
 		unsigned long ping_recv_tsms;
 		int ping_missed_count;
 	} ping;
+	struct {
+		SSL *context;
+		int want_read;
+	} ssl;
 	struct subscriptions subscriptions;
 	struct commands commands;
 	struct methods requests;
@@ -138,35 +146,39 @@ TAILQ_HEAD(clients, client);
 
 struct mbus_server {
 	struct {
-		struct {
-			int enabled;
-			const char *address;
-			unsigned int port;
-			struct mbus_socket *socket;
-		} uds;
-		struct {
-			int enabled;
-			const char *address;
-			unsigned int port;
-			struct mbus_socket *socket;
-		} tcp;
-		struct {
-			int enabled;
-			const char *address;
-			unsigned int port;
-			struct lws_context *context;
-			struct {
-				unsigned int length;
-				unsigned int size;
-				struct pollfd *pollfds;
-			} pollfds;
-		} websocket;
+		int enabled;
+		const char *address;
+		unsigned int port;
+		struct mbus_socket *socket;
+	} uds;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned int port;
+		struct mbus_socket *socket;
+	} tcp;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned int port;
+		struct lws_context *context;
 		struct {
 			unsigned int length;
 			unsigned int size;
 			struct pollfd *pollfds;
 		} pollfds;
-	} socket;
+	} websocket;
+	struct {
+		unsigned int length;
+		unsigned int size;
+		struct pollfd *pollfds;
+	} pollfds;
+	struct {
+		const char *certificate;
+		const char *privatekey;
+		const SSL_METHOD *method;
+		SSL_CTX *context;
+	} ssl;
 	struct clients clients;
 	struct methods methods;
 	int running;
@@ -190,6 +202,9 @@ static struct mbus_server *g_server;
 #define OPTION_SERVER_WEBSOCKET_ADDRESS		0x402
 #define OPTION_SERVER_WEBSOCKET_PORT		0x403
 
+#define OPTION_SERVER_SSL_CERTIFICATE		0x501
+#define OPTION_SERVER_SSL_PRIVATEKEY		0x502
+
 static struct option longopts[] = {
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
@@ -202,6 +217,8 @@ static struct option longopts[] = {
 	{ "mbus-server-websocket-enable",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ENABLE },
 	{ "mbus-server-websocket-address",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ADDRESS },
 	{ "mbus-server-websocket-port",		required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_PORT },
+	{ "mbus-server-ssl-certificate",	required_argument,	NULL,	OPTION_SERVER_SSL_CERTIFICATE },
+	{ "mbus-server-ssl-privatekey",		required_argument,	NULL,	OPTION_SERVER_SSL_PRIVATEKEY },
 	{ NULL,					0,			NULL,	0 },
 };
 
@@ -218,6 +235,8 @@ static void usage (void)
 	fprintf(stdout, "  --mbus-server-websocket-enable : server websocket enable (default: %d)\n", MBUS_SERVER_WEBSOCKET_ENABLE);
 	fprintf(stdout, "  --mbus-server-websocket-address: server websocket address (default: %s)\n", MBUS_SERVER_WEBSOCKET_ADDRESS);
 	fprintf(stdout, "  --mbus-server-websocket-port   : server websocket port (default: %d)\n", MBUS_SERVER_WEBSOCKET_PORT);
+	fprintf(stdout, "  --mbus-server-ssl-certificate  : server ssl certificate file (default: %s)\n", NULL);
+	fprintf(stdout, "  --mbus-server-ssl-privatekey   : server ssl privatekey file (default: %s)\n", NULL);
 	fprintf(stdout, "  --mbus-help                    : this text\n");
 }
 
@@ -1376,10 +1395,40 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		mbus_errorf("can not set client socket");
 		goto bail;
 	}
+	if (server->ssl.context != NULL) {
+		client->ssl.context = SSL_new(server->ssl.context);
+		if (client->ssl.context == NULL) {
+			mbus_errorf("can not create ssl");
+			goto bail;
+		}
+		SSL_set_fd(client->ssl.context, mbus_socket_get_fd(socket));
+		rc = SSL_accept(client->ssl.context);
+		if (rc <= 0) {
+			int error;
+			error = SSL_get_error(client->ssl.context, rc);
+			if (error == SSL_ERROR_WANT_READ) {
+				client->ssl.want_read = 1;
+			} else if (error == SSL_ERROR_SYSCALL) {
+				client->ssl.want_read = 1;
+			} else {
+				char ebuf[256];
+				mbus_errorf("can not accept ssl: %d", error);
+				error = ERR_get_error();
+				while (error) {
+					mbus_errorf("  error: %d, %s", error, ebuf);
+					error = ERR_get_error();
+				}
+				goto bail;
+			}
+		}
+	}
 	TAILQ_INSERT_TAIL(&server->clients, client, clients);
 	return 0;
 bail:	if (socket != NULL) {
-		mbus_socket_destroy(socket);
+		if (client == NULL ||
+		    client_get_socket(client) != socket) {
+			mbus_socket_destroy(socket);
+		}
 	}
 	if (client != NULL) {
 		client_destroy(client);
@@ -1904,36 +1953,36 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				{
 					unsigned int i;
 					struct lws_pollargs *pa = (struct lws_pollargs *) in;
-					for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
-						if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
-							server->socket.websocket.pollfds.pollfds[i].events = pa->events;
+					for (i = 0; i < server->websocket.pollfds.length; i++) {
+						if (server->websocket.pollfds.pollfds[i].fd == pa->fd) {
+							server->websocket.pollfds.pollfds[i].events = pa->events;
 							break;
 						}
 					}
-					if (i < server->socket.websocket.pollfds.length) {
+					if (i < server->websocket.pollfds.length) {
 						break;
 					}
 				}
-				if (server->socket.websocket.pollfds.length + 1 > server->socket.websocket.pollfds.size) {
-					while (server->socket.websocket.pollfds.length + 1 > server->socket.websocket.pollfds.size) {
-						server->socket.websocket.pollfds.size += 1024;
+				if (server->websocket.pollfds.length + 1 > server->websocket.pollfds.size) {
+					while (server->websocket.pollfds.length + 1 > server->websocket.pollfds.size) {
+						server->websocket.pollfds.size += 1024;
 					}
-					tmp = realloc(server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.size);
+					tmp = realloc(server->websocket.pollfds.pollfds, sizeof(struct pollfd) * server->websocket.pollfds.size);
 					if (tmp == NULL) {
-						tmp = malloc(sizeof(int) * server->socket.websocket.pollfds.size);
+						tmp = malloc(sizeof(int) * server->websocket.pollfds.size);
 						if (tmp == NULL) {
 							mbus_errorf("can not allocate memory");
 							return -1;
 						}
-						memcpy(tmp, server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
-						free(server->socket.websocket.pollfds.pollfds);
+						memcpy(tmp, server->websocket.pollfds.pollfds, sizeof(struct pollfd) * server->websocket.pollfds.length);
+						free(server->websocket.pollfds.pollfds);
 					}
-					server->socket.websocket.pollfds.pollfds = tmp;
+					server->websocket.pollfds.pollfds = tmp;
 				}
-				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].fd = pa->fd;
-				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].events = pa->events;
-				server->socket.websocket.pollfds.pollfds[server->socket.websocket.pollfds.length].revents = 0;
-				server->socket.websocket.pollfds.length += 1;
+				server->websocket.pollfds.pollfds[server->websocket.pollfds.length].fd = pa->fd;
+				server->websocket.pollfds.pollfds[server->websocket.pollfds.length].events = pa->events;
+				server->websocket.pollfds.pollfds[server->websocket.pollfds.length].revents = 0;
+				server->websocket.pollfds.length += 1;
 			}
 			break;
 		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
@@ -1941,9 +1990,9 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			{
 				unsigned int i;
 				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
-					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
-						server->socket.websocket.pollfds.pollfds[i].events = pa->events;
+				for (i = 0; i < server->websocket.pollfds.length; i++) {
+					if (server->websocket.pollfds.pollfds[i].fd == pa->fd) {
+						server->websocket.pollfds.pollfds[i].events = pa->events;
 						break;
 					}
 				}
@@ -1954,10 +2003,10 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 			{
 				unsigned int i;
 				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				for (i = 0; i < server->socket.websocket.pollfds.length; i++) {
-					if (server->socket.websocket.pollfds.pollfds[i].fd == pa->fd) {
-						memmove(&server->socket.websocket.pollfds.pollfds[i], &server->socket.websocket.pollfds.pollfds[i + 1], server->socket.websocket.pollfds.length - i);
-						server->socket.websocket.pollfds.length -= 1;
+				for (i = 0; i < server->websocket.pollfds.length; i++) {
+					if (server->websocket.pollfds.pollfds[i].fd == pa->fd) {
+						memmove(&server->websocket.pollfds.pollfds[i], &server->websocket.pollfds.pollfds[i + 1], server->websocket.pollfds.length - i);
+						server->websocket.pollfds.length -= 1;
 						break;
 					}
 				}
@@ -2279,35 +2328,35 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	}
 	n  = 3;
 	n += server->clients.count;
-	n += server->socket.websocket.pollfds.length;
-	if (n > server->socket.pollfds.size) {
+	n += server->websocket.pollfds.length;
+	if (n > server->pollfds.size) {
 		struct pollfd *tmp;
-		while (n > server->socket.pollfds.size) {
-			server->socket.pollfds.size += 1024;
+		while (n > server->pollfds.size) {
+			server->pollfds.size += 1024;
 		}
-		tmp = realloc(server->socket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.pollfds.size);
+		tmp = realloc(server->pollfds.pollfds, sizeof(struct pollfd) * server->pollfds.size);
 		if (tmp == NULL) {
-			tmp = malloc(sizeof(int) * server->socket.pollfds.size);
+			tmp = malloc(sizeof(int) * server->pollfds.size);
 			if (tmp == NULL) {
 				mbus_errorf("can not allocate memory");
 				goto bail;
 			}
-			memcpy(tmp, server->socket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.pollfds.length);
-			free(server->socket.pollfds.pollfds);
+			memcpy(tmp, server->pollfds.pollfds, sizeof(struct pollfd) * server->pollfds.length);
+			free(server->pollfds.pollfds);
 		}
-		server->socket.pollfds.pollfds = tmp;
+		server->pollfds.pollfds = tmp;
 	}
 	n = 0;
-	if (server->socket.uds.socket != NULL) {
-		server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
-		server->socket.pollfds.pollfds[n].revents = 0;
-		server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(server->socket.uds.socket);
+	if (server->uds.socket != NULL) {
+		server->pollfds.pollfds[n].events = mbus_poll_event_in;
+		server->pollfds.pollfds[n].revents = 0;
+		server->pollfds.pollfds[n].fd = mbus_socket_get_fd(server->uds.socket);
 		n += 1;
 	}
-	if (server->socket.tcp.socket != NULL) {
-		server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
-		server->socket.pollfds.pollfds[n].revents = 0;
-		server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(server->socket.tcp.socket);
+	if (server->tcp.socket != NULL) {
+		server->pollfds.pollfds[n].events = mbus_poll_event_in;
+		server->pollfds.pollfds[n].revents = 0;
+		server->pollfds.pollfds[n].fd = mbus_socket_get_fd(server->tcp.socket);
 		n += 1;
 	}
 	mbus_debugf("  prepare polling");
@@ -2317,13 +2366,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 		if (client_get_link(client) == client_link_tcp ||
 		    client_get_link(client) == client_link_uds) {
-			server->socket.pollfds.pollfds[n].events = mbus_poll_event_in;
-			server->socket.pollfds.pollfds[n].revents = 0;
-			server->socket.pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
+			server->pollfds.pollfds[n].events = mbus_poll_event_in;
+			server->pollfds.pollfds[n].revents = 0;
+			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
 			mbus_debugf("    in : %s", client_get_name(client));
 			if (mbus_buffer_length(client->buffer.out) > 0) {
 				mbus_debugf("    out: %s", client_get_name(client));
-				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
+				server->pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
 			n += 1;
 		} else if (client_get_link(client) == client_link_websocket) {
@@ -2335,11 +2384,11 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 		}
 	}
-	if (server->socket.websocket.pollfds.length > 0) {
-		memcpy(&server->socket.pollfds.pollfds[n], server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
-		n += server->socket.websocket.pollfds.length;
+	if (server->websocket.pollfds.length > 0) {
+		memcpy(&server->pollfds.pollfds[n], server->websocket.pollfds.pollfds, sizeof(struct pollfd) * server->websocket.pollfds.length);
+		n += server->websocket.pollfds.length;
 	}
-	rc = poll(server->socket.pollfds.pollfds, n, milliseconds);
+	rc = poll(server->pollfds.pollfds, n, milliseconds);
 	if (rc == 0) {
 		goto out;
 	}
@@ -2348,14 +2397,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		goto bail;
 	}
 	for (c = 0; c < n; c++) {
-		if (server->socket.pollfds.pollfds[c].revents == 0) {
+		if (server->pollfds.pollfds[c].revents == 0) {
 			continue;
 		}
-		if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.uds.socket) ||
-		    server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.tcp.socket)) {
-			if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.uds.socket)) {
-				if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
-					rc = server_accept_client(server, server->socket.uds.socket);
+		if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(server->uds.socket) ||
+		    server->pollfds.pollfds[c].fd == mbus_socket_get_fd(server->tcp.socket)) {
+			if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(server->uds.socket)) {
+				if (server->pollfds.pollfds[c].revents & mbus_poll_event_in) {
+					rc = server_accept_client(server, server->uds.socket);
 					if (rc == -1) {
 						mbus_errorf("can not accept new connection");
 						goto bail;
@@ -2364,9 +2413,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					}
 				}
 			}
-			if (server->socket.pollfds.pollfds[c].fd == mbus_socket_get_fd(server->socket.tcp.socket)) {
-				if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
-					rc = server_accept_client(server, server->socket.tcp.socket);
+			if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(server->tcp.socket)) {
+				if (server->pollfds.pollfds[c].revents & mbus_poll_event_in) {
+					rc = server_accept_client(server, server->tcp.socket);
 					if (rc == -1) {
 						mbus_errorf("can not accept new connection");
 						goto bail;
@@ -2377,7 +2426,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 			continue;
 		}
-		client = server_find_client_by_fd(server, server->socket.pollfds.pollfds[c].fd);
+		client = server_find_client_by_fd(server, server->pollfds.pollfds[c].fd);
 		if (client == NULL) {
 			continue;
 			mbus_errorf("can not find client by socket");
@@ -2387,7 +2436,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		    client_get_link(client) != client_link_uds) {
 			continue;
 		}
-		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_in) {
+		if (server->pollfds.pollfds[c].revents & mbus_poll_event_in) {
 			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
@@ -2455,7 +2504,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				}
 			}
 		}
-		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_out) {
+		if (server->pollfds.pollfds[c].revents & mbus_poll_event_out) {
 			if (mbus_buffer_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
@@ -2475,13 +2524,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				}
 			}
 		}
-		if (server->socket.pollfds.pollfds[c].revents & mbus_poll_event_err) {
+		if (server->pollfds.pollfds[c].revents & mbus_poll_event_err) {
 			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_name(client));
 			break;
 		}
 	}
-out:	lws_service(server->socket.websocket.context, 0);
+out:	lws_service(server->websocket.context, 0);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
@@ -2578,20 +2627,20 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server == NULL) {
 		return;
 	}
-	if (server->socket.uds.socket != NULL) {
-		mbus_socket_destroy(server->socket.uds.socket);
+	if (server->uds.socket != NULL) {
+		mbus_socket_destroy(server->uds.socket);
 	}
-	if (server->socket.tcp.socket != NULL) {
-		mbus_socket_destroy(server->socket.tcp.socket);
+	if (server->tcp.socket != NULL) {
+		mbus_socket_destroy(server->tcp.socket);
 	}
-	if (server->socket.websocket.context != NULL) {
-		lws_context_destroy(server->socket.websocket.context);
+	if (server->websocket.context != NULL) {
+		lws_context_destroy(server->websocket.context);
 	}
-	if (server->socket.websocket.pollfds.pollfds != NULL) {
-		free(server->socket.websocket.pollfds.pollfds);
+	if (server->websocket.pollfds.pollfds != NULL) {
+		free(server->websocket.pollfds.pollfds);
 	}
-	if (server->socket.pollfds.pollfds != NULL) {
-		free(server->socket.pollfds.pollfds);
+	if (server->pollfds.pollfds != NULL) {
+		free(server->pollfds.pollfds);
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
@@ -2618,7 +2667,9 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	argv= NULL;
 	server = NULL;
 
-	mbus_infof("creating server");
+	SSL_library_init();
+	SSL_load_error_strings();
+	OpenSSL_add_ssl_algorithms();
 
 	server = malloc(sizeof(struct mbus_server));
 	if (server == NULL) {
@@ -2630,17 +2681,17 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	TAILQ_INIT(&server->clients);
 	TAILQ_INIT(&server->methods);
 
-	server->socket.tcp.enabled = MBUS_SERVER_TCP_ENABLE;
-	server->socket.tcp.address = MBUS_SERVER_TCP_ADDRESS;
-	server->socket.tcp.port = MBUS_SERVER_TCP_PORT;
+	server->tcp.enabled = MBUS_SERVER_TCP_ENABLE;
+	server->tcp.address = MBUS_SERVER_TCP_ADDRESS;
+	server->tcp.port = MBUS_SERVER_TCP_PORT;
 
-	server->socket.uds.enabled = MBUS_SERVER_UDS_ENABLE;
-	server->socket.uds.address = MBUS_SERVER_UDS_ADDRESS;
-	server->socket.uds.port = MBUS_SERVER_UDS_PORT;
+	server->uds.enabled = MBUS_SERVER_UDS_ENABLE;
+	server->uds.address = MBUS_SERVER_UDS_ADDRESS;
+	server->uds.port = MBUS_SERVER_UDS_PORT;
 
-	server->socket.websocket.enabled = MBUS_SERVER_WEBSOCKET_ENABLE;
-	server->socket.websocket.address = MBUS_SERVER_WEBSOCKET_ADDRESS;
-	server->socket.websocket.port = MBUS_SERVER_WEBSOCKET_PORT;
+	server->websocket.enabled = MBUS_SERVER_WEBSOCKET_ENABLE;
+	server->websocket.address = MBUS_SERVER_WEBSOCKET_ADDRESS;
+	server->websocket.port = MBUS_SERVER_WEBSOCKET_PORT;
 
 	argv = malloc(sizeof(char *) * (argc + 1));
 	if (argv == NULL) {
@@ -2659,31 +2710,37 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 				mbus_debug_level = mbus_debug_level_from_string(optarg);
 				break;
 			case OPTION_SERVER_TCP_ENABLE:
-				server->socket.tcp.enabled = !!atoi(optarg);
+				server->tcp.enabled = !!atoi(optarg);
 				break;
 			case OPTION_SERVER_TCP_ADDRESS:
-				server->socket.tcp.address = optarg;
+				server->tcp.address = optarg;
 				break;
 			case OPTION_SERVER_TCP_PORT:
-				server->socket.tcp.port = atoi(optarg);
+				server->tcp.port = atoi(optarg);
 				break;
 			case OPTION_SERVER_UDS_ENABLE:
-				server->socket.uds.enabled = !!atoi(optarg);
+				server->uds.enabled = !!atoi(optarg);
 				break;
 			case OPTION_SERVER_UDS_ADDRESS:
-				server->socket.uds.address = optarg;
+				server->uds.address = optarg;
 				break;
 			case OPTION_SERVER_UDS_PORT:
-				server->socket.uds.port = atoi(optarg);
+				server->uds.port = atoi(optarg);
 				break;
 			case OPTION_SERVER_WEBSOCKET_ENABLE:
-				server->socket.websocket.enabled = !!atoi(optarg);
+				server->websocket.enabled = !!atoi(optarg);
 				break;
 			case OPTION_SERVER_WEBSOCKET_ADDRESS:
-				server->socket.websocket.address = optarg;
+				server->websocket.address = optarg;
 				break;
 			case OPTION_SERVER_WEBSOCKET_PORT:
-				server->socket.websocket.port = atoi(optarg);
+				server->websocket.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_SSL_CERTIFICATE:
+				server->ssl.certificate = optarg;
+				break;
+			case OPTION_SERVER_SSL_PRIVATEKEY:
+				server->ssl.privatekey = optarg;
 				break;
 			case OPTION_HELP:
 				usage();
@@ -2693,80 +2750,116 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 	optind = o;
 
-	if (server->socket.tcp.enabled == 0 &&
-	    server->socket.uds.enabled == 0 &&
-	    server->socket.websocket.enabled == 0) {
-		mbus_errorf("at leat one protocol must be enabled");
+	mbus_infof("creating server");
+
+	if (server->tcp.enabled == 0 &&
+	    server->uds.enabled == 0 &&
+	    server->websocket.enabled == 0) {
+		mbus_errorf("at least one protocol must be enabled");
 		goto bail;
 	}
 
-	if (server->socket.tcp.enabled == 1) {
-		server->socket.tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
-		if (server->socket.tcp.socket == NULL) {
+	if (server->ssl.certificate != NULL ||
+	    server->ssl.privatekey != NULL) {
+		mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
+		if (server->ssl.certificate == NULL) {
+			mbus_errorf("ssl certificate is invalid");
+			goto bail;
+		}
+		if (server->ssl.privatekey == NULL) {
+			mbus_errorf("ssl privatekey is invalid");
+			goto bail;
+		}
+		server->ssl.method = SSLv23_server_method();
+		if (server->ssl.method == NULL) {
+			mbus_errorf("can not get server method");
+			goto bail;
+		}
+		server->ssl.context = SSL_CTX_new(server->ssl.method);
+		if (server->ssl.context == NULL) {
+			mbus_errorf("can not create ssl context");
+			goto bail;
+		}
+		SSL_CTX_set_ecdh_auto(server->ssl.context, 1);
+		rc = SSL_CTX_use_certificate_file(server->ssl.context, server->ssl.certificate, SSL_FILETYPE_PEM);
+		if (rc <= 0) {
+			mbus_errorf("can not use ssl certificate");
+			goto bail;
+		}
+		rc = SSL_CTX_use_PrivateKey_file(server->ssl.context, server->ssl.privatekey, SSL_FILETYPE_PEM);
+		if (rc <= 0) {
+			mbus_errorf("can not use ssl privatekey");
+			goto bail;
+		}
+	}
+
+	if (server->tcp.enabled == 1) {
+		server->tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+		if (server->tcp.socket == NULL) {
 			mbus_errorf("can not create socket");
 			goto bail;
 		}
-		rc = mbus_socket_set_reuseaddr(server->socket.tcp.socket, 1);
+		rc = mbus_socket_set_reuseaddr(server->tcp.socket, 1);
 		if (rc != 0) {
 			mbus_errorf("can not reuse socket");
 			goto bail;
 		}
-		mbus_socket_set_keepalive(server->socket.tcp.socket, 1);
+		mbus_socket_set_keepalive(server->tcp.socket, 1);
 #if 0
-		mbus_socket_set_keepcnt(server->socket.tcp.socket, 20);
-		mbus_socket_set_keepidle(server->socket.tcp.socket, 180);
-		mbus_socket_set_keepintvl(server->socket.tcp.socket, 60);
+		mbus_socket_set_keepcnt(server->tcp.socket, 20);
+		mbus_socket_set_keepidle(server->tcp.socket, 180);
+		mbus_socket_set_keepintvl(server->tcp.socket, 60);
 #endif
-		rc = mbus_socket_bind(server->socket.tcp.socket, server->socket.tcp.address, server->socket.tcp.port);
+		rc = mbus_socket_bind(server->tcp.socket, server->tcp.address, server->tcp.port);
 		if (rc != 0) {
-			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", server->socket.tcp.address, server->socket.tcp.port);
+			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", server->tcp.address, server->tcp.port);
 			goto bail;
 		}
-		rc = mbus_socket_listen(server->socket.tcp.socket, 1024);
+		rc = mbus_socket_listen(server->tcp.socket, 1024);
 		if (rc != 0) {
 			mbus_errorf("can not listen socket");
 			goto bail;
 		}
-		mbus_infof("listening from: '%s:%s:%d'", "tcp", server->socket.tcp.address, server->socket.tcp.port);
+		mbus_infof("listening from: '%s:%s:%d'", "tcp", server->tcp.address, server->tcp.port);
 	}
-	if (server->socket.uds.enabled == 1) {
-		server->socket.uds.socket = mbus_socket_create(mbus_socket_domain_af_unix, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
-		if (server->socket.uds.socket == NULL) {
+	if (server->uds.enabled == 1) {
+		server->uds.socket = mbus_socket_create(mbus_socket_domain_af_unix, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
+		if (server->uds.socket == NULL) {
 			mbus_errorf("can not create socket");
 			goto bail;
 		}
-		rc = mbus_socket_set_reuseaddr(server->socket.uds.socket, 1);
+		rc = mbus_socket_set_reuseaddr(server->uds.socket, 1);
 		if (rc != 0) {
 			mbus_errorf("can not reuse socket");
 			goto bail;
 		}
-		rc = mbus_socket_bind(server->socket.uds.socket, server->socket.uds.address, server->socket.uds.port);
+		rc = mbus_socket_bind(server->uds.socket, server->uds.address, server->uds.port);
 		if (rc != 0) {
-			mbus_errorf("can not bind socket: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
+			mbus_errorf("can not bind socket: '%s:%s:%d'", "uds", server->uds.address, server->uds.port);
 			goto bail;
 		}
-		rc = mbus_socket_listen(server->socket.uds.socket, 1024);
+		rc = mbus_socket_listen(server->uds.socket, 1024);
 		if (rc != 0) {
 			mbus_errorf("can not listen socket");
 			goto bail;
 		}
-		mbus_infof("listening from: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
+		mbus_infof("listening from: '%s:%s:%d'", "uds", server->uds.address, server->uds.port);
 	}
-	if (server->socket.websocket.enabled == 1) {
+	if (server->websocket.enabled == 1) {
 		struct lws_context_creation_info info;
 		memset(&info, 0, sizeof(info));
 		info.iface = NULL;
-		info.port = server->socket.websocket.port;
+		info.port = server->websocket.port;
 		info.protocols = websocket_protocols;
 		info.extensions = websocket_extensions;
 		info.gid = -1;
 		info.uid = -1;
-		server->socket.websocket.context = lws_create_context(&info);
-		if (server->socket.websocket.context == NULL) {
-			mbus_errorf("can not create websocket context for: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
+		server->websocket.context = lws_create_context(&info);
+		if (server->websocket.context == NULL) {
+			mbus_errorf("can not create websocket context for: '%s:%s:%d'", "websocket", server->websocket.address, server->websocket.port);
 			goto bail;
 		}
-		mbus_infof("listening from: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
+		mbus_infof("listening from: '%s:%s:%d'", "websocket", server->websocket.address, server->websocket.port);
 	}
 
 	free(argv);
@@ -2785,7 +2878,7 @@ int mbus_server_tcp_enabled (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.tcp.enabled;
+	return server->tcp.enabled;
 bail:	return -1;
 }
 
@@ -2795,7 +2888,7 @@ const char * mbus_server_tcp_address (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.tcp.address;
+	return server->tcp.address;
 bail:	return NULL;
 }
 
@@ -2805,7 +2898,7 @@ int mbus_server_tcp_port (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.tcp.port;
+	return server->tcp.port;
 bail:	return -1;
 }
 
@@ -2815,7 +2908,7 @@ int mbus_server_uds_enabled (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.uds.enabled;
+	return server->uds.enabled;
 bail:	return -1;
 }
 
@@ -2825,7 +2918,7 @@ const char * mbus_server_uds_address (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.uds.address;
+	return server->uds.address;
 bail:	return NULL;
 }
 
@@ -2835,7 +2928,7 @@ int mbus_server_uds_port (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.uds.port;
+	return server->uds.port;
 bail:	return -1;
 }
 
@@ -2845,7 +2938,7 @@ int mbus_server_websocket_enabled (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.websocket.enabled;
+	return server->websocket.enabled;
 bail:	return -1;
 }
 
@@ -2855,7 +2948,7 @@ const char * mbus_server_websocket_address (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.websocket.address;
+	return server->websocket.address;
 bail:	return NULL;
 }
 
@@ -2865,6 +2958,6 @@ int mbus_server_websocket_port (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
-	return server->socket.websocket.port;
+	return server->websocket.port;
 bail:	return -1;
 }

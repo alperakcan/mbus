@@ -36,6 +36,9 @@
 #include <sys/time.h>
 #include <arpa/inet.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #define MBUS_DEBUG_NAME	"mbus-client"
 
 #include "mbus/json.h"
@@ -120,6 +123,11 @@ struct mbus_client {
 		int ping_wait_pong;
 		int pong_missed_count;
 	} ping;
+	struct {
+		const SSL_METHOD *method;
+		SSL_CTX *context;
+		SSL *ssl;
+	} ssl;
 	int sequence;
 	struct mbus_socket *socket;
 	struct methods methods;
@@ -829,6 +837,11 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		memcpy(&options, _options, sizeof(struct mbus_client_options));
 	}
 
+	SSL_library_init();
+	SSL_load_error_strings();
+	OpenSSL_add_ssl_algorithms();
+	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
+
 	if (options.client.name == NULL) {
 		options.client.name = "";
 	}
@@ -927,6 +940,21 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_socket_set_keepintvl(client->socket, 60);
 #endif
 	}
+	client->ssl.method = SSLv23_method();
+	if (client->ssl.method == NULL) {
+		mbus_errorf("ssl client method is invalid");
+		goto bail;
+	}
+	client->ssl.context = SSL_CTX_new(client->ssl.method);
+	if (client->ssl.context == NULL) {
+		mbus_errorf("can not create ssl");
+		goto bail;
+	}
+	client->ssl.ssl = SSL_new(client->ssl.context);
+	if (client->ssl.ssl == NULL) {
+		mbus_errorf("can not create ssl");
+		goto bail;
+	}
 	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {
@@ -936,6 +964,13 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	rc = mbus_socket_set_blocking(client->socket, 0);
 	if (rc != 0) {
 		mbus_errorf("can not set socket to nonblocking");
+		goto bail;
+	}
+	SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(client->socket));
+	rc = SSL_connect(client->ssl.ssl);
+	if (rc <= 0) {
+		ERR_print_errors_fp(stderr);
+		mbus_errorf("can not connect ssl");
 		goto bail;
 	}
 	pthread_mutex_lock(&client->mutex);
