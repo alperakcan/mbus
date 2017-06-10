@@ -681,7 +681,7 @@ static void * client_worker (void *arg)
 					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 			if (rc <= 0) {
-				mbus_debugf("can not read data from client");
+				mbus_debugf("can not read data from server");
 				goto bail;
 			}
 			{
@@ -961,7 +961,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not connect to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 		goto bail;
 	}
-	rc = mbus_socket_set_blocking(client->socket, 0);
+	rc = mbus_socket_set_blocking(client->socket, 1);
 	if (rc != 0) {
 		mbus_errorf("can not set socket to nonblocking");
 		goto bail;

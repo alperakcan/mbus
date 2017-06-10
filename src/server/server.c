@@ -132,6 +132,7 @@ struct client {
 	struct {
 		SSL *context;
 		int want_read;
+		int want_write;
 	} ssl;
 	struct subscriptions subscriptions;
 	struct commands commands;
@@ -1406,6 +1407,7 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		if (rc <= 0) {
 			int error;
 			error = SSL_get_error(client->ssl.context, rc);
+			mbus_errorf("can not accept ssl: %d", error);
 			if (error == SSL_ERROR_WANT_READ) {
 				client->ssl.want_read = 1;
 			} else if (error == SSL_ERROR_SYSCALL) {
@@ -2370,7 +2372,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->pollfds.pollfds[n].revents = 0;
 			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
 			mbus_debugf("    in : %s", client_get_name(client));
-			if (mbus_buffer_length(client->buffer.out) > 0) {
+			if (mbus_buffer_length(client->buffer.out) > 0 ||
+			    client->ssl.want_write != 0) {
 				mbus_debugf("    out: %s", client_get_name(client));
 				server->pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
@@ -2443,9 +2446,36 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				client_set_socket(client, NULL);
 				break;
 			}
-			rc = mbus_socket_read(client->socket,
-					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
-					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+			if (client->ssl.context == NULL) {
+				rc = mbus_socket_read(client->socket,
+						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+			} else {
+				rc = SSL_read(client->ssl.context,
+						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+				if (rc <= 0) {
+					int error;
+					error = SSL_get_error(client->ssl.context, rc);
+					mbus_errorf("can not read ssl: %d", error);
+					if (error == SSL_ERROR_WANT_READ) {
+						client->ssl.want_read = 1;
+						continue;
+					} else if (error == SSL_ERROR_WANT_WRITE) {
+						client->ssl.want_write = 1;
+						continue;
+					} else {
+						char ebuf[256];
+						mbus_errorf("can not read ssl: %d", error);
+						error = ERR_get_error();
+						while (error) {
+							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+							error = ERR_get_error();
+						}
+						goto bail;
+					}
+				}
+			}
 			if (rc <= 0) {
 				mbus_debugf("can not read data from client");
 				client_set_socket(client, NULL);
