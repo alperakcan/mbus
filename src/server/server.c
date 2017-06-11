@@ -2447,7 +2447,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				break;
 			}
 			if (client->ssl.context == NULL) {
-				rc = mbus_socket_read(client->socket,
+				rc = read(mbus_socket_get_fd(client_get_socket(client)),
 						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 			} else {
@@ -2459,9 +2459,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					error = SSL_get_error(client->ssl.context, rc);
 					mbus_errorf("can not read ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
+						rc = 0;
+						errno = EAGAIN;
 						client->ssl.want_read = 1;
 						continue;
 					} else if (error == SSL_ERROR_WANT_WRITE) {
+						rc = 0;
+						errno = EAGAIN;
 						client->ssl.want_write = 1;
 						continue;
 					} else {
@@ -2477,6 +2481,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				}
 			}
 			if (rc <= 0) {
+				if (errno == EINTR) {
+					goto skip_in;
+				} else if (errno == EAGAIN) {
+					goto skip_in;
+				} else if (errno == EWOULDBLOCK) {
+					goto skip_in;
+				}
 				mbus_debugf("can not read data from client");
 				client_set_socket(client, NULL);
 				mbus_infof("client: '%s' connection reset by peer", client_get_name(client));
@@ -2534,13 +2545,50 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				}
 			}
 		}
+skip_in:
 		if (server->pollfds.pollfds[c].revents & mbus_poll_event_out) {
 			if (mbus_buffer_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			rc = mbus_socket_write(client_get_socket(client), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+			if (client->ssl.context == NULL) {
+				rc = write(mbus_socket_get_fd(client_get_socket(client)), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+			} else {
+				rc = SSL_write(client->ssl.context, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				if (rc <= 0) {
+					int error;
+					error = SSL_get_error(client->ssl.context, rc);
+					mbus_errorf("can not read ssl: %d", error);
+					if (error == SSL_ERROR_WANT_READ) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_read = 1;
+						continue;
+					} else if (error == SSL_ERROR_WANT_WRITE) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_write = 1;
+						continue;
+					} else {
+						char ebuf[256];
+						mbus_errorf("can not read ssl: %d", error);
+						error = ERR_get_error();
+						while (error) {
+							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+							error = ERR_get_error();
+						}
+						goto bail;
+					}
+				}
+			}
 			if (rc <= 0) {
+				if (errno == EINTR) {
+					goto skip_out;
+				} else if (errno == EAGAIN) {
+					goto skip_out;
+				} else if (errno == EWOULDBLOCK) {
+					goto skip_out;
+				}
 				mbus_debugf("can not write string to client");
 				client_set_socket(client, NULL);
 				mbus_infof("client: '%s' connection reset by server", client_get_name(client));
@@ -2554,6 +2602,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				}
 			}
 		}
+skip_out:
 		if (server->pollfds.pollfds[c].revents & mbus_poll_event_err) {
 			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_name(client));

@@ -127,6 +127,8 @@ struct mbus_client {
 		const SSL_METHOD *method;
 		SSL_CTX *context;
 		SSL *ssl;
+		int want_read;
+		int want_write;
 	} ssl;
 	int sequence;
 	struct mbus_socket *socket;
@@ -775,8 +777,44 @@ static void * client_worker (void *arg)
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			rc = mbus_socket_write(client->socket, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+			if (client->ssl.context == NULL) {
+				rc = write(mbus_socket_get_fd(client->socket), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+			} else {
+				rc = SSL_write(client->ssl.context, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				if (rc <= 0) {
+					int error;
+					error = SSL_get_error(client->ssl.context, rc);
+					mbus_errorf("can not read ssl: %d", error);
+					if (error == SSL_ERROR_WANT_READ) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_read = 1;
+						continue;
+					} else if (error == SSL_ERROR_WANT_WRITE) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_write = 1;
+						continue;
+					} else {
+						char ebuf[256];
+						mbus_errorf("can not read ssl: %d", error);
+						error = ERR_get_error();
+						while (error) {
+							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+							error = ERR_get_error();
+						}
+						goto bail;
+					}
+				}
+			}
 			if (rc <= 0) {
+				if (errno == EINTR) {
+					goto skip_out;
+				} else if (errno == EAGAIN) {
+					goto skip_out;
+				} else if (errno == EWOULDBLOCK) {
+					goto skip_out;
+				}
 				mbus_debugf("can not write string to client");
 				goto bail;
 			} else {
@@ -787,6 +825,8 @@ static void * client_worker (void *arg)
 				}
 			}
 		}
+skip_out:
+		;
 	}
 	pthread_mutex_lock(&client->mutex);
 	client->worker.started = 1;

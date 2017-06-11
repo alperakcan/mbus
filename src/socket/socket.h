@@ -90,7 +90,4 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 int mbus_socket_read (struct mbus_socket *socket, void *vptr, int n);
 int mbus_socket_write (struct mbus_socket *socket, const void *vptr, int n);
 
-char * mbus_socket_read_string (struct mbus_socket *socket);
-int mbus_socket_write_string (struct mbus_socket *socket, const char *string);
-
 int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout);
