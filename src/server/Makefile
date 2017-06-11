@@ -1,4 +1,6 @@
 
+WEBSOCKET_ENABLE ?= y
+
 target.a-y = \
 	libmbus-server.a
 
@@ -22,12 +24,17 @@ libmbus-server.so_ldflags-y = \
 	-lmbus-json
 
 libmbus-server.so_cflags-y += \
-	$(shell pkg-config --cflags libssl) \
-	$(shell pkg-config --cflags libwebsockets)
+	$(shell pkg-config --cflags libssl)
 
 libmbus-server.so_ldflags-y += \
 	$(shell pkg-config --libs libssl) \
 	$(shell pkg-config --libs libcrypto) \
+
+libmbus-server.so_cflags-${WEBSOCKET_ENABLE} += \
+	-DWEBSOCKET_ENABLE=1 \
+	$(shell pkg-config --cflags libwebsockets)
+
+libmbus-server.so_ldflags-${WEBSOCKET_ENABLE} += \
 	$(shell pkg-config --libs libwebsockets)
 
 libmbus-server.a_files-y = \
@@ -37,7 +44,7 @@ libmbus-server.a_includes-y = \
 	${libmbus-server.so_includes-y}
 
 libmbus-server.a_cflags-y += \
-	$(shell pkg-config --cflags libwebsockets)
+	${libmbus-server.so_cflags-y}
 
 distdir = ../../dist
 
