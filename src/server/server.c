@@ -130,7 +130,7 @@ struct client {
 		int ping_missed_count;
 	} ping;
 	struct {
-		SSL *context;
+		SSL *ssl;
 		int want_read;
 		int want_write;
 	} ssl;
@@ -1397,16 +1397,16 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		goto bail;
 	}
 	if (server->ssl.context != NULL) {
-		client->ssl.context = SSL_new(server->ssl.context);
-		if (client->ssl.context == NULL) {
+		client->ssl.ssl = SSL_new(server->ssl.context);
+		if (client->ssl.ssl == NULL) {
 			mbus_errorf("can not create ssl");
 			goto bail;
 		}
-		SSL_set_fd(client->ssl.context, mbus_socket_get_fd(socket));
-		rc = SSL_accept(client->ssl.context);
+		SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(socket));
+		rc = SSL_accept(client->ssl.ssl);
 		if (rc <= 0) {
 			int error;
-			error = SSL_get_error(client->ssl.context, rc);
+			error = SSL_get_error(client->ssl.ssl, rc);
 			mbus_errorf("can not accept ssl: %d", error);
 			if (error == SSL_ERROR_WANT_READ) {
 				client->ssl.want_read = 1;
@@ -2446,17 +2446,17 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				client_set_socket(client, NULL);
 				break;
 			}
-			if (client->ssl.context == NULL) {
+			if (client->ssl.ssl == NULL) {
 				rc = read(mbus_socket_get_fd(client_get_socket(client)),
 						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 			} else {
-				rc = SSL_read(client->ssl.context,
+				rc = SSL_read(client->ssl.ssl,
 						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 				if (rc <= 0) {
 					int error;
-					error = SSL_get_error(client->ssl.context, rc);
+					error = SSL_get_error(client->ssl.ssl, rc);
 					mbus_errorf("can not read ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
@@ -2551,14 +2551,14 @@ skip_in:
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			if (client->ssl.context == NULL) {
+			if (client->ssl.ssl == NULL) {
 				rc = write(mbus_socket_get_fd(client_get_socket(client)), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 			} else {
-				rc = SSL_write(client->ssl.context, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				rc = SSL_write(client->ssl.ssl, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 				if (rc <= 0) {
 					int error;
-					error = SSL_get_error(client->ssl.context, rc);
-					mbus_errorf("can not read ssl: %d", error);
+					error = SSL_get_error(client->ssl.ssl, rc);
+					mbus_errorf("can not write ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
 						errno = EAGAIN;

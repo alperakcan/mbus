@@ -777,14 +777,14 @@ static void * client_worker (void *arg)
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			if (client->ssl.context == NULL) {
+			if (client->ssl.ssl == NULL) {
 				rc = write(mbus_socket_get_fd(client->socket), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 			} else {
-				rc = SSL_write(client->ssl.context, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				rc = SSL_write(client->ssl.ssl, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 				if (rc <= 0) {
 					int error;
-					error = SSL_get_error(client->ssl.context, rc);
-					mbus_errorf("can not read ssl: %d", error);
+					error = SSL_get_error(client->ssl.ssl, rc);
+					mbus_errorf("can not write ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
 						errno = EAGAIN;
