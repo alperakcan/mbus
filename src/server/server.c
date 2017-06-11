@@ -1436,7 +1436,6 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 		if (rc <= 0) {
 			int error;
 			error = SSL_get_error(client->ssl.ssl, rc);
-			mbus_errorf("can not accept ssl: %d", error);
 			if (error == SSL_ERROR_WANT_READ) {
 				client->ssl.want_read = 1;
 			} else if (error == SSL_ERROR_WANT_WRITE) {
@@ -1448,7 +1447,7 @@ static int server_accept_client (struct mbus_server *server, struct mbus_socket 
 				mbus_errorf("can not accept ssl: %d", error);
 				error = ERR_get_error();
 				while (error) {
-					mbus_errorf("  error: %d, %s", error, ebuf);
+					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
 					error = ERR_get_error();
 				}
 				goto bail;
@@ -2508,7 +2507,6 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				if (rc <= 0) {
 					int error;
 					error = SSL_get_error(client->ssl.ssl, rc);
-					mbus_errorf("can not read ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
 						errno = EAGAIN;

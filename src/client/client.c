@@ -683,7 +683,6 @@ static void * client_worker (void *arg)
 			goto bail;
 		}
 		if (polls[0].revents & POLLIN) {
-			mbus_errorf("in");
 			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + 1024);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
@@ -704,7 +703,6 @@ static void * client_worker (void *arg)
 				if (rc <= 0) {
 					int error;
 					error = SSL_get_error(client->ssl.ssl, rc);
-					mbus_errorf("can not read ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
 						errno = EAGAIN;
@@ -750,9 +748,9 @@ static void * client_worker (void *arg)
 					mbus_errorf("can not set buffer length");
 					goto bail;
 				}
-				mbus_errorf("      buffer.in:");
-				mbus_errorf("        length  : %d", mbus_buffer_length(client->buffer.in));
-				mbus_errorf("        size    : %d", mbus_buffer_size(client->buffer.in));
+				mbus_debugf("      buffer.in:");
+				mbus_debugf("        length  : %d", mbus_buffer_length(client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_size(client->buffer.in));
 				while (1) {
 					char *string;
 					ptr = mbus_buffer_base(client->buffer.in);
@@ -844,7 +842,6 @@ skip_in:
 				if (rc <= 0) {
 					int error;
 					error = SSL_get_error(client->ssl.ssl, rc);
-					mbus_errorf("can not write ssl: %d", error);
 					if (error == SSL_ERROR_WANT_READ) {
 						rc = 0;
 						errno = EAGAIN;
@@ -858,7 +855,7 @@ skip_in:
 						errno = EIO;
 					} else {
 						char ebuf[256];
-						mbus_errorf("can not read ssl: %d", error);
+						mbus_errorf("can not write ssl: %d", error);
 						error = ERR_get_error();
 						while (error) {
 							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
@@ -1078,7 +1075,6 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	if (rc <= 0) {
 		int error;
 		error = SSL_get_error(client->ssl.ssl, rc);
-		mbus_errorf("can not connect ssl: %d", error);
 		if (error == SSL_ERROR_WANT_READ) {
 			client->ssl.want_read = 1;
 		} else if (error == SSL_ERROR_WANT_WRITE) {
@@ -1090,7 +1086,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 			mbus_errorf("can not connect ssl: %d", error);
 			error = ERR_get_error();
 			while (error) {
-				mbus_errorf("  error: %d, %s", error, ebuf);
+				mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
 				error = ERR_get_error();
 			}
 			goto bail;
