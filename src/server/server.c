@@ -32,7 +32,11 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <poll.h>
+
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 #include <libwebsockets.h>
+#endif
 
 #define MBUS_DEBUG_NAME	"mbus-server"
 
@@ -103,7 +107,9 @@ enum client_link {
 	client_link_unknown,
 	client_link_tcp,
 	client_link_uds,
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	client_link_websocket,
+#endif
 };
 
 struct client {
@@ -150,6 +156,7 @@ struct mbus_server {
 			unsigned int port;
 			struct mbus_socket *socket;
 		} tcp;
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 		struct {
 			int enabled;
 			const char *address;
@@ -161,6 +168,7 @@ struct mbus_server {
 				struct pollfd *pollfds;
 			} pollfds;
 		} websocket;
+#endif
 		struct {
 			unsigned int length;
 			unsigned int size;
@@ -199,9 +207,11 @@ static struct option longopts[] = {
 	{ "mbus-server-uds-enable",		required_argument,	NULL,	OPTION_SERVER_UDS_ENABLE },
 	{ "mbus-server-uds-address",		required_argument,	NULL,	OPTION_SERVER_UDS_ADDRESS },
 	{ "mbus-server-uds-port",		required_argument,	NULL,	OPTION_SERVER_UDS_PORT },
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	{ "mbus-server-websocket-enable",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ENABLE },
 	{ "mbus-server-websocket-address",	required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_ADDRESS },
 	{ "mbus-server-websocket-port",		required_argument,	NULL,	OPTION_SERVER_WEBSOCKET_PORT },
+#endif
 	{ NULL,					0,			NULL,	0 },
 };
 
@@ -215,9 +225,11 @@ static void usage (void)
 	fprintf(stdout, "  --mbus-server-uds-enable       : server uds enable (default: %d)\n", MBUS_SERVER_UDS_ENABLE);
 	fprintf(stdout, "  --mbus-server-uds-address      : server uds address (default: %s)\n", MBUS_SERVER_UDS_ADDRESS);
 	fprintf(stdout, "  --mbus-server-uds-port         : server uds port (default: %d)\n", MBUS_SERVER_UDS_PORT);
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	fprintf(stdout, "  --mbus-server-websocket-enable : server websocket enable (default: %d)\n", MBUS_SERVER_WEBSOCKET_ENABLE);
 	fprintf(stdout, "  --mbus-server-websocket-address: server websocket address (default: %s)\n", MBUS_SERVER_WEBSOCKET_ADDRESS);
 	fprintf(stdout, "  --mbus-server-websocket-port   : server websocket port (default: %d)\n", MBUS_SERVER_WEBSOCKET_PORT);
+#endif
 	fprintf(stdout, "  --mbus-help                    : this text\n");
 }
 
@@ -981,17 +993,21 @@ static struct client * server_find_client_by_fd (struct mbus_server *server, int
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 		if (client_get_link(client) == client_link_websocket) {
 			struct websocket_client_data *data;
 			data = (struct websocket_client_data *) client_get_socket(client);
 			if (lws_get_socket_fd(data->wsi) == fd) {
 				return client;
 			}
-		} else if (client_get_link(client) == client_link_uds) {
+		}
+#endif
+		if (client_get_link(client) == client_link_uds) {
 			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
 				return client;
 			}
-		} else if (client_get_link(client) == client_link_tcp) {
+		}
+		if (client_get_link(client) == client_link_tcp) {
 			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
 				return client;
 			}
@@ -1879,6 +1895,8 @@ bail:	if (method != NULL) {
 	return -1;
 }
 
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
+
 static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {
 	int rc;
@@ -2181,6 +2199,8 @@ static const struct lws_extension websocket_extensions[] = {
 	}
 };
 
+#endif
+
 int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
@@ -2279,7 +2299,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	}
 	n  = 3;
 	n += server->clients.count;
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	n += server->socket.websocket.pollfds.length;
+#endif
 	if (n > server->socket.pollfds.size) {
 		struct pollfd *tmp;
 		while (n > server->socket.pollfds.size) {
@@ -2326,7 +2348,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				server->socket.pollfds.pollfds[n].events |= mbus_poll_event_out;
 			}
 			n += 1;
-		} else if (client_get_link(client) == client_link_websocket) {
+		}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
+		if (client_get_link(client) == client_link_websocket) {
 			struct websocket_client_data *data;
 			data = (struct websocket_client_data *) client_get_socket(client);
 			if (mbus_buffer_length(client->buffer.out) > 0) {
@@ -2334,11 +2358,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				lws_callback_on_writable(data->wsi);
 			}
 		}
+#endif
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	if (server->socket.websocket.pollfds.length > 0) {
 		memcpy(&server->socket.pollfds.pollfds[n], server->socket.websocket.pollfds.pollfds, sizeof(struct pollfd) * server->socket.websocket.pollfds.length);
 		n += server->socket.websocket.pollfds.length;
 	}
+#endif
 	rc = poll(server->socket.pollfds.pollfds, n, milliseconds);
 	if (rc == 0) {
 		goto out;
@@ -2481,7 +2508,10 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			break;
 		}
 	}
-out:	lws_service(server->socket.websocket.context, 0);
+out:
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
+	lws_service(server->socket.websocket.context, 0);
+#endif
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
@@ -2584,12 +2614,14 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server->socket.tcp.socket != NULL) {
 		mbus_socket_destroy(server->socket.tcp.socket);
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	if (server->socket.websocket.context != NULL) {
 		lws_context_destroy(server->socket.websocket.context);
 	}
 	if (server->socket.websocket.pollfds.pollfds != NULL) {
 		free(server->socket.websocket.pollfds.pollfds);
 	}
+#endif
 	if (server->socket.pollfds.pollfds != NULL) {
 		free(server->socket.pollfds.pollfds);
 	}
@@ -2638,10 +2670,11 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	server->socket.uds.address = MBUS_SERVER_UDS_ADDRESS;
 	server->socket.uds.port = MBUS_SERVER_UDS_PORT;
 
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	server->socket.websocket.enabled = MBUS_SERVER_WEBSOCKET_ENABLE;
 	server->socket.websocket.address = MBUS_SERVER_WEBSOCKET_ADDRESS;
 	server->socket.websocket.port = MBUS_SERVER_WEBSOCKET_PORT;
-
+#endif
 	argv = malloc(sizeof(char *) * (argc + 1));
 	if (argv == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -2676,6 +2709,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			case OPTION_SERVER_UDS_PORT:
 				server->socket.uds.port = atoi(optarg);
 				break;
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 			case OPTION_SERVER_WEBSOCKET_ENABLE:
 				server->socket.websocket.enabled = !!atoi(optarg);
 				break;
@@ -2685,6 +2719,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			case OPTION_SERVER_WEBSOCKET_PORT:
 				server->socket.websocket.port = atoi(optarg);
 				break;
+#endif
 			case OPTION_HELP:
 				usage();
 				optind = o;
@@ -2694,8 +2729,11 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	optind = o;
 
 	if (server->socket.tcp.enabled == 0 &&
-	    server->socket.uds.enabled == 0 &&
-	    server->socket.websocket.enabled == 0) {
+	    server->socket.uds.enabled == 0
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
+	    && server->socket.websocket.enabled == 0
+#endif
+	    ) {
 		mbus_errorf("at leat one protocol must be enabled");
 		goto bail;
 	}
@@ -2752,6 +2790,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		}
 		mbus_infof("listening from: '%s:%s:%d'", "uds", server->socket.uds.address, server->socket.uds.port);
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	if (server->socket.websocket.enabled == 1) {
 		struct lws_context_creation_info info;
 		memset(&info, 0, sizeof(info));
@@ -2768,7 +2807,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		}
 		mbus_infof("listening from: '%s:%s:%d'", "websocket", server->socket.websocket.address, server->socket.websocket.port);
 	}
-
+#endif
 	free(argv);
 	server->running = 1;
 	return server;
@@ -2845,7 +2884,9 @@ int mbus_server_websocket_enabled (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	return server->socket.websocket.enabled;
+#endif
 bail:	return -1;
 }
 
@@ -2855,7 +2896,9 @@ const char * mbus_server_websocket_address (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	return server->socket.websocket.address;
+#endif
 bail:	return NULL;
 }
 
@@ -2865,6 +2908,8 @@ int mbus_server_websocket_port (struct mbus_server *server)
 		mbus_errorf("server is null");
 		goto bail;
 	}
+#if defined(WEBSOCKET_ENABLE) && (WEBSOCKET_ENABLE == 1)
 	return server->socket.websocket.port;
+#endif
 bail:	return -1;
 }
