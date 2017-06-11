@@ -1290,6 +1290,14 @@ void mbus_client_destroy (struct mbus_client *client)
 	if (client->buffer.out != NULL) {
 		mbus_buffer_destroy(client->buffer.out);
 	}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+	if (client->ssl.ssl != NULL) {
+		SSL_free(client->ssl.ssl);
+	}
+	if (client->ssl.context != NULL) {
+		SSL_CTX_free(client->ssl.context);
+	}
+#endif
 	free(client);
 }
 

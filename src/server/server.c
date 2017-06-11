@@ -961,6 +961,11 @@ static void client_destroy (struct client *client)
 	if (client->buffer.out != NULL) {
 		mbus_buffer_destroy(client->buffer.out);
 	}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+	if (client->ssl.ssl != NULL) {
+		SSL_free(client->ssl.ssl);
+	}
+#endif
 	free(client);
 }
 
@@ -2791,6 +2796,12 @@ void mbus_server_destroy (struct mbus_server *server)
 		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
 		method_destroy(method);
 	}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+	if (server->ssl.context != NULL) {
+		SSL_CTX_free(server->ssl.context);
+	}
+	EVP_cleanup();
+#endif
 	free(server);
 }
 
