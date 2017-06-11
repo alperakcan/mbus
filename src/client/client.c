@@ -32,12 +32,15 @@
 #include <stdint.h>
 #include <getopt.h>
 #include <errno.h>
+#include <poll.h>
 #include <pthread.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
 
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#endif
 
 #define MBUS_DEBUG_NAME	"mbus-client"
 
@@ -123,6 +126,7 @@ struct mbus_client {
 		int ping_wait_pong;
 		int pong_missed_count;
 	} ping;
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 	struct {
 		const SSL_METHOD *method;
 		SSL_CTX *context;
@@ -130,6 +134,7 @@ struct mbus_client {
 		int want_read;
 		int want_write;
 	} ssl;
+#endif
 	int sequence;
 	struct mbus_socket *socket;
 	struct methods methods;
@@ -589,7 +594,7 @@ static void * client_worker (void *arg)
 	struct method *method;
 	struct request *request;
 	struct request *waiting;
-	struct mbus_poll polls[1];
+	struct pollfd polls[1];
 	struct mbus_client *client = arg;
 
 	pthread_mutex_lock(&client->mutex);
@@ -659,13 +664,17 @@ static void * client_worker (void *arg)
 				request_destroy(request);
 			}
 		}
-		polls[0].events = mbus_poll_event_in;
+		polls[0].events = POLLIN;
 		polls[0].revents = 0;
-		polls[0].socket = client->socket;
-		if (mbus_buffer_length(client->buffer.out) > 0) {
-			polls[0].events |= mbus_poll_event_out;
+		polls[0].fd = mbus_socket_get_fd(client->socket);
+		if (mbus_buffer_length(client->buffer.out) > 0
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+		    || client->ssl.want_write != 0
+#endif
+		) {
+			polls[0].events |= POLLOUT;
 		}
-		rc = mbus_socket_poll(polls, 1, 20);
+		rc = poll(polls, 1, 20);
 		if (rc == 0) {
 			continue;
 		}
@@ -673,16 +682,62 @@ static void * client_worker (void *arg)
 			mbus_errorf("poll error");
 			goto bail;
 		}
-		if (polls[0].revents & mbus_poll_event_in) {
+		if (polls[0].revents & POLLIN) {
+			mbus_errorf("in");
 			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + 1024);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
 				goto bail;
 			}
-			rc = mbus_socket_read(client->socket,
-					mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
-					mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+			if (client->ssl.ssl == NULL) {
+#endif
+				rc = read(mbus_socket_get_fd(client->socket),
+						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+			} else {
+				client->ssl.want_read = 0;
+				rc = SSL_read(client->ssl.ssl,
+						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
+						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+				if (rc <= 0) {
+					int error;
+					error = SSL_get_error(client->ssl.ssl, rc);
+					mbus_errorf("can not read ssl: %d", error);
+					if (error == SSL_ERROR_WANT_READ) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_read = 1;
+					} else if (error == SSL_ERROR_WANT_WRITE) {
+						rc = 0;
+						errno = EAGAIN;
+						client->ssl.want_write = 1;
+					} else if (error == SSL_ERROR_SYSCALL) {
+						rc = -1;
+						errno = EIO;
+					} else {
+						char ebuf[256];
+						mbus_errorf("can not read ssl: %d", error);
+						error = ERR_get_error();
+						while (error) {
+							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+							error = ERR_get_error();
+						}
+						rc = -1;
+						errno = EIO;
+					}
+				}
+			}
+#endif
 			if (rc <= 0) {
+				if (errno == EINTR) {
+					goto skip_in;
+				} else if (errno == EAGAIN) {
+					goto skip_in;
+				} else if (errno == EWOULDBLOCK) {
+					goto skip_in;
+				}
 				mbus_debugf("can not read data from server");
 				goto bail;
 			}
@@ -695,9 +750,9 @@ static void * client_worker (void *arg)
 					mbus_errorf("can not set buffer length");
 					goto bail;
 				}
-				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", mbus_buffer_length(client->buffer.in));
-				mbus_debugf("        size    : %d", mbus_buffer_size(client->buffer.in));
+				mbus_errorf("      buffer.in:");
+				mbus_errorf("        length  : %d", mbus_buffer_length(client->buffer.in));
+				mbus_errorf("        size    : %d", mbus_buffer_size(client->buffer.in));
 				while (1) {
 					char *string;
 					ptr = mbus_buffer_base(client->buffer.in);
@@ -772,14 +827,19 @@ static void * client_worker (void *arg)
 				}
 			}
 		}
-		if (polls[0].revents & mbus_poll_event_out) {
+skip_in:
+		if (polls[0].revents & POLLOUT) {
 			if (mbus_buffer_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
+#endif
 				rc = write(mbus_socket_get_fd(client->socket), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 			} else {
+				client->ssl.want_write = 0;
 				rc = SSL_write(client->ssl.ssl, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
 				if (rc <= 0) {
 					int error;
@@ -789,12 +849,13 @@ static void * client_worker (void *arg)
 						rc = 0;
 						errno = EAGAIN;
 						client->ssl.want_read = 1;
-						continue;
 					} else if (error == SSL_ERROR_WANT_WRITE) {
 						rc = 0;
 						errno = EAGAIN;
 						client->ssl.want_write = 1;
-						continue;
+					} else if (error == SSL_ERROR_SYSCALL) {
+						rc = -1;
+						errno = EIO;
 					} else {
 						char ebuf[256];
 						mbus_errorf("can not read ssl: %d", error);
@@ -807,6 +868,7 @@ static void * client_worker (void *arg)
 					}
 				}
 			}
+#endif
 			if (rc <= 0) {
 				if (errno == EINTR) {
 					goto skip_out;
@@ -877,10 +939,11 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		memcpy(&options, _options, sizeof(struct mbus_client_options));
 	}
 
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 	SSL_library_init();
 	SSL_load_error_strings();
 	OpenSSL_add_ssl_algorithms();
-	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
+#endif
 
 	if (options.client.name == NULL) {
 		options.client.name = "";
@@ -980,6 +1043,8 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_socket_set_keepintvl(client->socket, 60);
 #endif
 	}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 	client->ssl.method = SSLv23_method();
 	if (client->ssl.method == NULL) {
 		mbus_errorf("ssl client method is invalid");
@@ -995,24 +1060,43 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not create ssl");
 		goto bail;
 	}
+#endif
 	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 	rc = mbus_socket_connect(client->socket, options.server.address, options.server.port);
 	if (rc != 0) {
 		mbus_errorf("can not connect to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
 		goto bail;
 	}
-	rc = mbus_socket_set_blocking(client->socket, 1);
+	rc = mbus_socket_set_blocking(client->socket, 0);
 	if (rc != 0) {
 		mbus_errorf("can not set socket to nonblocking");
 		goto bail;
 	}
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
 	SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(client->socket));
 	rc = SSL_connect(client->ssl.ssl);
 	if (rc <= 0) {
-		ERR_print_errors_fp(stderr);
-		mbus_errorf("can not connect ssl");
-		goto bail;
+		int error;
+		error = SSL_get_error(client->ssl.ssl, rc);
+		mbus_errorf("can not connect ssl: %d", error);
+		if (error == SSL_ERROR_WANT_READ) {
+			client->ssl.want_read = 1;
+		} else if (error == SSL_ERROR_WANT_WRITE) {
+			client->ssl.want_write = 1;
+		} else if (error == SSL_ERROR_SYSCALL) {
+			client->ssl.want_read = 1;
+		} else {
+			char ebuf[256];
+			mbus_errorf("can not connect ssl: %d", error);
+			error = ERR_get_error();
+			while (error) {
+				mbus_errorf("  error: %d, %s", error, ebuf);
+				error = ERR_get_error();
+			}
+			goto bail;
+		}
 	}
+#endif
 	pthread_mutex_lock(&client->mutex);
 	pthread_create(&client->worker.thread, NULL, client_worker, client);
 	while (client->worker.started == 0) {

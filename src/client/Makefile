@@ -1,4 +1,6 @@
 
+OPENSSL_ENABLE ?= y
+
 target.a-y = \
 	libmbus-client.a
 
@@ -14,17 +16,22 @@ libmbus-client.so_libraries-y = \
 libmbus-client.so_files-y = \
 	client.c
 
-libmbus-client.so_cflags-y += \
+libmbus-client.so_cflags-${OPENSSL_ENABLE} += \
+	-DOPENSSL_ENABLE=1 \
 	$(shell pkg-config --cflags libssl)
 
-libmbus-client.so_ldflags-y = \
-	$(shell pkg-config --libs libssl) \
-	$(shell pkg-config --libs libcrypto) \
+libmbus-client.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-clock \
 	-lmbus-buffer \
 	-lmbus-socket \
-	-lmbus-json \
+	-lmbus-json
+
+libmbus-client.so_ldflags-${OPENSSL_ENABLE} += \
+	$(shell pkg-config --libs libssl) \
+	$(shell pkg-config --libs libcrypto)
+
+libmbus-client.so_ldflags-${OPENSSL_ENABLE} += \
 	-lpthread
 
 libmbus-client.a_includes-y = \

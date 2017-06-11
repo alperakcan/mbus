@@ -1,5 +1,6 @@
 
 WEBSOCKET_ENABLE ?= y
+OPENSSL_ENABLE ?= y
 
 target.a-y = \
 	libmbus-server.a
@@ -23,10 +24,11 @@ libmbus-server.so_ldflags-y = \
 	-lmbus-socket \
 	-lmbus-json
 
-libmbus-server.so_cflags-y += \
+libmbus-server.so_cflags-${OPENSSL_ENABLE} += \
+	-DOPENSSL_ENABLE=1 \
 	$(shell pkg-config --cflags libssl)
 
-libmbus-server.so_ldflags-y += \
+libmbus-server.so_ldflags-${OPENSSL_ENABLE} += \
 	$(shell pkg-config --libs libssl) \
 	$(shell pkg-config --libs libcrypto) \
 

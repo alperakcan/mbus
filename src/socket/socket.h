@@ -39,21 +39,6 @@ enum mbus_socket_protocol {
 	mbus_socket_protocol_any,
 };
 
-enum mbus_poll_event {
-	mbus_poll_event_in	= 0x00000001,
-	mbus_poll_event_pri	= 0x00000002,
-	mbus_poll_event_out	= 0x00000004,
-	mbus_poll_event_err	= 0x00000008,
-	mbus_poll_event_hup	= 0x00000010,
-	mbus_poll_event_nval	= 0x00000020,
-};
-
-struct mbus_poll {
-	enum mbus_poll_event events;
-	enum mbus_poll_event revents;
-	struct mbus_socket *socket;
-};
-
 struct mbus_socket;
 
 struct mbus_socket * mbus_socket_create (enum mbus_socket_domain domain, enum mbus_socket_type type, enum mbus_socket_protocol protocol);
@@ -89,5 +74,3 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 
 int mbus_socket_read (struct mbus_socket *socket, void *vptr, int n);
 int mbus_socket_write (struct mbus_socket *socket, const void *vptr, int n);
-
-int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout);
