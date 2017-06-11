@@ -2029,6 +2029,7 @@ static int websocket_protocol_mbus_callback (struct lws *wsi, enum lws_callback_
 				for (i = 0; i < server->websocket.pollfds.length; i++) {
 					if (server->websocket.pollfds.pollfds[i].fd == pa->fd) {
 						server->websocket.pollfds.pollfds[i].events = pa->events;
+						mbus_debugf("    %d, 0x%08x", i, pa->events);
 						break;
 					}
 				}
@@ -3013,6 +3014,13 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		info.extensions = websocket_extensions;
 		info.gid = -1;
 		info.uid = -1;
+#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+		info.ssl_ca_filepath = "ca.crt";
+		info.ssl_cert_filepath = server->ssl.certificate;
+		info.ssl_private_key_filepath = server->ssl.privatekey;
+//		info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
+		info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+#endif
 		server->websocket.context = lws_create_context(&info);
 		if (server->websocket.context == NULL) {
 			mbus_errorf("can not create websocket context for: '%s:%s:%d'", "websocket", server->websocket.address, server->websocket.port);
