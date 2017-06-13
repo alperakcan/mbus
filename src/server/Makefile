@@ -1,5 +1,6 @@
 
-WEBSOCKET_ENABLE ?= y
+WS_ENABLE  ?= y
+SSL_ENABLE ?= y
 
 target.a-y = \
 	libmbus-server.a
@@ -7,27 +8,35 @@ target.a-y = \
 target.so-y = \
 	libmbus-server.so
 
-libmbus-server.so_includes-y = \
-	../../dist/include
-
-libmbus-server.so_libraries-y = \
-	../../dist/lib
-
 libmbus-server.so_files-y = \
 	server.c
 
-libmbus-server.so_ldflags-y = \
+libmbus-server.so_cflags-y += \
+	-I../../dist/include
+
+libmbus-server.so_ldflags-y += \
+	-L../../dist/lib
+
+libmbus-server.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-buffer \
 	-lmbus-clock \
 	-lmbus-socket \
 	-lmbus-json
 
-libmbus-server.so_cflags-${WEBSOCKET_ENABLE} += \
-	-DWEBSOCKET_ENABLE=1 \
+libmbus-server.so_cflags-${SSL_ENABLE} += \
+	-DSSL_ENABLE=1 \
+	$(shell pkg-config --cflags libssl)
+
+libmbus-server.so_ldflags-${SSL_ENABLE} += \
+	$(shell pkg-config --libs libssl) \
+	$(shell pkg-config --libs libcrypto) \
+
+libmbus-server.so_cflags-${WS_ENABLE} += \
+	-DWS_ENABLE=1 \
 	$(shell pkg-config --cflags libwebsockets)
 
-libmbus-server.so_ldflags-${WEBSOCKET_ENABLE} += \
+libmbus-server.so_ldflags-${WS_ENABLE} += \
 	$(shell pkg-config --libs libwebsockets)
 
 libmbus-server.a_files-y = \

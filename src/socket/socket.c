@@ -36,7 +36,6 @@
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <errno.h>
 
 #define MBUS_DEBUG_NAME	"mbus-socket"
@@ -44,65 +43,12 @@
 #include "mbus/debug.h"
 #include "socket.h"
 
-struct websocket_per_session_data {
-	int fd;
-};
-
 struct mbus_socket {
 	int domain;
 	int type;
 	int protocol;
 	int fd;
-	struct {
-		unsigned int size;
-		char *buffer;
-	} buffer;
 };
-
-static int mbus_poll_event_to_posix (enum mbus_poll_event event)
-{
-	int e;
-	e = 0;
-	if (event & mbus_poll_event_in) {
-		e |= POLLIN;
-	}
-	if (event & mbus_poll_event_out) {
-		e |= POLLOUT;
-	}
-	return e;
-}
-
-enum mbus_poll_event mbus_poll_event_from_posix (int event)
-{
-	enum mbus_poll_event e;
-	e = 0;
-	if (event & POLLIN) {
-		e |= mbus_poll_event_in;
-		event &= ~POLLIN;
-	}
-	if (event & POLLOUT) {
-		e |= mbus_poll_event_out;
-		event &= ~POLLOUT;
-	}
-	if (event & POLLERR) {
-		e |= mbus_poll_event_err;
-		event &= ~POLLERR;
-	}
-	if (event & POLLHUP) {
-		e |= mbus_poll_event_err;
-		e |= mbus_poll_event_hup;
-		event &= ~POLLHUP;
-	}
-	if (event & POLLNVAL) {
-		e |= mbus_poll_event_err;
-		e |= mbus_poll_event_nval;
-		event &= ~POLLNVAL;
-	}
-	if (event != 0) {
-		e |= mbus_poll_event_err;
-	}
-	return e;
-}
 
 static int mbus_socket_domain_to_posix (enum mbus_socket_domain domain)
 {
@@ -170,9 +116,6 @@ void mbus_socket_destroy (struct mbus_socket *socket)
 	}
 	if (socket->fd >= 0) {
 		close(socket->fd);
-	}
-	if (socket->buffer.buffer != NULL) {
-		free(socket->buffer.buffer);
 	}
 	free(socket);
 }
@@ -588,133 +531,4 @@ int mbus_socket_write (struct mbus_socket *socket, const void *vptr, int n)
 		ptr   += nwritten;
 	}
 	return n - nleft;
-}
-
-char * mbus_socket_read_string (struct mbus_socket *socket)
-{
-	int rc;
-	char *string;
-	uint32_t length;
-	if (socket == NULL) {
-		mbus_errorf("socket is null");
-		return NULL;
-	}
-	rc = mbus_socket_read(socket, &length, sizeof(uint32_t));
-	if (rc != sizeof(uint32_t)) {
-		return NULL;
-	}
-	length = ntohl(length);
-	string = malloc(length + 1);
-	if (string == NULL) {
-		mbus_errorf("can not allocate memory");
-		return NULL;
-	}
-	rc = mbus_socket_read(socket, string, length);
-	if (rc != (int) length) {
-		free(string);
-		return NULL;
-	}
-	string[length] = '\0';
-	return string;
-}
-
-int mbus_socket_write_string (struct mbus_socket *socket, const char *string)
-{
-	int rc;
-	uint32_t slength;
-	uint32_t nlength;
-	uint32_t wlength;
-	if (socket == NULL) {
-		mbus_errorf("socket is null");
-		return -1;
-	}
-	if (string == NULL) {
-		mbus_errorf("string is null");
-		return -1;
-	}
-	slength = strlen(string);
-	wlength = sizeof(uint32_t) + slength;
-	if (wlength > socket->buffer.size) {
-		char *tmp;
-		while (wlength > socket->buffer.size) {
-			socket->buffer.size += 4096;
-		}
-		tmp = realloc(socket->buffer.buffer, socket->buffer.size);
-		if (tmp == NULL) {
-			tmp = malloc(socket->buffer.size);
-			if (tmp == NULL) {
-				return -1;
-			}
-			free(socket->buffer.buffer);
-		}
-		socket->buffer.buffer = tmp;
-	}
-	nlength = htonl(slength);
-	memcpy(socket->buffer.buffer, &nlength, sizeof(uint32_t));
-	memcpy(socket->buffer.buffer + sizeof(uint32_t), string, slength);
-	rc = mbus_socket_write(socket, socket->buffer.buffer, wlength);
-	if (rc != (int) wlength) {
-		return -1;
-	}
-	return 0;
-}
-
-int mbus_socket_poll (struct mbus_poll *polls, int npolls, int timeout)
-{
-	int p;
-	int rc;
-	struct pollfd *pollfd;
-	struct pollfd _pollfds[32];
-	if (polls == NULL) {
-		mbus_errorf("polls is null");
-		return -1;
-	}
-	if (npolls <= 0) {
-		mbus_errorf("invalid polls count");
-		return -1;
-	}
-	if (npolls < (int) (sizeof(_pollfds) / sizeof(_pollfds[0]))) {
-		pollfd = _pollfds;
-	} else {
-		pollfd = malloc(sizeof(struct pollfd) * npolls);
-		if (pollfd == NULL) {
-			mbus_errorf("can not allocate memory");
-			return -1;
-		}
-	}
-	for (p = 0; p < npolls; p++) {
-		pollfd[p].fd = polls[p].socket->fd;
-		pollfd[p].events = mbus_poll_event_to_posix(polls[p].events);
-		pollfd[p].revents = 0;
-		polls[p].revents = 0;
-	}
-	rc = poll(pollfd, npolls, timeout);
-	if (rc < 0) {
-		if (errno == EINTR) {
-			goto intr;
-		}
-		mbus_errorf("poll error (rc: %d, errno: %d - %s)", rc, errno, strerror(errno));
-		goto bail;
-	}
-	if (rc == 0) {
-		goto out;
-	}
-	for (p = 0; p < npolls; p++) {
-		if (pollfd[p].revents == 0) {
-			continue;
-		}
-		polls[p].revents = mbus_poll_event_from_posix(pollfd[p].revents);
-	}
-out:	if (pollfd != _pollfds) {
-		free(pollfd);
-	}
-	return rc;
-intr:	if (pollfd != _pollfds) {
-		free(pollfd);
-	}
-	return 0;
-bail:	if (pollfd != _pollfds) {
-		free(pollfd);
-	}
-	return -1;
 }

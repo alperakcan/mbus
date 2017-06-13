@@ -1,20 +1,26 @@
 
+SSL_ENABLE ?= y
+
 target.a-y = \
 	libmbus-client.a
 
 target.so-y = \
 	libmbus-client.so
 
-libmbus-client.so_includes-y = \
-	../../dist/include
-
-libmbus-client.so_libraries-y = \
-	../../dist/lib
-
 libmbus-client.so_files-y = \
 	client.c
 
-libmbus-client.so_ldflags-y = \
+libmbus-client.so_cflags-y += \
+	-I../../dist/include
+
+libmbus-client.so_ldflags-y += \
+	-L../../dist/lib
+
+libmbus-client.so_cflags-${SSL_ENABLE} += \
+	-DSSL_ENABLE=1 \
+	$(shell pkg-config --cflags libssl)
+
+libmbus-client.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-clock \
 	-lmbus-buffer \
@@ -22,8 +28,15 @@ libmbus-client.so_ldflags-y = \
 	-lmbus-json \
 	-lpthread
 
-libmbus-client.a_includes-y = \
-	${libmbus-client.so_includes-y}
+libmbus-client.so_ldflags-${SSL_ENABLE} += \
+	$(shell pkg-config --libs libssl) \
+	$(shell pkg-config --libs libcrypto)
+
+libmbus-client.so_ldflags-${SSL_ENABLE} += \
+	-lpthread
+
+libmbus-client.a_cflags-y = \
+	${libmbus-client.so_cflags-y}
 
 libmbus-client.a_files-y = \
 	${libmbus-client.so_files-y}
