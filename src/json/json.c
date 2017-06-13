@@ -147,6 +147,12 @@ struct mbus_json * mbus_json_get_array_item (const struct mbus_json *json, int a
 	return (struct mbus_json *) mbus_cJSON_GetArrayItem((mbus_cJSON *) json, at);
 }
 
+int mbus_json_add_item_to_object (struct mbus_json *json, const char *name, struct mbus_json *item)
+{
+	mbus_cJSON_AddItemToObject((mbus_cJSON *) json, name, (mbus_cJSON *) item);
+	return 0;
+}
+
 int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
 	mbus_cJSON_AddItemToObjectCS((mbus_cJSON *) json, name, (mbus_cJSON *) item);

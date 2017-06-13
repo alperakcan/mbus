@@ -53,6 +53,9 @@ struct mbus_client;
 
 void mbus_client_usage (void);
 
+int mbus_client_options_default (struct mbus_client_options *options);
+int mbus_client_options_from_argv (struct mbus_client_options *options, int argc, char *argv[]);
+
 struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[]);
 struct mbus_client * mbus_client_create_with_options (const struct mbus_client_options *options);
 void mbus_client_destroy (struct mbus_client *client);

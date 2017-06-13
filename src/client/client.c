@@ -1170,21 +1170,17 @@ bail:	if (client != NULL) {
 	return NULL;
 }
 
-struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv[])
+struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[])
 {
-	int a;
-	int ch;
-	char **argv;
+	int rc;
 	struct mbus_client *client;
 	struct mbus_client_options options;
 
-	int o_optind;
-
-	o_optind = optind;
-
-	argv = NULL;
-	client = NULL;
-	memset(&options, 0, sizeof(struct mbus_client_options));
+	rc = mbus_client_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
 
 	options.client.name = name;
 	if (name == NULL) {
@@ -1192,47 +1188,10 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		goto bail;
 	}
 
-	argv = malloc(sizeof(char *) * (argc + 1));
-	if (argv == NULL) {
-		mbus_errorf("can not allocate memory");
+	rc = mbus_client_options_from_argv(&options, argc, argv);
+	if (rc != 0) {
+		mbus_errorf("can not get options from argv");
 		goto bail;
-	}
-	for (a = 0; a < argc; a++) {
-		argv[a] = _argv[a];
-	}
-	argv[a] = NULL;
-
-	optind = 1;
-	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
-		switch (ch) {
-			case OPTION_DEBUG_LEVEL:
-				mbus_debug_level = mbus_debug_level_from_string(optarg);
-				break;
-			case OPTION_SERVER_PROTOCOL:
-				options.server.protocol = optarg;
-				break;
-			case OPTION_SERVER_ADDRESS:
-				options.server.address = optarg;
-				break;
-			case OPTION_SERVER_PORT:
-				options.server.port = atoi(optarg);
-				break;
-			case OPTION_CLIENT_NAME:
-				options.client.name = optarg;
-				break;
-			case OPTION_PING_INTERVAL:
-				options.ping.interval = atoi(optarg);
-				break;
-			case OPTION_PING_TIMEOUT:
-				options.ping.timeout = atoi(optarg);
-				break;
-			case OPTION_PING_THRESHOLD:
-				options.ping.threshold = atoi(optarg);
-				break;
-			case OPTION_HELP:
-				mbus_client_usage();
-				goto bail;
-		}
 	}
 
 	client = mbus_client_create_with_options(&options);
@@ -1241,17 +1200,73 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *_argv
 		goto bail;
 	}
 
-	free(argv);
-	optind = o_optind;
 	return client;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
 	}
-	if (argv != NULL) {
-		free(argv);
-	}
-	optind = o_optind;
 	return NULL;
+}
+
+int mbus_client_options_default (struct mbus_client_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_options));
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_options_from_argv (struct mbus_client_options *options, int argc, char *argv[])
+{
+	int ch;
+	int o_optind;
+
+	o_optind = optind;
+
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_options_default(options);
+
+	optind = 1;
+	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
+		switch (ch) {
+			case OPTION_DEBUG_LEVEL:
+				mbus_debug_level = mbus_debug_level_from_string(optarg);
+				break;
+			case OPTION_SERVER_PROTOCOL:
+				options->server.protocol = optarg;
+				break;
+			case OPTION_SERVER_ADDRESS:
+				options->server.address = optarg;
+				break;
+			case OPTION_SERVER_PORT:
+				options->server.port = atoi(optarg);
+				break;
+			case OPTION_CLIENT_NAME:
+				options->client.name = optarg;
+				break;
+			case OPTION_PING_INTERVAL:
+				options->ping.interval = atoi(optarg);
+				break;
+			case OPTION_PING_TIMEOUT:
+				options->ping.timeout = atoi(optarg);
+				break;
+			case OPTION_PING_THRESHOLD:
+				options->ping.threshold = atoi(optarg);
+				break;
+			case OPTION_HELP:
+				mbus_client_usage();
+				goto bail;
+		}
+	}
+
+	optind = o_optind;
+	return 0;
+bail:	return -1;
 }
 
 void mbus_client_destroy (struct mbus_client *client)
@@ -1634,8 +1649,8 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 		goto bail;
 	}
 	if (source == NULL) {
-		mbus_errorf("source is null");
-		goto bail;
+		mbus_debugf("source is null, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
+		source = MBUS_METHOD_EVENT_SOURCE_ALL;
 	}
 	if (event == NULL) {
 		mbus_errorf("event is null");
