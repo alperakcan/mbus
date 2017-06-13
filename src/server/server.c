@@ -2616,6 +2616,9 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 		case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS:
 			mbus_debugf("  load extra server verify certs");
 			break;
+		case LWS_CALLBACK_CLOSED_HTTP:
+			mbus_debugf("  closed http");
+			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);
 			goto bail;
