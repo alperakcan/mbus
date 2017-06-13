@@ -982,6 +982,24 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		}
 		socket_domain = mbus_socket_domain_af_unix;
 		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(options.server.protocol, MBUS_SERVER_TCPS_PROTOCOL) == 0) {
+		if (options.server.port <= 0) {
+			options.server.port = MBUS_SERVER_TCPS_PORT;
+		}
+		if (options.server.address == NULL) {
+			options.server.address = MBUS_SERVER_TCPS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_inet;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(options.server.protocol, MBUS_SERVER_UDSS_PROTOCOL) == 0) {
+		if (options.server.port <= 0) {
+			options.server.port = MBUS_SERVER_UDSS_PORT;
+		}
+		if (options.server.address == NULL) {
+			options.server.address = MBUS_SERVER_UDSS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_unix;
+		socket_type = mbus_socket_type_sock_stream;
 	} else {
 		mbus_errorf("invalid server protocol: %s", options.server.protocol);
 		goto bail;
@@ -1042,21 +1060,24 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 #endif
 	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
-	client->ssl.method = SSLv23_method();
-	if (client->ssl.method == NULL) {
-		mbus_errorf("ssl client method is invalid");
-		goto bail;
-	}
-	client->ssl.context = SSL_CTX_new(client->ssl.method);
-	if (client->ssl.context == NULL) {
-		mbus_errorf("can not create ssl");
-		goto bail;
-	}
-	client->ssl.ssl = SSL_new(client->ssl.context);
-	if (client->ssl.ssl == NULL) {
-		mbus_errorf("can not create ssl");
-		goto bail;
+	if (strcmp(options.server.protocol, MBUS_SERVER_TCPS_PROTOCOL) == 0 ||
+	    strcmp(options.server.protocol, MBUS_SERVER_UDSS_PROTOCOL) == 0) {
+		mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
+		client->ssl.method = SSLv23_method();
+		if (client->ssl.method == NULL) {
+			mbus_errorf("ssl client method is invalid");
+			goto bail;
+		}
+		client->ssl.context = SSL_CTX_new(client->ssl.method);
+		if (client->ssl.context == NULL) {
+			mbus_errorf("can not create ssl");
+			goto bail;
+		}
+		client->ssl.ssl = SSL_new(client->ssl.context);
+		if (client->ssl.ssl == NULL) {
+			mbus_errorf("can not create ssl");
+			goto bail;
+		}
 	}
 #endif
 	mbus_infof("connecting to server: '%s:%s:%d'", options.server.protocol, options.server.address, options.server.port);
@@ -1071,26 +1092,28 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		goto bail;
 	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(client->socket));
-	rc = SSL_connect(client->ssl.ssl);
-	if (rc <= 0) {
-		int error;
-		error = SSL_get_error(client->ssl.ssl, rc);
-		if (error == SSL_ERROR_WANT_READ) {
-			client->ssl.want_read = 1;
-		} else if (error == SSL_ERROR_WANT_WRITE) {
-			client->ssl.want_write = 1;
-		} else if (error == SSL_ERROR_SYSCALL) {
-			client->ssl.want_read = 1;
-		} else {
-			char ebuf[256];
-			mbus_errorf("can not connect ssl: %d", error);
-			error = ERR_get_error();
-			while (error) {
-				mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+	if (client->ssl.ssl != NULL) {
+		SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(client->socket));
+		rc = SSL_connect(client->ssl.ssl);
+		if (rc <= 0) {
+			int error;
+			error = SSL_get_error(client->ssl.ssl, rc);
+			if (error == SSL_ERROR_WANT_READ) {
+				client->ssl.want_read = 1;
+			} else if (error == SSL_ERROR_WANT_WRITE) {
+				client->ssl.want_write = 1;
+			} else if (error == SSL_ERROR_SYSCALL) {
+				client->ssl.want_read = 1;
+			} else {
+				char ebuf[256];
+				mbus_errorf("can not connect ssl: %d", error);
 				error = ERR_get_error();
+				while (error) {
+					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+					error = ERR_get_error();
+				}
+				goto bail;
 			}
-			goto bail;
 		}
 	}
 #endif

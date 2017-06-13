@@ -1,5 +1,5 @@
 
-SSL_ENABLE ?= n
+SSL_ENABLE ?= y
 
 target.a-y = \
 	libmbus-client.a

@@ -984,7 +984,9 @@ static struct listener * listener_create (enum listener_type type, const char *a
 			mbus_errorf("can not create ssl context");
 			goto bail;
 		}
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 		SSL_CTX_set_ecdh_auto(listener->ssl.context, 1);
+#endif
 		rc = SSL_CTX_use_certificate_file(listener->ssl.context, certificate, SSL_FILETYPE_PEM);
 		if (rc <= 0) {
 			mbus_errorf("can not use ssl certificate: %s", certificate);
@@ -3175,6 +3177,7 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server == NULL) {
 		return;
 	}
+	mbus_infof("destroying server");
 	while (server->listeners.tqh_first != NULL) {
 		listener = server->listeners.tqh_first;
 		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
@@ -3440,6 +3443,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.wss.enabled == 1) {
 		struct listener *listener;
@@ -3451,6 +3455,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 	}
+#endif
 #endif
 	free(argv);
 	server->running = 1;

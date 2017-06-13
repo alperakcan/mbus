@@ -1,6 +1,6 @@
 
 WS_ENABLE  ?= y
-SSL_ENABLE ?= n
+SSL_ENABLE ?= y
 
 target.a-y = \
 	libmbus-server.a

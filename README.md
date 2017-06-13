@@ -234,7 +234,7 @@ generate server key without encryption
 
 generate a certificate signing request to send to the ca
 
-    openssl req -out server.csr -key server.key -new
+    openssl req -out server.csr -key server.key -new -newkey rsa:4096 -sha256
 
 send the csr to the ca, or sign it with you ca key
 
