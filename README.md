@@ -11,9 +11,9 @@ and applications. enabling development of component based distributed applicatio
         - <a href="#411-command-line-options">command line options</a>
     - <a href="#42-listener">listener</a>
         - <a href="#421-command-line-options">command line options</a>
-    - <a href="#43-command">command</a>
+    - <a href="#43-event">event</a>
         - <a href="#431-command-line-options">command line options</a>
-    - <a href="#44-event">event</a>
+    - <a href="#44-command">command</a>
         - <a href="#441-command-line-options">command line options</a>
 5. <a href="#5-library">library</a>
     - <a href="#51-server">server</a>
@@ -102,15 +102,15 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
     server uds port, default: -1
   
-  - --mbus-server-websocket-enable
+  - --mbus-server-ws-enable
   
     server websocket enable, default: 1
     
-  - --mbus-server-websocket-address
+  - --mbus-server-ws-address
   
     server websocket address, default: 127.0.0.1
   
-  - --mbus-server-websocket-port
+  - --mbus-server-ws-port
   
     server websocket port, default: 9000
   
@@ -128,7 +128,7 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
   - --mbus-server-protocol
   
-    set communication protocol, available options: tcp, uds. default: uds
+    set communication protocol, available options: tcp, uds, tcps, udss. default: uds
 
   - --mbus-server-address
   
@@ -148,7 +148,7 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
     set client name, default: org.mbus.app.listener
 
-### 4.3 cli ###
+### 4.3 event ###
 
 #### 4.3.1 command line options ####
 
@@ -162,7 +162,7 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
   - --mbus-server-protocol
   
-    set communication protocol, available options: tcp, uds. default: uds
+    set communication protocol, available options: tcp, uds, tcps, udss. default: uds
 
   - --mbus-server-address
   
@@ -182,7 +182,39 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
     set client name, default: org.mbus.app.cli
 
-### 4.4 launcher ###
+### 4.4 command ###
+
+#### 4.4.1 command line options ####
+
+  - --mbus-help
+  
+    print available parameters list and exit
+
+  - --mbus-debug-level
+
+    set debug level, available options: debug, info, error. default: error
+  
+  - --mbus-server-protocol
+  
+    set communication protocol, available options: tcp, uds, tcps, udss. default: uds
+
+  - --mbus-server-address
+  
+    set server address:
+
+    - tcp: default is 127.0.0.1
+    - uds: default is /tmp/mbus-server
+  
+  - --mbus-server-port
+  
+    set server port:
+
+    - tcp: default is 8000
+    - uds: unused
+
+  - --mbus-client-name
+  
+    set client name, default: org.mbus.app.cli
 
 ## 5. library ##
 
