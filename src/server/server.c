@@ -3427,21 +3427,21 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		struct listener *listener;
 		listener = listener_create(listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
 		if (listener == NULL) {
-			mbus_errorf("can not create listener: tcps");
-			goto bail;
+			mbus_infof("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
+		} else {
+			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
+			mbus_infof("listening from: '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 		}
-		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
-		mbus_infof("listening from: '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 	}
 	if (server->options.udss.enabled == 1) {
 		struct listener *listener;
 		listener = listener_create(listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
 		if (listener == NULL) {
-			mbus_errorf("can not create listener: udss");
-			goto bail;
+			mbus_infof("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
+		} else {
+			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
+			mbus_infof("listening from: '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 		}
-		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
-		mbus_infof("listening from: '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 	}
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
@@ -3449,14 +3449,26 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		struct listener *listener;
 		listener = listener_create(listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
 		if (listener == NULL) {
-			mbus_errorf("can not create listener: wss");
-			goto bail;
+			mbus_infof("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
+		} else {
+			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
+			mbus_infof("listening from: '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 		}
-		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
-		mbus_infof("listening from: '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 	}
 #endif
 #endif
+	{
+		unsigned int nlisteners;
+		struct listener *listener;
+		nlisteners = 0;
+		TAILQ_FOREACH(listener, &server->listeners, listeners) {
+			nlisteners += 1;
+		}
+		if (nlisteners == 0) {
+			mbus_errorf("attached listener count: %d is invalid", nlisteners);
+			goto bail;
+		}
+	}
 	free(argv);
 	server->running = 1;
 	return server;
