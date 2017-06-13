@@ -25,7 +25,8 @@ libmbus-client.so_ldflags-y += \
 	-lmbus-clock \
 	-lmbus-buffer \
 	-lmbus-socket \
-	-lmbus-json
+	-lmbus-json \
+	-lpthread
 
 libmbus-client.so_ldflags-${SSL_ENABLE} += \
 	$(shell pkg-config --libs libssl) \

@@ -37,6 +37,8 @@
 #include <poll.h>
 #include <signal.h>
 
+#include <arpa/inet.h>
+
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
