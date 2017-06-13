@@ -37,7 +37,7 @@
 #include <sys/time.h>
 #include <arpa/inet.h>
 
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
@@ -126,7 +126,7 @@ struct mbus_client {
 		int ping_wait_pong;
 		int pong_missed_count;
 	} ping;
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	struct {
 		const SSL_METHOD *method;
 		SSL_CTX *context;
@@ -668,7 +668,7 @@ static void * client_worker (void *arg)
 		polls[0].revents = 0;
 		polls[0].fd = mbus_socket_get_fd(client->socket);
 		if (mbus_buffer_length(client->buffer.out) > 0
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 		    || client->ssl.want_write != 0
 #endif
 		) {
@@ -688,13 +688,13 @@ static void * client_worker (void *arg)
 				mbus_errorf("can not reserve client buffer");
 				goto bail;
 			}
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
 #endif
 				rc = read(mbus_socket_get_fd(client->socket),
 						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
 				client->ssl.want_read = 0;
 				rc = SSL_read(client->ssl.ssl,
@@ -831,11 +831,11 @@ skip_in:
 				mbus_errorf("logic error");
 				goto bail;
 			}
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
 #endif
 				rc = write(mbus_socket_get_fd(client->socket), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
 				client->ssl.want_write = 0;
 				rc = SSL_write(client->ssl.ssl, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
@@ -936,7 +936,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		memcpy(&options, _options, sizeof(struct mbus_client_options));
 	}
 
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL_library_init();
 	SSL_load_error_strings();
 	OpenSSL_add_ssl_algorithms();
@@ -1040,7 +1040,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_socket_set_keepintvl(client->socket, 60);
 #endif
 	}
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 	client->ssl.method = SSLv23_method();
 	if (client->ssl.method == NULL) {
@@ -1069,7 +1069,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_errorf("can not set socket to nonblocking");
 		goto bail;
 	}
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(client->socket));
 	rc = SSL_connect(client->ssl.ssl);
 	if (rc <= 0) {
@@ -1290,7 +1290,7 @@ void mbus_client_destroy (struct mbus_client *client)
 	if (client->buffer.out != NULL) {
 		mbus_buffer_destroy(client->buffer.out);
 	}
-#if defined(OPENSSL_ENABLE) && (OPENSSL_ENABLE == 1)
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (client->ssl.ssl != NULL) {
 		SSL_free(client->ssl.ssl);
 	}

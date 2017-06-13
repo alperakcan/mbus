@@ -1,5 +1,5 @@
 
-SSL_ENABLE ?= y
+SSL_ENABLE ?= n
 
 target.a-y = \
 	libmbus-client.a
@@ -16,8 +16,8 @@ libmbus-client.so_cflags-y += \
 libmbus-client.so_ldflags-y += \
 	-L../../dist/lib
 
-libmbus-client.so_cflags-${OPENSSL_ENABLE} += \
-	-DOPENSSL_ENABLE=1 \
+libmbus-client.so_cflags-${SSL_ENABLE} += \
+	-DSSL_ENABLE=1 \
 	$(shell pkg-config --cflags libssl)
 
 libmbus-client.so_ldflags-y += \
@@ -27,11 +27,11 @@ libmbus-client.so_ldflags-y += \
 	-lmbus-socket \
 	-lmbus-json
 
-libmbus-client.so_ldflags-${OPENSSL_ENABLE} += \
+libmbus-client.so_ldflags-${SSL_ENABLE} += \
 	$(shell pkg-config --libs libssl) \
 	$(shell pkg-config --libs libcrypto)
 
-libmbus-client.so_ldflags-${OPENSSL_ENABLE} += \
+libmbus-client.so_ldflags-${SSL_ENABLE} += \
 	-lpthread
 
 libmbus-client.a_cflags-y = \
