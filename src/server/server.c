@@ -3183,6 +3183,9 @@ void mbus_server_destroy (struct mbus_server *server)
 		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
 		listener_destroy(listener);
 	}
+	if (server->pollfds.pollfds != NULL) {
+		free(server->pollfds.pollfds);
+	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	EVP_cleanup();
 #endif
@@ -3202,6 +3205,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 
 	{
 		struct sigaction sa;
+		memset(&sa, 0, sizeof(struct sigaction));
 		sa.sa_handler = SIG_IGN;
 		sa.sa_flags = 0;
 		sigaction(SIGPIPE, &sa, 0);
