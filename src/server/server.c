@@ -2368,10 +2368,6 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 	if (protocol != NULL) {
 		listener = protocol->user;
 	}
-	if (protocol == NULL) {
-		mbus_errorf("can not get protocol");
-		goto bail;
-	}
 	switch (reason) {
 		case LWS_CALLBACK_LOCK_POLL:
 			mbus_debugf("  lock poll");
