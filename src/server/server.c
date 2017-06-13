@@ -2613,6 +2613,9 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				lws_callback_on_writable(data->wsi);
 			}
 			break;
+		case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS:
+			mbus_debugf("  load extra server verify certs");
+			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);
 			goto bail;
