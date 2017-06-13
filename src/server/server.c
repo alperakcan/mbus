@@ -60,13 +60,11 @@
 #include "server.h"
 
 #define BUFFER_OUT_CHUNK_SIZE (64 * 1024)
-#if (BUFFER_OUT_CHUNK_SIZE < LWS_PRE)
-#error "invalid BUFFER_OUT_CHUNK_SIZE"
-#endif
-
 #define BUFFER_IN_CHUNK_SIZE (64 * 1024)
-#if (BUFFER_IN_CHUNK_SIZE < LWS_PRE)
-#error "invalid BUFFER_IN_CHUNK_SIZE"
+
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_OUT_CHUNK_SIZE < LWS_PRE ? -1 : 0];
+static __attribute__((__unused__)) char __sizeof_check_buffer_in[BUFFER_IN_CHUNK_SIZE < LWS_PRE ? -1 : 0];
 #endif
 
 struct method {
