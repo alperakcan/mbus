@@ -2624,7 +2624,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			break;
 		default:
 			mbus_errorf("unknown reason: %d", reason);
-			goto bail;
+			break;
 	}
 	return 0;
 bail:	return -1;
