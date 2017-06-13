@@ -404,6 +404,8 @@ static const struct lws_extension ws_extensions[] = {
 	}
 };
 
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+
 static struct lws_protocols wss_protocols[] = {
 	{
 		"mbus",
@@ -441,6 +443,7 @@ static const struct lws_extension wss_extensions[] = {
 	}
 };
 
+#endif
 #endif
 
 static const char * command_get_identifier (struct command *command)
@@ -2357,9 +2360,12 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 	(void) len;
 	mbus_debugf("ws callback");
 	server = g_server;
+	listener = NULL;
 	data = (struct ws_client_data *) user;
 	protocol = lws_get_protocol(wsi);
-	listener = protocol->user;
+	if (protocol != NULL) {
+		listener = protocol->user;
+	}
 	if (protocol == NULL) {
 		mbus_errorf("can not get protocol");
 		goto bail;
@@ -3168,6 +3174,11 @@ void mbus_server_destroy (struct mbus_server *server)
 	if (server == NULL) {
 		return;
 	}
+	while (server->listeners.tqh_first != NULL) {
+		listener = server->listeners.tqh_first;
+		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
+		listener_destroy(listener);
+	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
 		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, clients);
@@ -3177,11 +3188,6 @@ void mbus_server_destroy (struct mbus_server *server)
 		method = server->methods.tqh_first;
 		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
 		method_destroy(method);
-	}
-	while (server->listeners.tqh_first != NULL) {
-		listener = server->listeners.tqh_first;
-		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
-		listener_destroy(listener);
 	}
 	if (server->pollfds.pollfds != NULL) {
 		free(server->pollfds.pollfds);
@@ -3401,7 +3407,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "uds", server->options.uds.address, server->options.uds.port);
 	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	if (server->options.ws.enabled == 1) {
 		struct listener *listener;
 		listener = listener_create(listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);

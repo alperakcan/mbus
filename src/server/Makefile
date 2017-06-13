@@ -1,5 +1,5 @@
 
-WS_ENABLE  ?= n
+WS_ENABLE  ?= y
 SSL_ENABLE ?= n
 
 target.a-y = \
