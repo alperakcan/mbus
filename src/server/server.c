@@ -2880,10 +2880,11 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			mbus_errorf("can not find client by socket");
 			goto bail;
 		}
-		if (client_get_listener_type(client) == listener_type_tcp &&
-		    client_get_listener_type(client) == listener_type_uds) {
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+		if (client_get_listener_type(client) == listener_type_ws) {
 			continue;
 		}
+#endif
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
 			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
 			if (rc != 0) {
