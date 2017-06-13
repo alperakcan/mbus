@@ -1,6 +1,6 @@
 
-WS_ENABLE  ?= y
-SSL_ENABLE ?= y
+WS_ENABLE  ?= n
+SSL_ENABLE ?= n
 
 target.a-y = \
 	libmbus-server.a
@@ -8,16 +8,16 @@ target.a-y = \
 target.so-y = \
 	libmbus-server.so
 
-libmbus-server.so_includes-y = \
-	../../dist/include
-
-libmbus-server.so_libraries-y = \
-	../../dist/lib
-
 libmbus-server.so_files-y = \
 	server.c
 
-libmbus-server.so_ldflags-y = \
+libmbus-server.so_cflags-y += \
+	-I../../dist/include
+
+libmbus-server.so_ldflags-y += \
+	-L../../dist/lib
+
+libmbus-server.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-buffer \
 	-lmbus-clock \

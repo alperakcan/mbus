@@ -37,12 +37,6 @@
 #include <poll.h>
 #include <signal.h>
 
-#undef WS_ENABLE
-#define WS_ENABLE 1
-
-#undef SSL_ENABLE
-#define SSL_ENABLE 1
-
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -144,8 +138,6 @@ struct listener {
 	} u;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	struct {
-		char *certificate;
-		char *privatekey;
 		SSL_CTX *context;
 	} ssl;
 #endif
@@ -848,12 +840,6 @@ static void listener_destroy (struct listener *listener)
 	}
 #endif
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (listener->ssl.certificate != NULL) {
-		free(listener->ssl.certificate);
-	}
-	if (listener->ssl.privatekey != NULL) {
-		free(listener->ssl.privatekey);
-	}
 	if (listener->ssl.context != NULL) {
 		SSL_CTX_free(listener->ssl.context);
 	}
@@ -883,8 +869,8 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		goto bail;
 	}
 	memset(listener, 0, sizeof(struct listener));
+	listener->type = type;
 	if (type == listener_type_tcp) {
-		listener->type = type;
 		listener->u.tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
 		if (listener->u.tcp.socket == NULL) {
 			mbus_errorf("can not create socket: '%s:%s:%d'", "tcp", address, port);
@@ -896,11 +882,11 @@ static struct listener * listener_create (enum listener_type type, const char *a
 			goto bail;
 		}
 		mbus_socket_set_keepalive(listener->u.tcp.socket, 1);
-	#if 0
+#if 0
 		mbus_socket_set_keepcnt(listener->u.tcp.socket, 20);
 		mbus_socket_set_keepidle(listener->u.tcp.socket, 180);
 		mbus_socket_set_keepintvl(listener->u.tcp.socket, 60);
-	#endif
+#endif
 		rc = mbus_socket_bind(listener->u.tcp.socket, address, port);
 		if (rc != 0) {
 			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", address, port);
@@ -994,12 +980,12 @@ static struct listener * listener_create (enum listener_type type, const char *a
 			goto bail;
 		}
 		SSL_CTX_set_ecdh_auto(listener->ssl.context, 1);
-		rc = SSL_CTX_use_certificate_file(listener->ssl.context, listener->ssl.certificate, SSL_FILETYPE_PEM);
+		rc = SSL_CTX_use_certificate_file(listener->ssl.context, certificate, SSL_FILETYPE_PEM);
 		if (rc <= 0) {
 			mbus_errorf("can not use ssl certificate: %s", certificate);
 			goto bail;
 		}
-		rc = SSL_CTX_use_PrivateKey_file(listener->ssl.context, listener->ssl.privatekey, SSL_FILETYPE_PEM);
+		rc = SSL_CTX_use_PrivateKey_file(listener->ssl.context, privatekey, SSL_FILETYPE_PEM);
 		if (rc <= 0) {
 			mbus_errorf("can not use ssl privatekey: %s", privatekey);
 			goto bail;
@@ -2848,7 +2834,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		{
 			struct listener *listener;
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
-				if (client_get_listener_type(client) == listener_type_tcp) {
+				if (listener_get_type(listener) == listener_type_tcp) {
 					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
 						if (server->pollfds.pollfds[c].revents & POLLIN) {
 							rc = server_accept_client(server, listener, listener->u.tcp.socket);
@@ -2857,11 +2843,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 								goto bail;
 							} else if (rc == -2) {
 								mbus_errorf("rejected new connection");
+							} else {
+								mbus_infof("accepted new client");
 							}
 						}
 					}
 				}
-				if (client_get_listener_type(client) == listener_type_uds) {
+				if (listener_get_type(listener) == listener_type_uds) {
 					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
 						if (server->pollfds.pollfds[c].revents & POLLIN) {
 							rc = server_accept_client(server, listener, listener->u.uds.socket);
@@ -2870,6 +2858,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 								goto bail;
 							} else if (rc == -2) {
 								mbus_errorf("rejected new connection");
+							} else {
+								mbus_infof("accepted new client");
 							}
 						}
 					}
@@ -3381,7 +3371,9 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 
 	mbus_infof("creating server");
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
+#endif
 
 	if (server->options.tcp.enabled == 1) {
 		struct listener *listener;
@@ -3403,6 +3395,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "uds", server->options.uds.address, server->options.uds.port);
 	}
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.ws.enabled == 1) {
 		struct listener *listener;
 		listener = listener_create(listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);
@@ -3413,6 +3406,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "ws", server->options.ws.address, server->options.ws.port);
 	}
+#endif
 	if (server->options.tcps.enabled == 1) {
 		struct listener *listener;
 		listener = listener_create(listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
@@ -3433,6 +3427,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 	}
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.wss.enabled == 1) {
 		struct listener *listener;
 		listener = listener_create(listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
@@ -3443,7 +3438,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 		TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 		mbus_infof("listening from: '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 	}
-
+#endif
 	free(argv);
 	server->running = 1;
 	return server;
