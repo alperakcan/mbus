@@ -176,6 +176,12 @@ int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name,
 	return 0;
 }
 
+int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, const char *string)
+{
+	mbus_cJSON_AddStringToObject((mbus_cJSON *) json, name, string);
+	return 0;
+}
+
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string)
 {
 	mbus_cJSON_AddStringToObjectCS((mbus_cJSON *) json, name, string);
