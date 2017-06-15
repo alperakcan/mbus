@@ -1833,7 +1833,7 @@ static int server_accept_client (struct mbus_server *server, struct listener *li
 					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
 					error = ERR_get_error();
 				}
-				goto bail;
+				goto reject;
 			}
 		}
 	}
@@ -1849,7 +1849,17 @@ bail:	if (socket != NULL) {
 	if (client != NULL) {
 		client_destroy(client);
 	}
-	return -1;
+	return -2;
+reject:	if (socket != NULL) {
+		if (client == NULL ||
+		    client_get_socket(client) != socket) {
+			mbus_socket_destroy(socket);
+		}
+	}
+	if (client != NULL) {
+		client_destroy(client);
+	}
+	return -2;
 }
 
 static int server_handle_command_create (struct mbus_server *server, struct method *method)
