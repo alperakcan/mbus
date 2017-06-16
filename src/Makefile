@@ -4,7 +4,6 @@ subdir-y = \
 	buffer \
 	client \
 	clock \
-	exec \
 	json \
 	method \
 	server \
@@ -23,9 +22,6 @@ client_depends-y = \
 	server
 
 clock_depends-y = \
-	debug
-
-exec_depends-y = \
 	debug
 
 method_depends-y = \
