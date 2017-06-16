@@ -1223,6 +1223,10 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 	int ch;
 	int o_optind;
 
+	int a;
+	char **_argv;
+
+	_argv = NULL;
 	o_optind = optind;
 
 	if (options == NULL) {
@@ -1232,7 +1236,12 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 	mbus_client_options_default(options);
 
 	optind = 1;
-	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
+	_argv = malloc(sizeof(char *) * argc);
+	for (a = 0; a < argc; a++) {
+		_argv[a] = argv[a];
+	}
+
+	while ((ch = getopt_long(argc, _argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
 			case OPTION_DEBUG_LEVEL:
 				mbus_debug_level = mbus_debug_level_from_string(optarg);
@@ -1265,8 +1274,12 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 	}
 
 	optind = o_optind;
+	free(_argv);
 	return 0;
-bail:	return -1;
+bail:	if (_argv != NULL) {
+		free(_argv);
+	}
+	return -1;
 }
 
 void mbus_client_destroy (struct mbus_client *client)
