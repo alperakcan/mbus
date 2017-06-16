@@ -25,7 +25,6 @@ install: app src test
 	install -m 0644 dist/include/mbus/client.h ${DESTDIR}/usr/local/include/mbus/client.h
 	install -m 0644 dist/include/mbus/clock.h ${DESTDIR}/usr/local/include/mbus/clock.h
 	install -m 0644 dist/include/mbus/debug.h ${DESTDIR}/usr/local/include/mbus/debug.h
-	install -m 0644 dist/include/mbus/exec.h ${DESTDIR}/usr/local/include/mbus/exec.h
 	install -m 0644 dist/include/mbus/json.h ${DESTDIR}/usr/local/include/mbus/json.h
 	install -m 0644 dist/include/mbus/method.h ${DESTDIR}/usr/local/include/mbus/method.h
 	install -m 0644 dist/include/mbus/server.h ${DESTDIR}/usr/local/include/mbus/server.h
@@ -37,7 +36,6 @@ install: app src test
 	install -m 0755 dist/lib/libmbus-client.so ${DESTDIR}/usr/local/lib/libmbus-client.so
 	install -m 0755 dist/lib/libmbus-clock.so ${DESTDIR}/usr/local/lib/libmbus-clock.so
 	install -m 0755 dist/lib/libmbus-debug.so ${DESTDIR}/usr/local/lib/libmbus-debug.so
-	install -m 0755 dist/lib/libmbus-exec.so ${DESTDIR}/usr/local/lib/libmbus-exec.so
 	install -m 0755 dist/lib/libmbus-json.so ${DESTDIR}/usr/local/lib/libmbus-json.so
 	install -m 0755 dist/lib/libmbus-json-cJSON.so ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so
 	install -m 0755 dist/lib/libmbus-server.so ${DESTDIR}/usr/local/lib/libmbus-server.so
@@ -48,7 +46,6 @@ install: app src test
 	install -m 0644 dist/lib/libmbus-client.a ${DESTDIR}/usr/local/lib/libmbus-client.a
 	install -m 0644 dist/lib/libmbus-clock.a ${DESTDIR}/usr/local/lib/libmbus-clock.a
 	install -m 0644 dist/lib/libmbus-debug.a ${DESTDIR}/usr/local/lib/libmbus-debug.a
-	install -m 0644 dist/lib/libmbus-exec.a ${DESTDIR}/usr/local/lib/libmbus-exec.a
 	install -m 0644 dist/lib/libmbus-json.a ${DESTDIR}/usr/local/lib/libmbus-json.a
 	install -m 0644 dist/lib/libmbus-json-cJSON.a ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.a
 	install -m 0644 dist/lib/libmbus-server.a ${DESTDIR}/usr/local/lib/libmbus-server.a
@@ -68,7 +65,6 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/include/mbus/client.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/clock.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/debug.h
-	rm -f ${DESTDIR}/usr/local/include/mbus/exec.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/json.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/method.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/server.h
@@ -80,7 +76,6 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-client.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-clock.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-debug.so
-	rm -f ${DESTDIR}/usr/local/lib/libmbus-exec.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.so
@@ -90,7 +85,6 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-client.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-clock.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-debug.a
-	rm -f ${DESTDIR}/usr/local/lib/libmbus-exec.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.a
