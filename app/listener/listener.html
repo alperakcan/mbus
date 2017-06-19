@@ -11,6 +11,9 @@
 
 			var url;
 	  		var mbc;
+			var timer;
+
+			timer = null;
 
 			function init()
 			{
@@ -19,16 +22,25 @@
 				mbc = new MBusClient();
 			
 				mbc.onConnected = function () {
-					mbc.subscribe("org.mbus.server", "org.mbus.method.event.status.all", function (source, event, payload) {
+					mbc.subscribe(MBUS_SERVER_NAME, MBUS_METHOD_STATUS_IDENTIFIER_ALL, function (source, event, payload) {
 						console.log(source + '.' + event, JSON.stringify(payload, null, '\t'));
 						writeToScreen(source + '.' + event + ':' + JSON.stringify(payload));
 					})
 					
-					mbc.subscribe(MBUS_METHOD_EVENT_SOURCE_ALL, "org.mbus.method.event.identifier.all", function (source, event, payload) {
+					mbc.subscribe(MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, function (source, event, payload) {
 						console.log(source + '.' + event, JSON.stringify(payload, null, '\t'));
 						writeToScreen(source + '.' + event + ':' + JSON.stringify(payload));
 					})
 				};
+
+				mbc.onDisconnected = function () {
+					if (timer !== null) {
+						clearTimeout(timer);
+					}
+					timer = setTimeout(function () {
+						mbc.connect(url);
+					}, 2000 + Math.floor(Math.random() * 2000));
+				}
 			 
 				if (typeof window.location.hostname !== 'string' ||
 				    window.location.hostname === '') {
