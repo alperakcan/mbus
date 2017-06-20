@@ -153,6 +153,35 @@
  */
 #define MBUS_SERVER_COMMAND_CLIENTS		"command.clients"
 
+/* command status
+ *
+ * input:
+ * {
+ *   "source": "application name",
+ * }
+ *
+ * output:
+ * {
+ *   "source": "application name",
+ *   "subscriptions": [
+ *     {
+ *       "source": "application name",
+ *       "identifier": "event name"
+ *     }
+ *     ..
+ *     .
+ *   ],
+ *   "commands": [
+ *     {
+ *       "identifier": "command name"
+ *     }
+ *     ..
+ *     .
+ *   ]
+ * }
+ */
+#define MBUS_SERVER_COMMAND_CLIENT		"command.client"
+
 /* command subscribe
  *
  * {
@@ -182,9 +211,9 @@
 /* command close
  *
  * input:
- *   {
- *     "source": "application name"
- *   }
+ * {
+ *   "source": "application name"
+ * }
  *
  * output:
  * {

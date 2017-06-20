@@ -2125,6 +2125,68 @@ command_status_bail:
 			if (clients != NULL) {
 				mbus_json_delete(clients);
 			}
+		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CLIENT) == 0) {
+			mbus_debugf("command client");
+			char address[1024];
+			struct mbus_json *result;
+			struct mbus_json *object;
+			struct mbus_json *commands;
+			struct mbus_json *subscribes;
+			struct command *command;
+			struct subscription *subscription;
+			const char *source;
+			result = NULL;
+			source = mbus_json_get_string_value(call, "source", NULL);
+			if (source == NULL) {
+				mbus_errorf("method request source is null");
+				goto command_client_bail;
+			}
+			client = server_find_client_by_name(server, source);
+			if (client == NULL) {
+				mbus_errorf("client: %s is not connected", source);
+				goto command_client_bail;
+			}
+			result = mbus_json_create_object();
+			if (result == NULL) {
+				goto command_client_bail;
+			}
+			mbus_json_add_string_to_object_cs(result, "source", client_get_name(client));
+			if (client_get_listener_type(client) == listener_type_tcp) {
+				mbus_json_add_string_to_object_cs(result, "address", mbus_socket_get_address(client_get_socket(client), address, 1024));
+			}
+			subscribes = mbus_json_create_array();
+			if (subscribes == NULL) {
+				goto command_client_bail;
+			}
+			mbus_json_add_item_to_object_cs(result, "subscriptions", subscribes);
+			TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
+				object = mbus_json_create_object();
+				if (object == NULL) {
+					goto command_client_bail;
+				}
+				mbus_json_add_item_to_array(subscribes, object);
+				mbus_json_add_string_to_object_cs(object, "source", subscription_get_source(subscription));
+				mbus_json_add_string_to_object_cs(object, "identifier", subscription_get_event(subscription));
+			}
+			commands = mbus_json_create_array();
+			if (commands == NULL) {
+				goto command_client_bail;
+			}
+			mbus_json_add_item_to_object_cs(result, "commands", commands);
+			TAILQ_FOREACH(command, &client->commands, commands) {
+				object = mbus_json_create_object();
+				if (object == NULL) {
+					goto command_client_bail;
+				}
+				mbus_json_add_item_to_array(commands, object);
+				mbus_json_add_string_to_object_cs(object, "identifier", command_get_identifier(command));
+			}
+			method_add_result_payload(method, "client", result);
+			goto out;
+command_client_bail:
+			if (result != NULL) {
+				mbus_json_delete(result);
+			}
 		} else if (strcmp(identifier, MBUS_SERVER_COMMAND_CLIENTS) == 0) {
 			mbus_debugf("command clients");
 			struct mbus_json *source;
