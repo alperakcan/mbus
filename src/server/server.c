@@ -2068,6 +2068,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		mbus_debugf("call from server");
 		if (strcmp(identifier, MBUS_SERVER_COMMAND_STATUS) == 0) {
 			mbus_debugf("command status");
+			char address[1024];
 			struct mbus_json *object;
 			struct mbus_json *source;
 			struct mbus_json *clients;
@@ -2087,6 +2088,9 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 				}
 				mbus_json_add_item_to_array(clients, source);
 				mbus_json_add_string_to_object_cs(source, "source", client_get_name(client));
+				if (client_get_listener_type(client) == listener_type_tcp) {
+					mbus_json_add_string_to_object_cs(source, "address", mbus_socket_get_address(client_get_socket(client), address, 1024));
+				}
 				subscribes = mbus_json_create_array();
 				if (subscribes == NULL) {
 					goto command_status_bail;

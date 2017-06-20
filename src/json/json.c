@@ -184,6 +184,12 @@ int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, co
 
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string)
 {
+	if (name == NULL) {
+		return -1;
+	}
+	if (string == NULL) {
+		return -1;
+	}
 	mbus_cJSON_AddStringToObjectCS((mbus_cJSON *) json, name, string);
 	return 0;
 }
