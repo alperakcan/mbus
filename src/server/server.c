@@ -2091,6 +2091,13 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 				if (client_get_listener_type(client) == listener_type_tcp) {
 					mbus_json_add_string_to_object_cs(source, "address", mbus_socket_get_address(client_get_socket(client), address, 1024));
 				}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+				if (client_get_listener_type(client) == listener_type_ws) {
+					struct ws_client_data *data;
+					data = (struct ws_client_data *) client_get_socket(client);
+					mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(lws_get_socket_fd(data->wsi), address, 1024));
+				}
+#endif
 				subscribes = mbus_json_create_array();
 				if (subscribes == NULL) {
 					goto command_status_bail;

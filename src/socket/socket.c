@@ -480,12 +480,12 @@ bail:	mbus_socket_destroy(s);
 	return NULL;
 }
 
-char * mbus_socket_get_address (struct mbus_socket *socket, char *buffer, int length)
+char * mbus_socket_fd_get_address (int fd, char *buffer, int length)
 {
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
 	addrlen = sizeof(addr);
-	if (getpeername(socket->fd, (struct sockaddr *) &addr, &addrlen) == 0) {
+	if (getpeername(fd, (struct sockaddr *) &addr, &addrlen) == 0) {
 		if (addr.ss_family == AF_INET) {
 			if (inet_ntop(AF_INET, &((struct sockaddr_in *) &addr)->sin_addr.s_addr, buffer, length)) {
 				return buffer;
@@ -497,6 +497,11 @@ char * mbus_socket_get_address (struct mbus_socket *socket, char *buffer, int le
 		}
 	}
 	return NULL;
+}
+
+char * mbus_socket_get_address (struct mbus_socket *socket, char *buffer, int length)
+{
+	return mbus_socket_fd_get_address(socket->fd, buffer, length);
 }
 
 int mbus_socket_read (struct mbus_socket *socket, void *vptr, int n)

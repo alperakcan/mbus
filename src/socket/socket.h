@@ -70,6 +70,7 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 int mbus_socket_listen (struct mbus_socket *socket, int backlog);
 struct mbus_socket * mbus_socket_accept (struct mbus_socket *socket);
 char * mbus_socket_get_address (struct mbus_socket *socket, char *buffer, int length);
+char * mbus_socket_fd_get_address (int fd, char *buffer, int length);
 
 int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsigned short port);
 
