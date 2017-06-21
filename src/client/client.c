@@ -1175,31 +1175,27 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[
 	int rc;
 	struct mbus_client *client;
 	struct mbus_client_options options;
-
+	client = NULL;
 	rc = mbus_client_options_default(&options);
 	if (rc != 0) {
 		mbus_errorf("can not get default options");
 		goto bail;
 	}
-
 	options.client.name = name;
 	if (name == NULL) {
 		options.client.name = "";
 		goto bail;
 	}
-
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
 		mbus_errorf("can not get options from argv");
 		goto bail;
 	}
-
 	client = mbus_client_create_with_options(&options);
 	if (client == NULL) {
 		mbus_errorf("can not create client with options");
 		goto bail;
 	}
-
 	return client;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
