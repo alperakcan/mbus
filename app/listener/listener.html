@@ -38,6 +38,7 @@
 						clearTimeout(timer);
 					}
 					timer = setTimeout(function () {
+						console.log("connecting to: " + url);
 						mbc.connect(url);
 					}, 2000 + Math.floor(Math.random() * 2000));
 				}
