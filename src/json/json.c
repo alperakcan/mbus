@@ -124,6 +124,9 @@ const char * mbus_json_get_name (const struct mbus_json *json)
 
 const char * mbus_json_get_value_string (const struct mbus_json *json)
 {
+	if (json == NULL) {
+		return NULL;
+	}
 	return ((mbus_cJSON *) json)->valuestring;
 }
 
@@ -139,11 +142,23 @@ int mbus_json_get_value_bool (const struct mbus_json *json)
 
 int mbus_json_get_array_size (const struct mbus_json *json)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (mbus_json_get_type(json) != mbus_json_type_array) {
+		return -1;
+	}
 	return mbus_cJSON_GetArraySize((mbus_cJSON *) json);
 }
 
 struct mbus_json * mbus_json_get_array_item (const struct mbus_json *json, int at)
 {
+	if (json == NULL) {
+		return NULL;
+	}
+	if (mbus_json_get_type(json) != mbus_json_type_array) {
+		return NULL;
+	}
 	return (struct mbus_json *) mbus_cJSON_GetArrayItem((mbus_cJSON *) json, at);
 }
 
