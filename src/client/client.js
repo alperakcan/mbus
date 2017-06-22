@@ -129,6 +129,7 @@ function MBusClient (name = "", options = {} ) {
 	this.onSubscribed = function (source, event) { };
 	this.onDisconnected = function () { };
 	
+	this._cname = name;
 	this._name = name;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
 	this._socket = null;
@@ -280,7 +281,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 
 	this._socket.onopen = this._scope(function open() {
 		var request;
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._cname, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 			this._sequence = MBUS_METHOD_SEQUENCE_START;

@@ -1128,6 +1128,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		int rc;
 		struct mbus_json *request;
 		struct mbus_json *request_ping;
+		struct mbus_json *request_compression;
 		struct mbus_json *result;
 		request = NULL;
 		result = NULL;
@@ -1137,6 +1138,10 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_json_add_number_to_object_cs(request_ping, "timeout", client->ping.timeout);
 		mbus_json_add_number_to_object_cs(request_ping, "threshold", client->ping.threshold);
 		mbus_json_add_item_to_object_cs(request, "ping", request_ping);
+		request_compression = mbus_json_create_array();
+		mbus_json_add_item_to_array(request_compression, mbus_json_create_string("none"));
+		mbus_json_add_item_to_array(request_compression, mbus_json_create_string("zlib"));
+		mbus_json_add_item_to_object_cs(request, "compression", request_compression);
 		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, request, &result);
 		if (rc != 0) {
 			mbus_errorf("can not send command");
@@ -1152,6 +1157,24 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 			mbus_json_delete(request);
 		}
 		if (result != NULL) {
+			{
+				const char *name;
+				name = mbus_json_get_string_value(result, "name", NULL);
+				if (name != NULL) {
+					free(client->name);
+					client->name = strdup(name);
+					if (client->name == NULL) {
+						mbus_errorf("can not allocate memory");
+						if (request != NULL) {
+							mbus_json_delete(request);
+						}
+						if (result != NULL) {
+							mbus_json_delete(result);
+						}
+						goto bail;
+					}
+				}
+			}
 			mbus_json_delete(result);
 		}
 		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, server_event_pong_callback, client);
