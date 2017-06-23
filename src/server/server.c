@@ -1987,6 +1987,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				mbus_debugf("compression: %s", "none");
 				client_set_compression(method_get_source(method), mbus_compress_method_none);
 			}
+			client_set_compression(method_get_source(method), mbus_compress_method_none);
 		}
 	}
 	mbus_infof("client created");
