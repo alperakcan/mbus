@@ -9,5 +9,5 @@ int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length);
 uint8_t * mbus_buffer_base (struct mbus_buffer *buffer);
 int mbus_buffer_reserve (struct mbus_buffer *buffer, unsigned int length);
 int mbus_buffer_push (struct mbus_buffer *buffer, const void *data, unsigned int length);
-int mbus_buffer_push_string (struct mbus_buffer *buffer, const char *string);
+int mbus_buffer_push_string (struct mbus_buffer *buffer, enum mbus_compress_method compression, const char *string);
 int mbus_buffer_shift (struct mbus_buffer *buffer, unsigned int length);

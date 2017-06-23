@@ -51,6 +51,7 @@
 #define MBUS_DEBUG_NAME	"mbus-server"
 
 #include "mbus/debug.h"
+#include "mbus/compress.h"
 #include "mbus/buffer.h"
 #include "mbus/clock.h"
 #include "mbus/tailq.h"
@@ -149,10 +150,21 @@ enum client_status {
 	client_status_connected		= 0x00000002,
 };
 
+static const struct {
+	const char *name;
+	enum mbus_compress_method value;
+} compression_methods[] = {
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
+	{ "zlib", mbus_compress_method_zlib },
+#endif
+	{ "none", mbus_compress_method_none },
+};
+
 struct client {
 	TAILQ_ENTRY(client) clients;
 	char *name;
 	enum client_status status;
+	enum mbus_compress_method compression;
 	enum listener_type type;
 	struct mbus_socket *socket;
 	struct {
@@ -1067,6 +1079,25 @@ static enum client_status client_get_status (struct client *client)
 	return client->status;
 }
 
+static int client_set_compression (struct client *client, enum mbus_compress_method compression)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return -1;
+	}
+	client->compression = compression;
+	return 0;
+}
+
+static enum mbus_compress_method client_get_compression (struct client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return 0;
+	}
+	return client->compression;
+}
+
 static int client_set_name (struct client *client, const char *name)
 {
 	if (client == NULL) {
@@ -1910,33 +1941,59 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	}
 	{
 		struct mbus_json *call;
-		struct mbus_json *ping;
 		call = mbus_json_get_object(method_get_request_payload(method), "call");
-		ping = mbus_json_get_object(call, "ping");
-		client->ping.interval = mbus_json_get_int_value(ping, "interval", -1);
-		client->ping.timeout = mbus_json_get_int_value(ping, "timeout", -1);
-		client->ping.threshold = mbus_json_get_int_value(ping, "threshold", -1);
-		if (client->ping.interval <= 0) {
-			client->ping.interval = 0;
+		{
+			struct mbus_json *ping;
+			ping = mbus_json_get_object(call, "ping");
+			client->ping.interval = mbus_json_get_int_value(ping, "interval", -1);
+			client->ping.timeout = mbus_json_get_int_value(ping, "timeout", -1);
+			client->ping.threshold = mbus_json_get_int_value(ping, "threshold", -1);
+			if (client->ping.interval <= 0) {
+				client->ping.interval = 0;
+			}
+			if (client->ping.timeout > (client->ping.interval * 2) / 3) {
+				client->ping.timeout = (client->ping.interval * 2) / 3;
+			}
+			if (client->ping.threshold <= 0) {
+				client->ping.threshold = 0;
+			}
+			if (client->ping.interval > 0) {
+				client->ping.enabled = 1;
+			}
+			client->ping.ping_recv_tsms = mbus_clock_get();
 		}
-		if (client->ping.timeout > (client->ping.interval * 2) / 3) {
-			client->ping.timeout = (client->ping.interval * 2) / 3;
+		{
+			int i;
+			int j;
+			struct mbus_json *compression;
+			compression = mbus_json_get_object(call, "compression");
+			for (i = 0; i < (int) (sizeof(compression_methods) / sizeof(compression_methods[0])); i++) {
+				for (j = 0; j < mbus_json_get_array_size(compression); j++) {
+					if (mbus_json_get_value_string(mbus_json_get_array_item(compression, j)) == NULL) {
+						continue;
+					}
+					if (strcmp(compression_methods[i].name, mbus_json_get_value_string(mbus_json_get_array_item(compression, j))) == 0) {
+						break;
+					}
+				}
+				if (j < mbus_json_get_array_size(compression)) {
+					break;
+				}
+			}
+			if (i < (int) (sizeof(compression_methods) / sizeof(compression_methods[0]))) {
+				mbus_debugf("compression: %s", compression_methods[i].name);
+				client_set_compression(method_get_source(method), compression_methods[i].value);
+			} else {
+				mbus_debugf("compression: %s", "none");
+				client_set_compression(method_get_source(method), mbus_compress_method_none);
+			}
 		}
-		if (client->ping.threshold <= 0) {
-			client->ping.threshold = 0;
-		}
-		if (client->ping.interval > 0) {
-			client->ping.enabled = 1;
-		}
-		client->ping.ping_recv_tsms = mbus_clock_get();
 	}
-	mbus_debugf("client: '%s' created", client_get_name(method_get_source(method)));
+	mbus_infof("client created");
+	mbus_infof("  name       : %s", client_get_name(method_get_source(method)));
+	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(method_get_source(method))));
 	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
-	rc = method_set_result_code(method, 0);
-	if (rc != 0) {
-		mbus_errorf("can not set method result code");
-		goto bail;
-	}
+	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
 	return 0;
 bail:	return -1;
 }
@@ -2365,22 +2422,24 @@ static int server_handle_methods (struct mbus_server *server)
 				}
 			}
 		}
-		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
-			response = 0;
-		}
 		if (rc != 0) {
 			mbus_errorf("can not execute method type: '%s', identifier: '%s'", method_get_request_type(method), method_get_request_identifier(method));
 		}
 		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
 			TAILQ_REMOVE(&server->methods, method, methods);
 		}
-		if (response == 1 || rc != 0) {
-			mbus_debugf("  push to result");
-			method_set_result_code(method, rc);
-			client_push_result(method_get_source(method), method);
+		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+			mbus_debugf("  push to trash");
+			method_destroy(method);
 		} else {
-			mbus_debugf("  push to wait");
-			TAILQ_INSERT_TAIL(&method_get_source(method)->waits, method, methods);
+			if (response == 1 || rc != 0) {
+				mbus_debugf("  push to result");
+				method_set_result_code(method, rc);
+				client_push_result(method_get_source(method), method);
+			} else {
+				mbus_debugf("  push to wait");
+				TAILQ_INSERT_TAIL(&method_get_source(method)->waits, method, methods);
+			}
 		}
 	}
 	return 0;
@@ -2630,7 +2689,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 					expected |= *ptr++ << 0x10;
 					expected |= *ptr++ << 0x18;
 					expected = ntohl(expected);
-					mbus_debugf("%d", expected);
+					mbus_debugf("expected %d", expected);
 					if (end - ptr < (int32_t) expected) {
 						break;
 					}
@@ -2767,15 +2826,28 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	}
 	mbus_debugf("  prepare out buffer");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+		enum mbus_compress_method compression;
 		mbus_debugf("    client: %s", client_get_name(client));
 		if (client_get_socket(client) == NULL) {
 			continue;
 		}
+		compression = client_get_compression(client);
 		if (client_get_results_count(client) > 0) {
 			method = client_pop_result(client);
 			if (method == NULL) {
 				mbus_errorf("could not pop result from client");
 				continue;
+			}
+			mbus_debugf("%s", method_get_request_string(method));
+			if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
+				if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
+					compression = mbus_compress_method_none;
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CALL) == 0) {
+					if (strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL), MBUS_SERVER_NAME) == 0 &&
+					    strcmp(mbus_json_get_string_value(method_get_request_payload(method), "identifier", NULL), MBUS_SERVER_COMMAND_CREATE) == 0) {
+						compression = mbus_compress_method_none;
+					}
+				}
 			}
 			string = method_get_result_string(method);
 		} else if (client_get_requests_count(client) > 0) {
@@ -2800,8 +2872,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			method_destroy(method);
 			goto bail;
 		}
-		mbus_debugf("send method to client: %s, %s", client_get_name(client), string);
-		rc = mbus_buffer_push_string(client->buffer.out, string);
+		mbus_debugf("send method to client: %s, %s, %s", client_get_name(client), mbus_compress_method_string(compression), string);
+		rc = mbus_buffer_push_string(client->buffer.out, compression, string);
 		if (rc != 0) {
 			mbus_errorf("can not push string");
 			method_destroy(method);

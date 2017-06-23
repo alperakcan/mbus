@@ -47,6 +47,7 @@
 
 #include "mbus/json.h"
 #include "mbus/debug.h"
+#include "mbus/compress.h"
 #include "mbus/buffer.h"
 #include "mbus/clock.h"
 #include "mbus/tailq.h"
@@ -111,8 +112,15 @@ struct command {
 };
 TAILQ_HEAD(commands, command);
 
+enum client_state {
+	client_state_initial,
+	client_state_created,
+};
+
 struct mbus_client {
+	enum client_state state;
 	char *name;
+	enum mbus_compress_method compression;
 	struct {
 		struct mbus_buffer *in;
 		struct mbus_buffer *out;
@@ -587,6 +595,32 @@ bail:	if (request != NULL) {
 	return NULL;
 }
 
+static int mbus_client_handle_command_create_result (struct mbus_client *client, struct mbus_json *result)
+{
+	{
+		const char *name;
+		name = mbus_json_get_string_value(result, "name", NULL);
+		if (name != NULL) {
+			free(client->name);
+			client->name = strdup(name);
+			if (client->name == NULL) {
+				mbus_errorf("can not allocate memory");
+				return -1;
+			}
+		}
+	}
+	{
+		const char *compression;
+		compression = mbus_json_get_string_value(result, "compression", "none");
+		client->compression = mbus_compress_method_value(compression);
+		if (client->compression == mbus_compress_method_unknown) {
+			mbus_errorf("unknown compression");
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static void * client_worker (void *arg)
 {
 	int rc;
@@ -650,7 +684,7 @@ static void * client_worker (void *arg)
 				goto bail;
 			}
 			mbus_debugf("request to server: %s", string);
-			rc = mbus_buffer_push_string(client->buffer.out, string);
+			rc = mbus_buffer_push_string(client->buffer.out, mbus_compress_method_none, string);
 			if (rc != 0) {
 				mbus_errorf("could not send request string");
 				goto bail;
@@ -743,7 +777,9 @@ static void * client_worker (void *arg)
 			{
 				uint8_t *ptr;
 				uint8_t *end;
+				uint8_t *data;
 				uint32_t expected;
+				uint32_t uncompressed;
 				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length");
@@ -766,19 +802,57 @@ static void * client_worker (void *arg)
 					if (end - ptr < (int32_t) expected) {
 						break;
 					}
-					mbus_debugf("message: '%.*s'", expected, ptr);
-					string = strndup((char *) ptr, expected);
-					if (string == NULL) {
-						mbus_errorf("can not allocate memory");
+					data = ptr;
+					if (client->state == client_state_initial) {
+						data = ptr;
+						uncompressed = expected;
+					} else if (client->state == client_state_created) {
+						if (client->compression != mbus_compress_method_none) {
+							int uncompressedlen;
+							memcpy(&uncompressed, ptr, sizeof(uncompressed));
+							uncompressed = ntohl(uncompressed);
+							mbus_debugf("  uncompressed: %d", uncompressed);
+							uncompressedlen = uncompressed;
+							rc = mbus_uncompress_data((void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
+							if (rc != 0) {
+								mbus_errorf("can not uncompress data");
+								goto bail;
+							}
+							if (uncompressedlen != (int) uncompressed) {
+								mbus_errorf("can not uncompress data");
+								goto bail;
+							}
+						} else {
+							data = ptr;
+							uncompressed = expected;
+						}
+					} else {
+						mbus_errorf("unknown client state");
 						goto bail;
 					}
 
-					mbus_debugf("request from server: %s", string);
+					mbus_debugf("message: '%.*s'", uncompressed, data);
+					string = strndup((char *) data, uncompressed);
+					if (string == NULL) {
+						mbus_errorf("can not allocate memory");
+						if (data != ptr) {
+							free(data);
+						}
+						goto bail;
+					}
+
 					method = method_create_from_string(string);
 					if (method == NULL) {
 						mbus_errorf("method create failed");
 						free(string);
+						if (data != ptr) {
+							free(data);
+						}
 						goto bail;
+					}
+					if (client->state == client_state_initial) {
+						mbus_client_handle_command_create_result(client, method_get_payload(method));
+						client->state = client_state_created;
 					}
 					pthread_mutex_lock(&client->mutex);
 					switch (method_get_type(method)) {
@@ -797,6 +871,9 @@ static void * client_worker (void *arg)
 								mbus_errorf("unknown result sequence");
 								pthread_mutex_unlock(&client->mutex);
 								free(string);
+								if (data != ptr) {
+									free(data);
+								}
 								method_destroy(method);
 								goto bail;
 							}
@@ -811,6 +888,9 @@ static void * client_worker (void *arg)
 							mbus_errorf("unknown method type");
 							pthread_mutex_unlock(&client->mutex);
 							free(string);
+							if (data != ptr) {
+								free(data);
+							}
 							method_destroy(method);
 							goto bail;
 					}
@@ -820,9 +900,15 @@ static void * client_worker (void *arg)
 					if (rc != 0) {
 						mbus_errorf("can not shift in");
 						free(string);
+						if (data != ptr) {
+							free(data);
+						}
 						goto bail;
 					}
 					free(string);
+					if (data != ptr) {
+						free(data);
+					}
 				}
 			}
 		}
@@ -1013,6 +1099,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct mbus_client));
+	client->state = client_state_initial;
 	client->incommand = 0;
 	client->sequence = MBUS_METHOD_SEQUENCE_START;
 	TAILQ_INIT(&client->methods);
@@ -1157,24 +1244,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 			mbus_json_delete(request);
 		}
 		if (result != NULL) {
-			{
-				const char *name;
-				name = mbus_json_get_string_value(result, "name", NULL);
-				if (name != NULL) {
-					free(client->name);
-					client->name = strdup(name);
-					if (client->name == NULL) {
-						mbus_errorf("can not allocate memory");
-						if (request != NULL) {
-							mbus_json_delete(request);
-						}
-						if (result != NULL) {
-							mbus_json_delete(result);
-						}
-						goto bail;
-					}
-				}
-			}
+			mbus_client_handle_command_create_result(client, result);
 			mbus_json_delete(result);
 		}
 		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, server_event_pong_callback, client);
@@ -1185,7 +1255,10 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		if (client->ping.interval > 0) {
 			client->ping.enabled = 1;
 		}
+		client->state = client_state_created;
 	}
+	mbus_infof("  name       : %s", client->name);
+	mbus_infof("  compression: %s", mbus_compress_method_string(client->compression));
 	return client;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);

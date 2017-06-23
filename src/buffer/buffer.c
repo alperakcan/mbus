@@ -36,6 +36,7 @@
 #define MBUS_DEBUG_NAME	"mbus-buffer"
 
 #include "mbus/debug.h"
+#include "mbus/compress.h"
 #include "buffer.h"
 
 struct mbus_buffer {
@@ -131,28 +132,58 @@ int mbus_buffer_push (struct mbus_buffer *buffer, const void *data, unsigned int
 	return 0;
 }
 
-int mbus_buffer_push_string (struct mbus_buffer *buffer, const char *string)
+int mbus_buffer_push_string (struct mbus_buffer *buffer, enum mbus_compress_method compression, const char *string)
 {
 	int rc;
+	void *compressed;
+	int compressedlength;
 	uint32_t length;
+	compressed = NULL;
 	if (string == NULL) {
 		mbus_errorf("string is invalid");
-		return -1;
+		goto bail;
 	}
-	length = strlen(string);
+	if (compression != mbus_compress_method_none) {
+		rc = mbus_compress_data(&compressed, &compressedlength, string, strlen(string));
+		if (rc != 0) {
+			mbus_errorf("can not compress data");
+			goto bail;
+		}
+		length = compressedlength + sizeof(length);
+	} else {
+		compressed = (void *) string;
+		compressedlength = strlen(compressed);
+		length = compressedlength;
+	}
 	length = htonl(length);
 	rc = mbus_buffer_push(buffer, &length, sizeof(length));
 	if (rc != 0) {
 		mbus_errorf("can not push length");
-		return -1;
+		goto bail;
 	}
-	length = ntohl(length);
-	rc = mbus_buffer_push(buffer, string, length);
+	if (compression != mbus_compress_method_none) {
+		length = htonl(strlen(string));
+		rc = mbus_buffer_push(buffer, &length, sizeof(length));
+		if (rc != 0) {
+			mbus_errorf("can not push length");
+			goto bail;
+		}
+	}
+	rc = mbus_buffer_push(buffer, compressed, compressedlength);
 	if (rc != 0) {
 		mbus_errorf("can not push string");
-		return -1;
+		goto bail;
+	}
+	if (compressed != NULL &&
+	    compressed != string) {
+		free(compressed);
 	}
 	return 0;
+bail:	if (compressed != NULL &&
+	    compressed != string) {
+		free(compressed);
+	}
+	return -1;
 }
 
 int mbus_buffer_shift (struct mbus_buffer *buffer, unsigned int length)

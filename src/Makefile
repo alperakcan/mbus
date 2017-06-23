@@ -4,6 +4,7 @@ subdir-y = \
 	buffer \
 	client \
 	clock \
+	compress \
 	json \
 	method \
 	server \
@@ -11,7 +12,8 @@ subdir-y = \
 	queue
 
 buffer_depends-y = \
-	debug
+	debug \
+	compress
 
 client_depends-y = \
 	debug \
@@ -31,6 +33,7 @@ server_depends-y = \
 	debug \
 	buffer \
 	clock \
+	compress \
 	json \
 	method \
 	socket \

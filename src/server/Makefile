@@ -1,6 +1,7 @@
 
-WS_ENABLE  ?= y
-SSL_ENABLE ?= y
+WS_ENABLE   ?= y
+SSL_ENABLE  ?= y
+ZLIB_ENABLE ?= y
 
 target.a-y = \
 	libmbus-server.a
@@ -21,6 +22,7 @@ libmbus-server.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-buffer \
 	-lmbus-clock \
+	-lmbus-compress \
 	-lmbus-socket \
 	-lmbus-json
 
@@ -38,6 +40,13 @@ libmbus-server.so_cflags-${WS_ENABLE} += \
 
 libmbus-server.so_ldflags-${WS_ENABLE} += \
 	$(shell pkg-config --libs libwebsockets)
+
+libmbus-server.so_cflags-${ZLIB_ENABLE} += \
+	-DZLIB_ENABLE=1 \
+	$(shell pkg-config --cflags zlib)
+
+libmbus-server.so_ldflags-${ZLIB_ENABLE} += \
+	$(shell pkg-config --libs zlib)
 
 libmbus-server.a_files-y = \
 	${libmbus-server.so_files-y}

@@ -23,6 +23,7 @@ libmbus-client.so_cflags-${SSL_ENABLE} += \
 libmbus-client.so_ldflags-y += \
 	-lmbus-debug \
 	-lmbus-clock \
+	-lmbus-compress \
 	-lmbus-buffer \
 	-lmbus-socket \
 	-lmbus-json \
