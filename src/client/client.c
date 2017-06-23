@@ -809,7 +809,7 @@ static void * client_worker (void *arg)
 							uncompressed = ntohl(uncompressed);
 							mbus_debugf("  uncompressed: %d", uncompressed);
 							uncompressedlen = uncompressed;
-							rc = mbus_uncompress_data((void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
+							rc = mbus_uncompress_data(client->compression, (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
 							if (rc != 0) {
 								mbus_errorf("can not uncompress data");
 								goto bail;

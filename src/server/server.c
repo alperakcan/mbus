@@ -3143,7 +3143,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						uncompressed = ntohl(uncompressed);
 						mbus_debugf("  uncompressed: %d", uncompressed);
 						uncompressedlen = uncompressed;
-						rc = mbus_uncompress_data((void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
+						rc = mbus_uncompress_data(client_get_compression(client), (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
 						if (rc != 0) {
 							mbus_errorf("can not uncompress data");
 							goto bail;

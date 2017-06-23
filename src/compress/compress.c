@@ -3,12 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
 #include <zlib.h>
+#endif
 
 #include "mbus/debug.h"
 #include "compress.h"
 
-int mbus_compress_data (void **dst, int *dstlen, const void *src, int srclen)
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
+
+static int zlib_compress_data (void **dst, int *dstlen, const void *src, int srclen)
 {
 	int rc;
 	Bytef *compressed;
@@ -51,7 +55,7 @@ bail:	if (compressed != NULL) {
 	return -1;
 }
 
-int mbus_uncompress_data (void **dst, int *dstlen, const void *src, int srclen)
+static int zlib_uncompress_data (void **dst, int *dstlen, const void *src, int srclen)
 {
 	int rc;
 	Bytef *uncompressed;
@@ -95,6 +99,28 @@ int mbus_uncompress_data (void **dst, int *dstlen, const void *src, int srclen)
 bail:	if (uncompressed != NULL) {
 		free(uncompressed);
 	}
+	return -1;
+}
+
+#endif
+
+int mbus_compress_data (enum mbus_compress_method compression, void **dst, int *dstlen, const void *src, int srclen)
+{
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
+	if (compression == mbus_compress_method_zlib) {
+		return zlib_compress_data(dst, dstlen, src, srclen);
+	}
+#endif
+	return -1;
+}
+
+int mbus_uncompress_data (enum mbus_compress_method compression, void **dst, int *dstlen, const void *src, int srclen)
+{
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
+	if (compression == mbus_compress_method_zlib) {
+		return zlib_uncompress_data(dst, dstlen, src, srclen);
+	}
+#endif
 	return -1;
 }
 

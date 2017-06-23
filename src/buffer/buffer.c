@@ -144,7 +144,7 @@ int mbus_buffer_push_string (struct mbus_buffer *buffer, enum mbus_compress_meth
 		goto bail;
 	}
 	if (compression != mbus_compress_method_none) {
-		rc = mbus_compress_data(&compressed, &compressedlength, string, strlen(string));
+		rc = mbus_compress_data(compression, &compressed, &compressedlength, string, strlen(string));
 		if (rc != 0) {
 			mbus_errorf("can not compress data");
 			goto bail;

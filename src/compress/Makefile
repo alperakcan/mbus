@@ -26,11 +26,14 @@ libmbus-compress.so_cflags-${ZLIB_ENABLE} += \
 libmbus-compress.so_ldflags-${ZLIB_ENABLE} += \
 	$(shell pkg-config --libs zlib)
 
-libmbus-compress.a_includes-y = \
+libmbus-compress.a_includes-y += \
 	${libmbus-compress.so_includes-y}
 
-libmbus-compress.a_files-y = \
+libmbus-compress.a_files-y += \
 	${libmbus-compress.so_files-y}
+
+libmbus-compress.a_cflags-y += \
+	${libmbus-compress.so_cflags-y}
 
 distdir = ../../dist
 
