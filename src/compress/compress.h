@@ -1,6 +1,5 @@
 
 enum mbus_compress_method {
-	mbus_compress_method_unknown,
 	mbus_compress_method_none,
 	mbus_compress_method_zlib
 };

@@ -613,10 +613,6 @@ static int mbus_client_handle_command_create_result (struct mbus_client *client,
 		const char *compression;
 		compression = mbus_json_get_string_value(result, "compression", "none");
 		client->compression = mbus_compress_method_value(compression);
-		if (client->compression == mbus_compress_method_unknown) {
-			mbus_errorf("unknown compression");
-			return -1;
-		}
 	}
 	return 0;
 }
@@ -683,8 +679,8 @@ static void * client_worker (void *arg)
 				mbus_errorf("could not get request string");
 				goto bail;
 			}
-			mbus_debugf("request to server: %s", string);
-			rc = mbus_buffer_push_string(client->buffer.out, mbus_compress_method_none, string);
+			mbus_debugf("request to server: %s, %s", mbus_compress_method_string(client->compression), string);
+			rc = mbus_buffer_push_string(client->buffer.out, client->compression, string);
 			if (rc != 0) {
 				mbus_errorf("could not send request string");
 				goto bail;

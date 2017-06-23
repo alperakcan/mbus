@@ -3108,7 +3108,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			} else {
 				uint8_t *ptr;
 				uint8_t *end;
+				uint8_t *data;
 				uint32_t expected;
+				uint32_t uncompressed;
 				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
@@ -3132,19 +3134,41 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					if (end - ptr < (int32_t) expected) {
 						break;
 					}
-					mbus_debugf("message: '%.*s'", expected, ptr);
-					string = strndup((char *) ptr, expected);
+					data = ptr;
+					if (client_get_compression(client) == mbus_compress_method_none) {
+						data = ptr;
+						uncompressed = expected;
+					} else {
+						int uncompressedlen;
+						memcpy(&uncompressed, ptr, sizeof(uncompressed));
+						uncompressed = ntohl(uncompressed);
+						mbus_debugf("  uncompressed: %d", uncompressed);
+						uncompressedlen = uncompressed;
+						rc = mbus_uncompress_data((void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
+						if (rc != 0) {
+							mbus_errorf("can not uncompress data");
+							goto bail;
+						}
+						if (uncompressedlen != (int) uncompressed) {
+							mbus_errorf("can not uncompress data");
+							goto bail;
+						}
+					}
+					mbus_debugf("message: '%.*s'", uncompressed, data);
+					string = strndup((char *) data, uncompressed);
 					if (string == NULL) {
 						mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_name(client));
 						client_set_socket(client, NULL);
 						break;
 					}
-					mbus_debugf("new request from client: '%s', '%s'", client_get_name(client), string);
 					rc = server_handle_method(server, client, string);
 					if (rc != 0) {
 						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_name(client));
 						client_set_socket(client, NULL);
 						free(string);
+						if (data != ptr) {
+							free(data);
+						}
 						break;
 					}
 					rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
@@ -3152,9 +3176,15 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						mbus_errorf("can not shift in, closing client: '%s' connection", client_get_name(client));
 						client_set_socket(client, NULL);
 						free(string);
+						if (data != ptr) {
+							free(data);
+						}
 						break;
 					}
 					free(string);
+					if (data != ptr) {
+						free(data);
+					}
 				}
 			}
 		}
