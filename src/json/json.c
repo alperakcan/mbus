@@ -105,15 +105,13 @@ enum mbus_json_type mbus_json_get_type (const struct mbus_json *json)
 	if (json == NULL) {
 		return mbus_json_type_unknown;
 	}
-	switch (((mbus_cJSON *) json)->type) {
-		case mbus_cJSON_False:	return mbus_json_type_false;
-		case mbus_cJSON_True:	return mbus_json_type_true;
-		case mbus_cJSON_NULL:	return mbus_json_type_null;
-		case mbus_cJSON_Number:	return mbus_json_type_number;
-		case mbus_cJSON_String:	return mbus_json_type_string;
-		case mbus_cJSON_Array:	return mbus_json_type_array;
-		case mbus_cJSON_Object:	return mbus_json_type_object;
-	}
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_False)	return mbus_json_type_false;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_True)	return mbus_json_type_true;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_NULL)	return mbus_json_type_null;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_Number)	return mbus_json_type_number;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_String)	return mbus_json_type_string;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_Array)	return mbus_json_type_array;
+	if (((mbus_cJSON *) json)->type & mbus_cJSON_Object)	return mbus_json_type_object;
 	return mbus_json_type_unknown;
 }
 
