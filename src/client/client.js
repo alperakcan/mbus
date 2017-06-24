@@ -194,11 +194,13 @@ function MBusClient (name = "", options = {} ) {
 	}
 
 	this._pingSend = function (mbc) {
-		mbc.eventAsyncTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, null);
+		console.log("ping");
+		mbc.eventTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, null);
 		mbc._pingCheckTimer = setTimeout(mbc._pingCheck, mbc._ping['timeout'], mbc)
 	}
 
 	this._pongRecv = function (source, event, payload, mbc) {
+		console.log("pong");
 		mbc._pingWaitPong = 0;
 		mbc._pingMissedCount = 0;
 		if (mbc._pingCheckTimer !== null) {
@@ -338,7 +340,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		var options;
 		options = {};
 		options['ping'] = {};
-		options['ping']['interval'] = 300000;
+		options['ping']['interval'] = 180000;
 		options['ping']['timeout'] = 5000;
 		options['ping']['threshold'] = 2;
 		options['compression'] = [];
@@ -460,7 +462,7 @@ MBusClient.prototype.event = function (identifier, event) {
 	this._scheduleRequests();
 }
 
-MBusClient.prototype.eventAsyncTo = function (to, identifier, event) {
+MBusClient.prototype.eventTo = function (to, identifier, event) {
 	var request;
 	var payload;
 	if (event == null) {

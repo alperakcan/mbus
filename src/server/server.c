@@ -2008,6 +2008,11 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	mbus_infof("client created");
 	mbus_infof("  name       : %s", client_get_name(method_get_source(method)));
 	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+	mbus_infof("  ping");
+	mbus_infof("    enabled  : %d", client->ping.enabled);
+	mbus_infof("    interval : %d", client->ping.interval);
+	mbus_infof("    timeout  : %d", client->ping.timeout);
+	mbus_infof("    threshold: %d", client->ping.threshold);
 	{
 		struct mbus_json *ping;
 
