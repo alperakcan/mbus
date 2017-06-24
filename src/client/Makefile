@@ -1,5 +1,6 @@
 
-SSL_ENABLE ?= y
+SSL_ENABLE  ?= y
+ZLIB_ENABLE ?= y
 
 target.a-y = \
 	libmbus-client.a
@@ -35,6 +36,13 @@ libmbus-client.so_ldflags-${SSL_ENABLE} += \
 
 libmbus-client.so_ldflags-${SSL_ENABLE} += \
 	-lpthread
+
+libmbus-client.so_cflags-${ZLIB_ENABLE} += \
+	-DZLIB_ENABLE=1 \
+	$(shell pkg-config --cflags zlib)
+
+libmbus-client.so_ldflags-${ZLIB_ENABLE} += \
+	$(shell pkg-config --libs zlib)
 
 libmbus-client.a_cflags-y = \
 	${libmbus-client.so_cflags-y}

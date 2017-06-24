@@ -1016,6 +1016,15 @@ bail:	if (listener != NULL) {
 	return NULL;
 }
 
+static struct mbus_socket * client_get_socket (struct client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return NULL;
+	}
+	return client->socket;
+}
+
 static int client_set_socket (struct client *client, struct mbus_socket *socket)
 {
 	if (client == NULL) {
@@ -1026,10 +1035,20 @@ static int client_set_socket (struct client *client, struct mbus_socket *socket)
 		if (client->socket != NULL) {
 			if (client->type == listener_type_tcp) {
 				mbus_socket_destroy(client->socket);
+				client->socket = NULL;
 			}
 			if (client->type == listener_type_uds) {
 				mbus_socket_destroy(client->socket);
+				client->socket = NULL;
 			}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+			if (client->type == listener_type_ws) {
+				struct ws_client_data *data;
+				data = (struct ws_client_data *) client_get_socket(client);
+				data->client = NULL;
+				lws_callback_on_writable(data->wsi);
+			}
+#endif
 			client->socket = NULL;
 		}
 	} else {
@@ -1040,15 +1059,6 @@ static int client_set_socket (struct client *client, struct mbus_socket *socket)
 		client->socket = socket;
 	}
 	return 0;
-}
-
-static struct mbus_socket * client_get_socket (struct client *client)
-{
-	if (client == NULL) {
-		mbus_errorf("client is null");
-		return NULL;
-	}
-	return client->socket;
 }
 
 static enum listener_type client_get_listener_type (struct client *client)
@@ -1439,6 +1449,9 @@ static struct client * server_find_client_by_fd (struct mbus_server *server, int
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
+		if (client_get_socket(client) == NULL) {
+			continue;
+		}
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 		if (client_get_listener_type(client) == listener_type_ws) {
 			struct ws_client_data *data;
@@ -1942,6 +1955,9 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	{
 		struct mbus_json *call;
 		call = mbus_json_get_object(method_get_request_payload(method), "call");
+		if (call == NULL) {
+			call = method_get_request_payload(method);
+		}
 		{
 			struct mbus_json *ping;
 			ping = mbus_json_get_object(call, "ping");
@@ -1992,8 +2008,19 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	mbus_infof("client created");
 	mbus_infof("  name       : %s", client_get_name(method_get_source(method)));
 	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(method_get_source(method))));
-	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
-	mbus_json_add_string_to_object_cs(method_get_result_payload(method), "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+	{
+		struct mbus_json *ping;
+
+		mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
+
+		mbus_json_add_string_to_object_cs(method_get_result_payload(method), "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+
+		ping = mbus_json_create_object();
+		mbus_json_add_number_to_object_cs(ping, "interval", client->ping.interval);
+		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping.timeout);
+		mbus_json_add_number_to_object_cs(ping, "threshold", client->ping.threshold);
+		mbus_json_add_item_to_object_cs(method_get_result_payload(method), "ping", ping);
+	}
 	return 0;
 bail:	return -1;
 }

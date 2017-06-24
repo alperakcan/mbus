@@ -1223,7 +1223,9 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		mbus_json_add_item_to_object_cs(request, "ping", request_ping);
 		request_compression = mbus_json_create_array();
 		mbus_json_add_item_to_array(request_compression, mbus_json_create_string("none"));
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
 		mbus_json_add_item_to_array(request_compression, mbus_json_create_string("zlib"));
+#endif
 		mbus_json_add_item_to_object_cs(request, "compression", request_compression);
 		rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, request, &result);
 		if (rc != 0) {

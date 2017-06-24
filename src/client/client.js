@@ -45,6 +45,9 @@ const MBUS_SERVER_EVENT_DISCONNECTED			= "event.disconnected";
 const MBUS_SERVER_EVENT_SUBSCRIBED				= "event.subscribed";
 const MBUS_SERVER_EVENT_UNSUBSCRIBED			= "event.unsubscribed";
 
+const MBUS_SERVER_EVENT_PING					= "event.ping";
+const MBUS_SERVER_EVENT_PONG					= "event.pong";
+
 function MBusClientRequest (type, source, destination, identifier, sequence, payload, callback)
 {
 	if (this instanceof MBusClientRequest == false) {
@@ -97,11 +100,11 @@ MBusClientRequest.prototype.stringify = function () {
 	return JSON.stringify(request);
 }
 
-function MBusClientCallback (source, event, callback)
+function MBusClientCallback (source, event, callback, context)
 {
 	var cb;
 	if (this instanceof MBusClientCallback == false) {
-		return new MBusClientCallback(source, event, callback);
+		return new MBusClientCallback(source, event, callback, context);
 	}
 	if (typeof source !== 'string') {
 		return null;
@@ -116,6 +119,7 @@ function MBusClientCallback (source, event, callback)
 	this._source = source;
 	this._event = event;
 	this._callback = callback;
+	this._context = context;
 }
 
 function MBusClient (name = "", options = {} ) {
@@ -131,6 +135,12 @@ function MBusClient (name = "", options = {} ) {
 	
 	this._cname = name;
 	this._name = name;
+	this._ping = null;
+	this._pingWaitPong = 0;
+	this._pingMissedCount = 0;
+	this._pingTimer = null;
+	this._pingCheckTimer = null;
+	this._compression = null;
 	this._sequence = MBUS_METHOD_SEQUENCE_START;
 	this._socket = null;
 	this._requests = Array();
@@ -146,20 +156,20 @@ function MBusClient (name = "", options = {} ) {
 	
 	this._sendString = function (message) {
 		var b;
-	    	var s;
+		var s;
 		if (typeof message !== 'string') {
 			return false;
 		}
-	    	s = new TextEncoder("utf-8").encode(message);
-	    	b = new Uint8Array(4 + s.length);
-	    	b.fill(0);
-	    	b[0] = s.length >> 0x16;
-	    	b[1] = s.length >> 0x10;
-	    	b[2] = s.length >> 0x08;
-	    	b[3] = s.length >> 0x00;
-	    	b.set(s, 4);
-	    	this._socket.send(b);
-	    	return true;
+		s = new TextEncoder("utf-8").encode(message);
+		b = new Uint8Array(4 + s.length);
+		b.fill(0);
+		b[0] = s.length >> 0x16;
+		b[1] = s.length >> 0x10;
+		b[2] = s.length >> 0x08;
+		b[3] = s.length >> 0x00;
+		b.set(s, 4);
+		this._socket.send(b);
+		return true;
 	}
 	
 	this._scheduleRequests = function () {
@@ -167,7 +177,33 @@ function MBusClient (name = "", options = {} ) {
 		while (this._requests.length > 0) {
 			request = this._requests.shift();
 			this._sendString(request.stringify());
-			this._pendings.push(request);
+			if (request._type !== MBUS_METHOD_TYPE_EVENT) {
+				this._pendings.push(request);
+			}
+		}
+	}
+
+	this._pingCheck = function (mbc) {
+		console.log("check");
+		mbc._pingWaitPong = 0;
+		mbc._pingMissedCount += 1;
+		if (mbc._pingMissedCount > mbc._ping['threshold']) {
+			console.log("missed too many pongs, ", mbc._pingMissedCount, " > ", mbc._ping['threshold']);
+			mbc._socket.close();
+		}
+	}
+
+	this._pingSend = function (mbc) {
+		mbc.eventAsyncTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, null);
+		mbc._pingCheckTimer = setTimeout(mbc._pingCheck, mbc._ping['timeout'], mbc)
+	}
+
+	this._pongRecv = function (source, event, payload, mbc) {
+		mbc._pingWaitPong = 0;
+		mbc._pingMissedCount = 0;
+		if (mbc._pingCheckTimer !== null) {
+			clearTimeout(mbc._pingCheckTimer);
+			mbc._pingCheckTimer = null;
 		}
 	}
 	
@@ -196,6 +232,23 @@ function MBusClient (name = "", options = {} ) {
 		    request._destination == MBUS_SERVER_NAME &&
 		    request._identifier == MBUS_SERVER_COMMAND_CREATE) {
 		    this._name = object['payload']['name'];
+		    this._ping = object['payload']['ping'];
+			if (this._pingTimer !== null) {
+				clearInterval(this._pingTimer);
+			}
+			if (this._pingCheckTimer !== null) {
+				clearInterval(this._pingCheckTimer);
+			}
+			this._pingWaitPong = 0;
+			this._pingMissedCount = 0;
+			this._pingTimer = null;
+			this._pingCheckTimer = null;
+			if (this._ping !== undefined &&
+				this._ping !== null &&
+				this._ping['interval'] > 0) {
+				this._pingTimer = setInterval(this._pingSend, this._ping['interval'], this);
+				this.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
+			}
 			this.onConnected();
 		} else if (request._type == MBUS_METHOD_TYPE_COMMAND &&
 		    request._destination == MBUS_SERVER_NAME &&
@@ -217,18 +270,19 @@ function MBusClient (name = "", options = {} ) {
 	}
 
 	this._handleEvent = function (object) {
-		this._callbacks.forEach(function (callback) {
+		this._callbacks.every(function (callback) {
 			if (callback._source !== MBUS_METHOD_EVENT_SOURCE_ALL) {
 				if (object['source'] !== callback._source) {
-					return;
+					return true;
 				}
 			}
 			if (callback._event !== MBUS_METHOD_EVENT_IDENTIFIER_ALL) {
 				if (object['identifier'] !== callback._event) {
-					return;
+					return true;
 				}
 			}
-			callback._callback(object['source'], object['identifier'], object['payload']);
+			callback._callback(object['source'], object['identifier'], object['payload'], callback._context);
+			return false;
 		})
 	}
 	
@@ -281,7 +335,27 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 
 	this._socket.onopen = this._scope(function open() {
 		var request;
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._cname, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, null);
+		var options;
+		options = {};
+		options['ping'] = {};
+		options['ping']['interval'] = 300000;
+		options['ping']['timeout'] = 5000;
+		options['ping']['threshold'] = 2;
+		options['compression'] = [];
+		options['compression'].push("none");
+		if (this._pingTimer !== null) {
+			clearInterval(this._pingTimer);
+		}
+		if (this._pingCheckTimer !== null) {
+			clearInterval(this._pingCheckTimer);
+		}
+		this._ping = null;
+		this._pingWaitPong = 0;
+		this._pingMissedCount = 0;
+		this._pingTimer = null;
+		this._pingCheckTimer = null;
+		this._compression = null;
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._cname, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 			this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -301,6 +375,18 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 
 	this._socket.onclose =  this._scope(function close(event) {
 		console.log('close, event:', event.code, event.reason);
+		if (this._pingTimer !== null) {
+			clearInterval(this._pingTimer);
+		}
+		if (this._pingCheckTimer !== null) {
+			clearInterval(this._pingCheckTimer);
+		}
+		this._ping = null;
+		this._pingWaitPong = 0;
+		this._pingMissedCount = 0;
+		this._pingTimer = null;
+		this._pingCheckTimer = null;
+		this._compression = null;
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
 		this._socket = null;
 		this._requests = Array();
@@ -312,6 +398,18 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 
 	this._socket.onerror = this._scope(function error(event) {
 		console.log('error, event:', event);
+		if (this._pingTimer !== null) {
+			clearInterval(this._pingTimer);
+		}
+		if (this._pingCheckTimer !== null) {
+			clearInterval(this._pingCheckTimer);
+		}
+		this._ping = null;
+		this._pingWaitPong = 0;
+		this._pingMissedCount = 0;
+		this._pingTimer = null;
+		this._pingCheckTimer = null;
+		this._compression = null;
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
 		this._socket = null;
 		this._requests = Array();
@@ -322,7 +420,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 	}, this);
 }
 
-MBusClient.prototype.subscribe = function (source, event, callback) {
+MBusClient.prototype.subscribe = function (source, event, callback, context) {
 	var request;
 	var payload;
 	payload = {
@@ -338,7 +436,7 @@ MBusClient.prototype.subscribe = function (source, event, callback) {
 	this._scheduleRequests();
 
 	var cb;
-	cb = MBusClientCallback(source, event, callback);
+	cb = MBusClientCallback(source, event, callback, context);
 	this._callbacks.push(cb);
 }
 
@@ -354,6 +452,26 @@ MBusClient.prototype.event = function (identifier, event) {
 		event: event,
 	};
 	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
+	this._sequence += 1;
+	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
+		this._sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	this._requests.push(request);
+	this._scheduleRequests();
+}
+
+MBusClient.prototype.eventAsyncTo = function (to, identifier, event) {
+	var request;
+	var payload;
+	if (event == null) {
+		event = {};
+	}
+	payload = {
+		destination: to,
+		identifier: identifier,
+		event: event,
+	};
+	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
