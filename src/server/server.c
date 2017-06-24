@@ -898,7 +898,7 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		}
 		mbus_socket_set_keepalive(listener->u.tcp.socket, 1);
 #if 0
-		mbus_socket_set_keepcnt(listener->u.tcp.socket, 20);
+		mbus_socket_set_keepcnt(listener->u.tcp.socket, 5);
 		mbus_socket_set_keepidle(listener->u.tcp.socket, 180);
 		mbus_socket_set_keepintvl(listener->u.tcp.socket, 60);
 #endif

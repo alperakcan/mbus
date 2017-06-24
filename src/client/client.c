@@ -1137,7 +1137,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	    socket_type == mbus_socket_type_sock_stream) {
 		mbus_socket_set_keepalive(client->socket, 1);
 #if 0
-		mbus_socket_set_keepcnt(client->socket, 20);
+		mbus_socket_set_keepcnt(client->socket, 5);
 		mbus_socket_set_keepidle(client->socket, 180);
 		mbus_socket_set_keepintvl(client->socket, 60);
 #endif
