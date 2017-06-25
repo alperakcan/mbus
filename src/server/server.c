@@ -2608,16 +2608,9 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				mbus_debugf("    fd: %d", pa->fd);
 				for (i = 0; i < listener->u.ws.pollfds.length; i++) {
 					if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
-						memmove(&listener->u.ws.pollfds.pollfds[i], &listener->u.ws.pollfds.pollfds[i + 1], listener->u.ws.pollfds.length - i - 1);
+						memmove(&listener->u.ws.pollfds.pollfds[i], &listener->u.ws.pollfds.pollfds[i + 1], sizeof(struct pollfd) * (listener->u.ws.pollfds.length - i - 1));
 						listener->u.ws.pollfds.length -= 1;
 						break;
-					}
-				}
-				{
-					unsigned int i;
-					mbus_debugf("    pollfds: %d", listener->u.ws.pollfds.length);
-					for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-						mbus_debugf("      fd: %d, events: 0x%08x", listener->u.ws.pollfds.pollfds[i].fd, listener->u.ws.pollfds.pollfds[i].events);
 					}
 				}
 			}
