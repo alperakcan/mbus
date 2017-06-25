@@ -2613,6 +2613,13 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 						break;
 					}
 				}
+				{
+					unsigned int i;
+					mbus_debugf("    pollfds: %d", listener->u.ws.pollfds.length);
+					for (i = 0; i < listener->u.ws.pollfds.length; i++) {
+						mbus_debugf("      fd: %d, events: 0x%08x", listener->u.ws.pollfds.pollfds[i].fd, listener->u.ws.pollfds.pollfds[i].events);
+					}
+				}
 			}
 			break;
 		case LWS_CALLBACK_UNLOCK_POLL:
