@@ -3010,12 +3010,26 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 #endif
 	}
+	{
+		unsigned int i;
+		mbus_debugf("    pollfds: %d", n);
+		for (i = 0; i < n; i++) {
+			mbus_debugf("      fd: %d, events: 0x%08x", server->pollfds.pollfds[i].fd, server->pollfds.pollfds[i].events);
+		}
+	}
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	{
 		struct listener *listener;
 		TAILQ_FOREACH(listener, &server->listeners, listeners) {
 			if (listener_get_type(listener) == listener_type_ws) {
 				if (listener->u.ws.pollfds.length > 0) {
+					{
+						unsigned int i;
+						mbus_debugf("    ws: %d", listener->u.ws.pollfds.length);
+						for (i = 0; i < listener->u.ws.pollfds.length; i++) {
+							mbus_debugf("      fd: %d, events: 0x%08x", listener->u.ws.pollfds.pollfds[i].fd, listener->u.ws.pollfds.pollfds[i].events);
+						}
+					}
 					memcpy(&server->pollfds.pollfds[n], listener->u.ws.pollfds.pollfds, sizeof(struct pollfd) * listener->u.ws.pollfds.length);
 					n += listener->u.ws.pollfds.length;
 				}
