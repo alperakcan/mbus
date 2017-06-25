@@ -2549,7 +2549,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			{
 				struct pollfd *tmp;
 				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				mbus_debugf("    %d", pa->fd);
+				mbus_debugf("    fd: %d", pa->fd);
 				{
 					unsigned int i;
 					struct lws_pollargs *pa = (struct lws_pollargs *) in;
@@ -2590,10 +2590,11 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			{
 				unsigned int i;
 				struct lws_pollargs *pa = (struct lws_pollargs *) in;
+				mbus_debugf("    fd: %d, events: 0x%08x", pa->fd, pa->events);
 				for (i = 0; i < listener->u.ws.pollfds.length; i++) {
 					if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
 						listener->u.ws.pollfds.pollfds[i].events = pa->events;
-						mbus_debugf("    %d, 0x%08x", i, pa->events);
+						mbus_debugf("      %d", i);
 						break;
 					}
 				}
@@ -2604,10 +2605,10 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			{
 				unsigned int i;
 				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				mbus_debugf("    %d", pa->fd);
+				mbus_debugf("    fd: %d", pa->fd);
 				for (i = 0; i < listener->u.ws.pollfds.length; i++) {
 					if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
-						memmove(&listener->u.ws.pollfds.pollfds[i], &listener->u.ws.pollfds.pollfds[i + 1], listener->u.ws.pollfds.length - i);
+						memmove(&listener->u.ws.pollfds.pollfds[i], &listener->u.ws.pollfds.pollfds[i + 1], listener->u.ws.pollfds.length - i - 1);
 						listener->u.ws.pollfds.length -= 1;
 						break;
 					}
