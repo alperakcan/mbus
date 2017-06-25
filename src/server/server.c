@@ -2913,7 +2913,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 		method_destroy(method);
 	}
-	n  = 3;
+	n  = 0;
+	n += server->listeners.count;
 	n += server->clients.count;
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	{
@@ -3027,9 +3028,51 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		mbus_errorf("poll error");
 		goto bail;
 	}
+	mbus_debugf("  check poll events");
 	for (c = 0; c < n; c++) {
 		if (server->pollfds.pollfds[c].revents == 0) {
 			continue;
+		}
+		mbus_debugf("    fd: %d, events: 0x%08x, revents: 0x%08x", server->pollfds.pollfds[c].fd, server->pollfds.pollfds[c].events, server->pollfds.pollfds[c].revents);
+		{
+			struct client *client;
+			struct listener *listener;
+			TAILQ_FOREACH(listener, &server->listeners, listeners) {
+				if (listener_get_type(listener) == listener_type_tcp) {
+					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
+						mbus_debugf("    listener: tcp");
+					}
+				}
+				if (listener_get_type(listener) == listener_type_uds) {
+					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
+						mbus_debugf("    listener: uds");
+					}
+				}
+			}
+			TAILQ_FOREACH(client, &server->clients, clients) {
+				if (client_get_socket(client) == NULL) {
+					continue;
+				}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+				if (client_get_listener_type(client) == listener_type_ws) {
+					struct ws_client_data *data;
+					data = (struct ws_client_data *) client_get_socket(client);
+					if (lws_get_socket_fd(data->wsi) == server->pollfds.pollfds[c].fd) {
+						mbus_debugf("    ws client: %s", client_get_name(client));
+					}
+				}
+#endif
+				if (client_get_listener_type(client) == listener_type_uds) {
+					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
+						mbus_debugf("    uds client: %s", client_get_name(client));
+					}
+				}
+				if (client_get_listener_type(client) == listener_type_tcp) {
+					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
+						mbus_debugf("    tcp client: %s", client_get_name(client));
+					}
+				}
+			}
 		}
 		{
 			struct listener *listener;
@@ -3161,7 +3204,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					memcpy(&expected, ptr, sizeof(expected));
 					ptr += sizeof(expected);
 					expected = ntohl(expected);
-					mbus_debugf("expected: %d", expected);
+					mbus_debugf("        expected: %d", expected);
 					if (end - ptr < (int32_t) expected) {
 						break;
 					}
@@ -3173,7 +3216,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						int uncompressedlen;
 						memcpy(&uncompressed, ptr, sizeof(uncompressed));
 						uncompressed = ntohl(uncompressed);
-						mbus_debugf("  uncompressed: %d", uncompressed);
+						mbus_debugf("        uncompressed: %d", uncompressed);
 						uncompressedlen = uncompressed;
 						rc = mbus_uncompress_data(client_get_compression(client), (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
 						if (rc != 0) {
@@ -3185,7 +3228,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 							goto bail;
 						}
 					}
-					mbus_debugf("message: '%.*s'", uncompressed, data);
+					mbus_debugf("        message: '%.*s'", uncompressed, data);
 					string = strndup((char *) data, uncompressed);
 					if (string == NULL) {
 						mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_name(client));
