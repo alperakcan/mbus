@@ -81,7 +81,7 @@ int mbus_debug_printf (enum mbus_debug_level level, const char *name, const char
 
 	str = NULL;
 	va_start(ap, fmt);
-	if (level < mbus_debug_level) {
+	if (mbus_debug_level < level) {
 		goto out;
 	}
 	vasprintf(&str, fmt, ap);
