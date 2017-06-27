@@ -26,8 +26,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <sys/time.h>
 
 #include "debug.h"
 
@@ -62,4 +65,40 @@ enum mbus_debug_level mbus_debug_level_from_string (const char *string)
 		return mbus_debug_level_debug;
 	}
 	return mbus_debug_level_error;
+}
+
+int mbus_debug_printf (enum mbus_debug_level level, const char *name, const char *function, const char *file, int line, const char *fmt, ...)
+{
+	char *str;
+	va_list ap;
+
+	struct timeval timeval;
+	struct tm *tm;
+	int milliseconds;
+	char date[80];
+
+	str = NULL;
+	va_start(ap, fmt);
+	if (level < mbus_debug_level) {
+		goto out;
+	}
+	vasprintf(&str, fmt, ap);
+
+	gettimeofday(&timeval, NULL);
+
+	milliseconds = (int) ((timeval.tv_usec / 1000.0) + 0.5);
+	if (milliseconds >= 1000) {
+		milliseconds -= 1000;
+		timeval.tv_sec++;
+	}
+	tm = localtime(&timeval.tv_sec);
+	strftime(date, sizeof(date), "%x-%H:%M:%S", tm);
+
+	fprintf(stderr, "mbus:%s.%03d:%s:%s: %s (%s %s:%d)\n", date, milliseconds, name, mbus_debug_level_to_string(level), str, function, file, line);
+
+out:	va_end(ap);
+	if (str != NULL) {
+		free(str);
+	}
+	return 0;
 }

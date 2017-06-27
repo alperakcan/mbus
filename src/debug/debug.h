@@ -40,31 +40,17 @@ enum mbus_debug_level {
 extern enum mbus_debug_level mbus_debug_level;
 
 #define mbus_debugf(a...) { \
-	if (mbus_debug_level >= mbus_debug_level_debug) { \
-		fprintf(stderr, "mbus:%s:debug: ", MBUS_DEBUG_NAME); \
-		fprintf(stderr, a); \
-		fprintf(stderr, " (%s %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); \
-		fflush(stderr); \
-	} \
+	mbus_debug_printf(mbus_debug_level_debug, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
 }
 
 #define mbus_infof(a...) { \
-	if (mbus_debug_level >= mbus_debug_level_info) { \
-		fprintf(stderr, "mbus:%s:info: ", MBUS_DEBUG_NAME); \
-		fprintf(stderr, a); \
-		fprintf(stderr, " (%s %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); \
-		fflush(stderr); \
-	} \
+	mbus_debug_printf(mbus_debug_level_info, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
 }
 
 #define mbus_errorf(a...) { \
-	if (mbus_debug_level >= mbus_debug_level_error) { \
-		fprintf(stderr, "mbus:%s:error: ", MBUS_DEBUG_NAME); \
-		fprintf(stderr, a); \
-		fprintf(stderr, " (%s %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); \
-		fflush(stderr); \
-	} \
+	mbus_debug_printf(mbus_debug_level_error, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
 }
 
 const char * mbus_debug_level_to_string (enum mbus_debug_level level);
 enum mbus_debug_level mbus_debug_level_from_string (const char *string);
+int mbus_debug_printf (enum mbus_debug_level level, const char *name, const char *function, const char *file, int line, const char *fmt, ...);
