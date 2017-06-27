@@ -15,7 +15,8 @@ libmbus-buffer.so_files-y = \
 	buffer.c
 
 libmbus-buffer.so_ldflags-y = \
-	-lmbus-debug
+	-lmbus-debug \
+	-lmbus-compress
 
 libmbus-buffer.a_includes-y = \
 	${libmbus-buffer.so_includes-y}

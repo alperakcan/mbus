@@ -20,11 +20,10 @@ libmbus-compress.so_ldflags-y = \
 	-lmbus-debug
 
 libmbus-compress.so_cflags-${ZLIB_ENABLE} += \
-	-DZLIB_ENABLE=1 \
-	$(shell pkg-config --cflags zlib)
+	-DZLIB_ENABLE=1
 
 libmbus-compress.so_ldflags-${ZLIB_ENABLE} += \
-	$(shell pkg-config --libs zlib)
+	-lz
 
 libmbus-compress.a_includes-y += \
 	${libmbus-compress.so_includes-y}

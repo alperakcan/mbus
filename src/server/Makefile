@@ -42,11 +42,7 @@ libmbus-server.so_ldflags-${WS_ENABLE} += \
 	$(shell pkg-config --libs libwebsockets)
 
 libmbus-server.so_cflags-${ZLIB_ENABLE} += \
-	-DZLIB_ENABLE=1 \
-	$(shell pkg-config --cflags zlib)
-
-libmbus-server.so_ldflags-${ZLIB_ENABLE} += \
-	$(shell pkg-config --libs zlib)
+	-DZLIB_ENABLE=1
 
 libmbus-server.a_files-y = \
 	${libmbus-server.so_files-y}

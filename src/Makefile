@@ -26,6 +26,9 @@ client_depends-y = \
 clock_depends-y = \
 	debug
 
+compress_depends-y = \
+	debug
+
 method_depends-y = \
 	debug
 
