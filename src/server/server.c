@@ -2873,7 +2873,6 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				mbus_errorf("could not pop result from client");
 				continue;
 			}
-			mbus_debugf("%s", method_get_request_string(method));
 			if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
 				if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
 					compression = mbus_compress_method_none;
@@ -2907,7 +2906,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			method_destroy(method);
 			goto bail;
 		}
-		mbus_debugf("send method to client: %s, %s, %s", client_get_name(client), mbus_compress_method_string(compression), string);
+		mbus_debugf("      message: %s, %s", mbus_compress_method_string(compression), string);
 		rc = mbus_buffer_push_string(client->buffer.out, compression, string);
 		if (rc != 0) {
 			mbus_errorf("can not push string");
@@ -3061,12 +3060,12 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
 				if (listener_get_type(listener) == listener_type_tcp) {
 					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
-						mbus_debugf("    listener: tcp");
+						mbus_debugf("      listener: tcp");
 					}
 				}
 				if (listener_get_type(listener) == listener_type_uds) {
 					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
-						mbus_debugf("    listener: uds");
+						mbus_debugf("      listener: uds");
 					}
 				}
 			}
@@ -3079,18 +3078,18 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					struct ws_client_data *data;
 					data = (struct ws_client_data *) client_get_socket(client);
 					if (lws_get_socket_fd(data->wsi) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("    ws client: %s", client_get_name(client));
+						mbus_debugf("      ws client: %s", client_get_name(client));
 					}
 				}
 #endif
 				if (client_get_listener_type(client) == listener_type_uds) {
 					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("    uds client: %s", client_get_name(client));
+						mbus_debugf("      uds client: %s", client_get_name(client));
 					}
 				}
 				if (client_get_listener_type(client) == listener_type_tcp) {
 					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("    tcp client: %s", client_get_name(client));
+						mbus_debugf("      tcp client: %s", client_get_name(client));
 					}
 				}
 			}
