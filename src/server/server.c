@@ -2810,6 +2810,7 @@ bail:	return -1;
 int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
+	int read_rc;
 	char *string;
 	unsigned int c;
 	unsigned int n;
@@ -3150,44 +3151,54 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
 #endif
-				rc = read(mbus_socket_get_fd(client_get_socket(client)),
+				read_rc = read(mbus_socket_get_fd(client->socket),
 						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
 						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
-				client->ssl.want_read = 0;
-				rc = SSL_read(client->ssl.ssl,
-						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
-						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
-				if (rc <= 0) {
-					int error;
-					error = SSL_get_error(client->ssl.ssl, rc);
-					if (error == SSL_ERROR_WANT_READ) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_read = 1;
-					} else if (error == SSL_ERROR_WANT_WRITE) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_write = 1;
-					} else if (error == SSL_ERROR_SYSCALL) {
-						rc = -1;
-						errno = EIO;
-					} else {
-						char ebuf[256];
-						mbus_errorf("can not read ssl: %d", error);
-						error = ERR_get_error();
-						while (error) {
-							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-							error = ERR_get_error();
-						}
-						rc = -1;
-						errno = EIO;
+				read_rc = 0;
+				do {
+					rc = mbus_buffer_reserve(client->buffer.in, (mbus_buffer_length(client->buffer.in) + read_rc) + 1024);
+					if (rc != 0) {
+						mbus_errorf("can not reserve client buffer");
+						goto bail;
 					}
-				}
+					client->ssl.want_read = 0;
+					rc = SSL_read(client->ssl.ssl,
+							mbus_buffer_base(client->buffer.in) + (mbus_buffer_length(client->buffer.in) + read_rc),
+							mbus_buffer_size(client->buffer.in) - (mbus_buffer_length(client->buffer.in) + read_rc));
+					if (rc <= 0) {
+						int error;
+						error = SSL_get_error(client->ssl.ssl, rc);
+						if (error == SSL_ERROR_WANT_READ) {
+							read_rc = 0;
+							errno = EAGAIN;
+							client->ssl.want_read = 1;
+						} else if (error == SSL_ERROR_WANT_WRITE) {
+							read_rc = 0;
+							errno = EAGAIN;
+							client->ssl.want_write = 1;
+						} else if (error == SSL_ERROR_SYSCALL) {
+							read_rc = -1;
+							errno = EIO;
+						} else {
+							char ebuf[256];
+							mbus_errorf("can not read ssl: %d", error);
+							error = ERR_get_error();
+							while (error) {
+								mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+								error = ERR_get_error();
+							}
+							read_rc = -1;
+							errno = EIO;
+						}
+					} else {
+						read_rc += rc;
+					}
+				} while (SSL_pending(client->ssl.ssl));
 			}
 #endif
-			if (rc <= 0) {
+			if (read_rc <= 0) {
 				if (errno == EINTR) {
 					goto skip_in;
 				} else if (errno == EAGAIN) {
@@ -3205,7 +3216,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				uint8_t *data;
 				uint32_t expected;
 				uint32_t uncompressed;
-				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + rc);
+				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + read_rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_name(client));
 					client_set_socket(client, NULL);
