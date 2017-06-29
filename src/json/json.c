@@ -191,8 +191,13 @@ int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name,
 
 int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, const char *string)
 {
-	mbus_cJSON_AddStringToObject((mbus_cJSON *) json, name, string);
-	return 0;
+	if (name == NULL) {
+		return -1;
+	}
+	if (string == NULL) {
+		return -1;
+	}
+	return mbus_json_add_item_to_object(json, name, mbus_json_create_string(string));
 }
 
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string)
@@ -203,8 +208,7 @@ int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name,
 	if (string == NULL) {
 		return -1;
 	}
-	mbus_cJSON_AddStringToObjectCS((mbus_cJSON *) json, name, string);
-	return 0;
+	return mbus_json_add_item_to_object_cs(json, name, mbus_json_create_string(string));
 }
 
 int mbus_json_get_int_value (const struct mbus_json *json, const char *name, int value)
