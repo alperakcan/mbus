@@ -2655,9 +2655,11 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
 			lws_callback_on_writable(data->wsi);
 			break;
+#if 0
 		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
 			mbus_debugf("  http drop protocol");
 			break;
+#endif
 		case LWS_CALLBACK_PROTOCOL_DESTROY:
 			mbus_debugf("  protocol destroy");
 			break;
