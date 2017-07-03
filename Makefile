@@ -31,6 +31,7 @@ install: app src test
 	install -m 0644 dist/include/mbus/server.h ${DESTDIR}/usr/local/include/mbus/server.h
 	install -m 0644 dist/include/mbus/socket.h ${DESTDIR}/usr/local/include/mbus/socket.h
 	install -m 0644 dist/include/mbus/tailq.h ${DESTDIR}/usr/local/include/mbus/tailq.h
+	install -m 0644 dist/include/mbus/version.h ${DESTDIR}/usr/local/include/mbus/version.h
 	
 	install -d ${DESTDIR}/usr/local/lib
 	install -m 0755 dist/lib/libmbus-buffer.so ${DESTDIR}/usr/local/lib/libmbus-buffer.so
@@ -76,6 +77,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/include/mbus/server.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/socket.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/tailq.h
+	rm -f ${DESTDIR}/usr/local/include/mbus/version.h
 	rm -rf ${DESTDIR}/usr/local/include/mbus
 	
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-buffer.so
