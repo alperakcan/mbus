@@ -54,6 +54,7 @@
 #include "mbus/method.h"
 #include "mbus/socket.h"
 #include "mbus/server.h"
+#include "mbus/version.h"
 #include "client.h"
 
 enum method_type {

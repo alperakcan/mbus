@@ -28,6 +28,7 @@ libmbus-client.so_ldflags-y += \
 	-lmbus-buffer \
 	-lmbus-socket \
 	-lmbus-json \
+	-lmbus-version \
 	-lpthread
 
 libmbus-client.so_ldflags-${SSL_ENABLE} += \
