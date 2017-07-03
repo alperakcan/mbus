@@ -1,3 +1,0 @@
-
-mbus-command --destination org.mbus.server --command command.status
-mbus-command --destination org.mbus.server --command command.close --payload '{ "source": "org.mbus.server" }'
