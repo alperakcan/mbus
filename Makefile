@@ -19,6 +19,7 @@ install: app src test
 	install -m 0755 dist/bin/mbus-controller ${DESTDIR}/usr/local/bin/mbus-controller
 	install -m 0755 dist/bin/mbus-event ${DESTDIR}/usr/local/bin/mbus-event
 	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
+	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
 	install -m 0644 dist/include/mbus/buffer.h ${DESTDIR}/usr/local/include/mbus/buffer.h
@@ -66,6 +67,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-controller
 	rm -f ${DESTDIR}/usr/local/bin/mbus-event
 	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
+	rm -f ${DESTDIR}/usr/local/bin/mbus-version
 	
 	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/client.h

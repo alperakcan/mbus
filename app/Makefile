@@ -3,6 +3,7 @@ subdir-y = \
 	command \
 	controller \
 	event \
-	listener
+	listener \
+	version
 
 include ../Makefile.lib
