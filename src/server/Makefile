@@ -24,7 +24,8 @@ libmbus-server.so_ldflags-y += \
 	-lmbus-clock \
 	-lmbus-compress \
 	-lmbus-socket \
-	-lmbus-json
+	-lmbus-json \
+	-lmbus-version
 
 libmbus-server.so_cflags-${SSL_ENABLE} += \
 	-DSSL_ENABLE=1 \

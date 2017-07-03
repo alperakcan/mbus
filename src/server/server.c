@@ -58,6 +58,7 @@
 #include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/socket.h"
+#include "mbus/version.h"
 #include "server.h"
 
 #define BUFFER_OUT_CHUNK_SIZE (64 * 1024)
@@ -3683,6 +3684,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 
 	mbus_infof("creating server");
+	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_version());
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 #endif

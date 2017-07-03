@@ -9,7 +9,8 @@ subdir-y = \
 	method \
 	server \
 	socket \
-	queue
+	queue \
+	version
 
 buffer_depends-y = \
 	debug \
@@ -21,7 +22,8 @@ client_depends-y = \
 	json \
 	method \
 	socket \
-	server
+	server \
+	version
 
 clock_depends-y = \
 	debug
@@ -40,7 +42,8 @@ server_depends-y = \
 	json \
 	method \
 	socket \
-	queue
+	queue \
+	version
 
 socket_depends-y = \
 	debug

@@ -42,6 +42,7 @@ install: app src test
 	install -m 0755 dist/lib/libmbus-json-cJSON.so ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so
 	install -m 0755 dist/lib/libmbus-server.so ${DESTDIR}/usr/local/lib/libmbus-server.so
 	install -m 0755 dist/lib/libmbus-socket.so ${DESTDIR}/usr/local/lib/libmbus-socket.so
+	install -m 0755 dist/lib/libmbus-version.so ${DESTDIR}/usr/local/lib/libmbus-version.so
 	
 	install -d ${DESTDIR}/usr/local/lib
 	install -m 0644 dist/lib/libmbus-buffer.a ${DESTDIR}/usr/local/lib/libmbus-buffer.a
@@ -53,6 +54,7 @@ install: app src test
 	install -m 0644 dist/lib/libmbus-json-cJSON.a ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.a
 	install -m 0644 dist/lib/libmbus-server.a ${DESTDIR}/usr/local/lib/libmbus-server.a
 	install -m 0644 dist/lib/libmbus-socket.a ${DESTDIR}/usr/local/lib/libmbus-socket.a
+	install -m 0644 dist/lib/libmbus-version.a ${DESTDIR}/usr/local/lib/libmbus-version.a
 
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
 	install -m 0644 libmbus-client.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
