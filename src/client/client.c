@@ -1108,7 +1108,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	}
 
 	mbus_infof("creating client: '%s'", options.client.name);
-	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_version());
+	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_revision());
 
 	client = malloc(sizeof(struct mbus_client));
 	if (client == NULL) {

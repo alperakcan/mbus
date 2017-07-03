@@ -3684,7 +3684,7 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	}
 
 	mbus_infof("creating server");
-	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_version());
+	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_revision());
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 #endif

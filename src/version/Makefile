@@ -1,6 +1,6 @@
 
 GIT_COMMIT := $(shell git log -1 --format="%ci")
-GIT_VERSION := $(shell git describe --long --dirty --always --tags)
+GIT_REVISION := $(shell git describe --long --dirty --always --tags)
 
 target.a-y = \
 	libmbus-version.a
@@ -13,7 +13,7 @@ libmbus-version.so_files-y = \
 
 libmbus-version.so_cflags-y = \
 	-DGIT_COMMIT="\"$(GIT_COMMIT)\"" \
-	-DGIT_VERSION="\"$(GIT_VERSION)\""
+	-DGIT_REVISION="\"$(GIT_REVISION)\""
 
 libmbus-version.a_files-y = \
 	${libmbus-version.so_files-y}
