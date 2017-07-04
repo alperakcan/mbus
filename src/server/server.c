@@ -398,11 +398,13 @@ static struct lws_protocols ws_protocols[] = {
 };
 
 static const struct lws_extension ws_extensions[] = {
+#if 0
 	{
 		"permessage-deflate",
 		lws_extension_callback_pm_deflate,
 		"permessage-deflate"
 	},
+#endif
 	{
 		"deflate-frame",
 		lws_extension_callback_pm_deflate,
@@ -437,11 +439,13 @@ static struct lws_protocols wss_protocols[] = {
 };
 
 static const struct lws_extension wss_extensions[] = {
+#if 0
 	{
 		"permessage-deflate",
 		lws_extension_callback_pm_deflate,
 		"permessage-deflate"
 	},
+#endif
 	{
 		"deflate-frame",
 		lws_extension_callback_pm_deflate,
