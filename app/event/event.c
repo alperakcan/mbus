@@ -145,6 +145,7 @@ int main (int argc, char *argv[])
 		}
 	}
 	mbus_json_delete(arg.payload);
+	mbus_client_sync(client);
 	mbus_client_destroy(client);
 	return arg.result;
 bail:	if (client != NULL) {

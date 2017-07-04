@@ -2123,7 +2123,7 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = server_send_event_to(server, client_get_name(method_get_source(method)), destination, identifier, event);
+	rc = server_send_event_to(server, method_get_request_source(method), destination, identifier, event);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
 	}
@@ -3420,6 +3420,9 @@ out:
 		TAILQ_REMOVE(&server->clients, client, clients);
 		TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 			if (method_get_source(method) != client) {
+				continue;
+			}
+			if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
 				continue;
 			}
 			TAILQ_REMOVE(&server->methods, method, methods);

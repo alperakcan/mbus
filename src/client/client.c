@@ -1511,6 +1511,20 @@ again:  ret = pthread_cond_timedwait(cond, mutex, &tspec);
         return ret;
 }
 
+int mbus_client_sync (struct mbus_client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		return -1;
+	}
+	pthread_mutex_lock(&client->mutex);
+	while (client->requests.count > 0) {
+		pthread_cond_wait(&client->cond, &client->mutex);
+	}
+	pthread_mutex_unlock(&client->mutex);
+	return 0;
+}
+
 int mbus_client_break (struct mbus_client *client)
 {
 	if (client == NULL) {
