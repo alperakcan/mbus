@@ -976,7 +976,7 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
 		listener->u.ws.context = lws_create_context(&info);
 		if (listener->u.ws.context == NULL) {
-			mbus_errorf("can not create ws context for: '%s:%s:%d'", "ws", address, port);
+			mbus_errorf("can not create ws context for: '%s:%s:%d'", "wss", address, port);
 			goto bail;
 		}
 #endif
