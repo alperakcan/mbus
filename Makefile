@@ -91,6 +91,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.so
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.so
+	rm -f ${DESTDIR}/usr/local/lib/libmbus-version.so
 	
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-buffer.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-client.a
@@ -101,6 +102,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.a
+	rm -f ${DESTDIR}/usr/local/lib/libmbus-version.a
 
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
