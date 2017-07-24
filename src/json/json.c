@@ -85,6 +85,11 @@ struct mbus_json * mbus_json_create_string (const char *string)
 	return (struct mbus_json *) mbus_cJSON_CreateString(string);
 }
 
+struct mbus_json * mbus_json_create_number (double number)
+{
+	return (struct mbus_json *) mbus_cJSON_CreateNumber(number);
+}
+
 void mbus_json_delete (struct mbus_json *json)
 {
 	mbus_cJSON_Delete((mbus_cJSON *) json);

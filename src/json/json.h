@@ -17,6 +17,7 @@ struct mbus_json * mbus_json_parse_file (const char *path);
 struct mbus_json * mbus_json_create_object (void);
 struct mbus_json * mbus_json_create_array (void);
 struct mbus_json * mbus_json_create_string (const char *string);
+struct mbus_json * mbus_json_create_number (double number);
 void mbus_json_delete (struct mbus_json *json);
 
 struct mbus_json * mbus_json_get_child (const struct mbus_json *json);
