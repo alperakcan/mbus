@@ -83,7 +83,7 @@ static void event_status_server_connected (struct mbus_client *client, const cha
 	(void) status;
 	(void) payload;
 	while (arg->flood--) {
-		rc = mbus_client_event_to(client, arg->destination, arg->event, arg->payload);
+		rc = mbus_client_event_sync_to(client, arg->destination, arg->event, arg->payload);
 		if (rc != 0) {
 			mbus_errorf("can not call event");
 			break;

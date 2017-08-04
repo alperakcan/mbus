@@ -66,6 +66,8 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data), void *data);
 int mbus_client_event (struct mbus_client *client, const char *identifier, const struct mbus_json *event);
 int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event);
+int mbus_client_event_sync (struct mbus_client *client, const char *identifier, const struct mbus_json *event);
+int mbus_client_event_sync_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event);
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **result);
 int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **result, int timeout);
 
