@@ -87,7 +87,7 @@ static void command_status_server_connected (struct mbus_client *client, const c
 		if (string == NULL) {
 			return;
 		}
-		fprintf(stdout, "%s.%s: %s\n", arg->destination, arg->command, string);
+		fprintf(stdout, "%s\n", string);
 		free(string);
 		mbus_json_delete(result);
 	}

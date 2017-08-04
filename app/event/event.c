@@ -45,11 +45,13 @@
 #define OPTION_DESTINATION	0x101
 #define OPTION_EVENT		0x102
 #define OPTION_PAYLOAD		0x103
+#define OPTION_FLOOD		0x104
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
 	{ "event",			required_argument,	NULL,	OPTION_EVENT },
 	{ "payload",			required_argument,	NULL,	OPTION_PAYLOAD },
+	{ "flood",			required_argument,	NULL,	OPTION_FLOOD },
 	{ NULL,				0,			NULL,	0 },
 };
 
@@ -59,6 +61,7 @@ static void usage (void)
 	fprintf(stdout, "  --destination            : destination identifier\n");
 	fprintf(stdout, "  --event                  : event identifier\n");
 	fprintf(stdout, "  --payload                : payload json\n");
+	fprintf(stdout, "  --flood                  : flood event n times\n");
 	fprintf(stdout, "  --help                   : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 }
@@ -67,6 +70,7 @@ struct arg {
 	const char *destination;
 	const char *event;
 	struct mbus_json *payload;
+	int flood;
 	int finished;
 	int result;
 };
@@ -78,9 +82,12 @@ static void event_status_server_connected (struct mbus_client *client, const cha
 	(void) source;
 	(void) status;
 	(void) payload;
-	rc = mbus_client_event_to(client, arg->destination, arg->event, arg->payload);
-	if (rc != 0) {
-		mbus_errorf("can not call event");
+	while (arg->flood--) {
+		rc = mbus_client_event_to(client, arg->destination, arg->event, arg->payload);
+		if (rc != 0) {
+			mbus_errorf("can not call event");
+			break;
+		}
 	}
 	arg->result = rc;
 	arg->finished = 1;
@@ -100,6 +107,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	arg.destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
+	arg.flood = 1;
 	optind = 1;
 	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (ch) {
@@ -113,6 +121,13 @@ int main (int argc, char *argv[])
 				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
 					mbus_errorf("invalid payload");
+					goto bail;
+				}
+				break;
+			case OPTION_FLOOD:
+				arg.flood = atoi(optarg);
+				if (arg.flood <= 0) {
+					mbus_errorf("invalid flood");
 					goto bail;
 				}
 				break;

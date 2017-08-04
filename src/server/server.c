@@ -2847,7 +2847,6 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	}
 	mbus_debugf("  check ping timeout");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
-		mbus_debugf("    client: %s", client_get_name(client));
 		if (client_get_socket(client) == NULL) {
 			continue;
 		}
@@ -2857,6 +2856,13 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		if (client->ping.enabled == 0) {
 			continue;
 		}
+		mbus_debugf("    client: %s, recv: %lu, interval: %d, timeout: %d, missed: %d, threshold: %d",
+				client_get_name(client),
+				client->ping.ping_recv_tsms,
+				client->ping.interval,
+				client->ping.timeout,
+				client->ping.ping_missed_count,
+				client->ping.threshold);
 		if (mbus_clock_after(current, client->ping.ping_recv_tsms + client->ping.interval + client->ping.timeout)) {
 			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_name(client), current, client->ping.ping_recv_tsms, client->ping.interval, client->ping.timeout);
 			client->ping.ping_missed_count += 1;
