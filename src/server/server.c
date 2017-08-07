@@ -322,8 +322,8 @@ static struct option longopts[] = {
 	{ "mbus-server-wss-enable",		required_argument,	NULL,	OPTION_SERVER_WSS_ENABLE },
 	{ "mbus-server-wss-address",		required_argument,	NULL,	OPTION_SERVER_WSS_ADDRESS },
 	{ "mbus-server-wss-port",		required_argument,	NULL,	OPTION_SERVER_WSS_PORT },
-	{ "mbus-server-wss-certificate",	required_argument,	NULL,	OPTION_SERVER_WSS_PORT },
-	{ "mbus-server-wss-privatekey",		required_argument,	NULL,	OPTION_SERVER_WSS_PORT },
+	{ "mbus-server-wss-certificate",	required_argument,	NULL,	OPTION_SERVER_WSS_CERTIFICATE },
+	{ "mbus-server-wss-privatekey",		required_argument,	NULL,	OPTION_SERVER_WSS_PRIVATEKEY },
 #endif
 #endif
 
@@ -969,7 +969,7 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		info.extensions = wss_extensions;
 		info.gid = -1;
 		info.uid = -1;
-		info.ssl_ca_filepath = "ca.crt";
+		info.ssl_ca_filepath = NULL; //"ca.crt";
 		info.ssl_cert_filepath = certificate;
 		info.ssl_private_key_filepath = privatekey;
 //		info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
@@ -3670,10 +3670,10 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 				server->options.wss.port = atoi(optarg);
 				break;
 			case OPTION_SERVER_WSS_CERTIFICATE:
-				server->options.tcps.certificate = optarg;
+				server->options.wss.certificate = optarg;
 				break;
 			case OPTION_SERVER_WSS_PRIVATEKEY:
-				server->options.tcps.privatekey = optarg;
+				server->options.wss.privatekey = optarg;
 				break;
 #endif
 #endif
