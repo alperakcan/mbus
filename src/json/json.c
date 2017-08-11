@@ -135,6 +135,9 @@ const char * mbus_json_get_value_string (const struct mbus_json *json)
 	if (json == NULL) {
 		return NULL;
 	}
+	if (mbus_json_get_type(json) != mbus_json_type_string) {
+		return NULL;
+	}
 	return ((mbus_cJSON *) json)->valuestring;
 }
 
