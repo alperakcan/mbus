@@ -95,6 +95,11 @@ struct mbus_json * mbus_json_create_number (double number)
 	return (struct mbus_json *) mbus_cJSON_CreateNumber(number);
 }
 
+struct mbus_json * mbus_json_create_null (void)
+{
+	return (struct mbus_json *) mbus_cJSON_CreateNull();
+}
+
 void mbus_json_delete (struct mbus_json *json)
 {
 	mbus_cJSON_Delete((mbus_cJSON *) json);
@@ -189,6 +194,11 @@ int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 {
 	mbus_cJSON_DeleteItemFromObject((mbus_cJSON *) json, name);
 	return 0;
+}
+
+int mbus_json_add_null_to_array (struct mbus_json *json)
+{
+	return mbus_json_add_item_to_array(json, mbus_json_create_null());
 }
 
 int mbus_json_add_bool_to_object_cs (struct mbus_json *json, const char *name, int on)
