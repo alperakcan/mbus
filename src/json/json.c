@@ -15,6 +15,11 @@ struct mbus_json * mbus_json_parse (const char *string)
 	return (struct mbus_json *) mbus_cJSON_Parse(string);
 }
 
+struct mbus_json * mbus_json_parse_end (const char *string, const char **end)
+{
+	return (struct mbus_json *) mbus_cJSON_ParseWithOpts(string, end, 0);
+}
+
 struct mbus_json * mbus_json_parse_file (const char *path)
 {
 	int rc;
@@ -192,6 +197,14 @@ int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name,
 {
 	mbus_cJSON_AddNumberToObjectCS((mbus_cJSON *) json, name, number);
 	return 0;
+}
+
+int mbus_json_add_string_to_array (struct mbus_json *json, const char *string)
+{
+	if (string == NULL) {
+		return -1;
+	}
+	return mbus_json_add_item_to_array(json, mbus_json_create_string(string));
 }
 
 int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, const char *string)

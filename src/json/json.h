@@ -13,6 +13,7 @@ enum mbus_json_type {
 struct mbus_json;
 
 struct mbus_json * mbus_json_parse (const char *string);
+struct mbus_json * mbus_json_parse_end (const char *string, const char **end);
 struct mbus_json * mbus_json_parse_file (const char *path);
 struct mbus_json * mbus_json_create_object (void);
 struct mbus_json * mbus_json_create_array (void);
@@ -41,6 +42,7 @@ int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 int mbus_json_add_bool_to_object_cs (struct mbus_json *json, const char *name, int on);
 int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name, double number);
 
+int mbus_json_add_string_to_array (struct mbus_json *json, const char *string);
 int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, const char *string);
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string);
 
