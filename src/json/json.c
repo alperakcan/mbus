@@ -148,12 +148,27 @@ const char * mbus_json_get_value_string (const struct mbus_json *json)
 
 int mbus_json_get_value_int (const struct mbus_json *json)
 {
+	if (json == NULL) {
+		return 0;
+	}
+	if (mbus_json_get_type(json) != mbus_json_type_number) {
+		return 0;
+	}
 	return ((mbus_cJSON *) json)->valueint;
 }
 
 int mbus_json_get_value_bool (const struct mbus_json *json)
 {
-	return ((mbus_cJSON *) json)->valueint;
+	if (json == NULL) {
+		return 0;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_true) {
+		return 1;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_false) {
+		return 0;
+	}
+	return 0;
 }
 
 int mbus_json_get_array_size (const struct mbus_json *json)
