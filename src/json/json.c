@@ -206,6 +206,13 @@ int mbus_json_add_bool_to_object_cs (struct mbus_json *json, const char *name, i
 	mbus_cJSON_AddBoolToObjectCS((mbus_cJSON *) json, name, on);
 	return 0;
 }
+
+int mbus_json_add_number_to_array (struct mbus_json *json, double number)
+{
+	mbus_json_add_item_to_array(json, mbus_json_create_number(number));
+	return 0;
+}
+
 int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name, double number)
 {
 	mbus_cJSON_AddNumberToObjectCS((mbus_cJSON *) json, name, number);

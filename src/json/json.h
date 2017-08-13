@@ -44,6 +44,7 @@ int mbus_json_add_null_to_array (struct mbus_json *json);
 
 int mbus_json_add_bool_to_object_cs (struct mbus_json *json, const char *name, int on);
 
+int mbus_json_add_number_to_array (struct mbus_json *json, double number);
 int mbus_json_add_number_to_object_cs (struct mbus_json *json, const char *name, double number);
 
 int mbus_json_add_string_to_array (struct mbus_json *json, const char *string);
