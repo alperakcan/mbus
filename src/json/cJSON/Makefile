@@ -1,5 +1,5 @@
 
-include ../../Makefile.conf
+include ../../../Makefile.conf
 
 target.a-y = \
 	libmbus-json-cJSON.a

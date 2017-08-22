@@ -7,6 +7,9 @@ target.a-y = \
 target.so-${SHARED_ENABLE} = \
 	libmbus-debug.so
 
+libmbus-debug.so_files-y = \
+	debug.c
+
 libmbus-debug.a_files-y = \
 	${libmbus-debug.so_files-y}
 
