@@ -1,8 +1,10 @@
 
+include ../../Makefile.conf
+
 target.a-y = \
 	libmbus-clock.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-clock.so
 
 libmbus-clock.so_includes-y = \
@@ -28,7 +30,9 @@ dist.include-y = \
 	clock.h
 
 dist.lib-y = \
-	libmbus-clock.a \
+	libmbus-clock.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-clock.so
 
 include ../../Makefile.lib

@@ -1,8 +1,10 @@
 
+include ../../Makefile.conf
+
 target.a-y = \
 	libmbus-socket.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-socket.so
 
 libmbus-socket.so_includes-y = \
@@ -31,7 +33,9 @@ dist.include-y = \
 	socket.h
 
 dist.lib-y = \
-	libmbus-socket.a \
+	libmbus-socket.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-socket.so
 
 include ../../Makefile.lib

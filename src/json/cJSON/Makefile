@@ -1,8 +1,10 @@
 
+include ../../Makefile.conf
+
 target.a-y = \
 	libmbus-json-cJSON.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-json-cJSON.so
 
 libmbus-json-cJSON.so_files-y = \
@@ -19,7 +21,9 @@ distdir = ../../../dist
 dist.base = mbus
 
 dist.lib-y = \
-	libmbus-json-cJSON.a \
+	libmbus-json-cJSON.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-json-cJSON.so
 
 include ../../../Makefile.lib

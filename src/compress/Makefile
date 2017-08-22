@@ -1,10 +1,10 @@
 
-ZLIB_ENABLE ?= y
+include ../../Makefile.conf
 
 target.a-y = \
 	libmbus-compress.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-compress.so
 
 libmbus-compress.so_includes-y = \
@@ -20,10 +20,10 @@ libmbus-compress.so_ldflags-y = \
 	-lmbus-debug
 
 libmbus-compress.so_cflags-${ZLIB_ENABLE} += \
-	-DZLIB_ENABLE=1
+	${zlib_cflags-y}
 
 libmbus-compress.so_ldflags-${ZLIB_ENABLE} += \
-	-lz
+	${zlib_ldflags-y}
 
 libmbus-compress.a_includes-y += \
 	${libmbus-compress.so_includes-y}
@@ -42,7 +42,9 @@ dist.include-y = \
 	compress.h
 
 dist.lib-y = \
-	libmbus-compress.a \
+	libmbus-compress.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-compress.so
 
 include ../../Makefile.lib

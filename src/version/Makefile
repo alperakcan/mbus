@@ -1,11 +1,13 @@
 
+include ../../Makefile.conf
+
 GIT_COMMIT := $(shell git log -1 --format="%ci")
 GIT_REVISION := $(shell git describe --long --dirty --always --tags)
 
 target.a-y = \
 	libmbus-version.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-version.so
 
 libmbus-version.so_files-y = \
@@ -29,7 +31,9 @@ dist.include-y = \
 	version.h
 
 dist.lib-y = \
-	libmbus-version.a \
+	libmbus-version.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-version.so
 
 include ../../Makefile.lib
