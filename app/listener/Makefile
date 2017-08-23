@@ -14,15 +14,15 @@ mbus-listener_files-y = \
 	listener.c
 
 mbus-listener_ldflags-y = \
-	-lmbus-debug \
-	-lmbus-buffer \
-	-lmbus-clock \
-	-lmbus-compress \
-	-lmbus-socket \
 	-lmbus-client \
+	-lmbus-socket \
 	-lmbus-json \
+	-lmbus-version \
+	-lmbus-clock \
+	-lmbus-buffer \
 	-lmbus-json-cJSON \
-	-lmbus-version
+	-lmbus-compress \
+	-lmbus-debug
 
 mbus-listener_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}

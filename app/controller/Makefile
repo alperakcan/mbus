@@ -14,15 +14,15 @@ mbus-controller_files-y = \
 	controller.c
 
 mbus-controller_ldflags-y = \
-	-lmbus-debug \
-	-lmbus-buffer \
 	-lmbus-server \
-	-lmbus-clock \
-	-lmbus-compress \
 	-lmbus-socket \
 	-lmbus-json \
+	-lmbus-version \
+	-lmbus-clock \
+	-lmbus-buffer \
 	-lmbus-json-cJSON \
-	-lmbus-version
+	-lmbus-compress \
+	-lmbus-debug
 
 mbus-controller_ldflags-${WS_ENABLE} += \
 	${ws_ldflags-y}
