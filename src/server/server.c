@@ -2298,6 +2298,9 @@ command_client_bail:
 				goto command_clients_bail;
 			}
 			TAILQ_FOREACH(client, &server->clients, clients) {
+				if (client_get_name(client) == NULL) {
+					continue;
+				}
 				source = mbus_json_create_string(client_get_name(client));
 				if (source == NULL) {
 					goto command_clients_bail;
