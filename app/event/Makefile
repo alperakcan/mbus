@@ -1,4 +1,6 @@
 
+include ../../Makefile.conf
+
 target-y = \
 	mbus-event
 
@@ -13,8 +15,20 @@ mbus-event_files-y = \
 
 mbus-event_ldflags-y = \
 	-lmbus-debug \
+	-lmbus-buffer \
+	-lmbus-clock \
+	-lmbus-compress \
+	-lmbus-socket \
 	-lmbus-client \
-	-lmbus-json
+	-lmbus-json \
+	-lmbus-json-cJSON \
+	-lmbus-version
+
+mbus-event_ldflags-${SSL_ENABLE} += \
+	${ssl_ldflags-y}
+
+mbus-event_ldflags-${ZLIB_ENABLE} += \
+	${zlib_ldflags-y}
 
 distdir = ../../dist
 

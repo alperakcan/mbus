@@ -1,4 +1,6 @@
 
+include ../../Makefile.conf
+
 target-y = \
 	mbus-controller
 
@@ -14,7 +16,22 @@ mbus-controller_files-y = \
 mbus-controller_ldflags-y = \
 	-lmbus-debug \
 	-lmbus-buffer \
-	-lmbus-server
+	-lmbus-server \
+	-lmbus-clock \
+	-lmbus-compress \
+	-lmbus-socket \
+	-lmbus-json \
+	-lmbus-json-cJSON \
+	-lmbus-version
+
+mbus-controller_ldflags-${WS_ENABLE} += \
+	${ws_ldflags-y}
+
+mbus-controller_ldflags-${SSL_ENABLE} += \
+	${ssl_ldflags-y}
+
+mbus-controller_ldflags-${ZLIB_ENABLE} += \
+	${zlib_ldflags-y}
 
 distdir = ../../dist
 
