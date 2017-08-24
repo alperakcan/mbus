@@ -45,6 +45,9 @@ libmbus-server.so_ldflags-${WS_ENABLE} += \
 libmbus-server.so_cflags-${ZLIB_ENABLE} += \
 	-DZLIB_ENABLE=1
 
+libmbus-server.so_ldflags-${ZLIB_ENABLE} += \
+	-lz
+
 libmbus-server.a_files-y = \
 	${libmbus-server.so_files-y}
 
