@@ -1,4 +1,6 @@
 
+include ../../Makefile.conf
+
 target-y = \
 	mbus-command
 
@@ -12,9 +14,21 @@ mbus-command_files-y = \
 	command.c
 
 mbus-command_ldflags-y = \
-	-lmbus-debug \
 	-lmbus-client \
-	-lmbus-json
+	-lmbus-socket \
+	-lmbus-json \
+	-lmbus-version \
+	-lmbus-clock \
+	-lmbus-buffer \
+	-lmbus-json-cJSON \
+	-lmbus-compress \
+	-lmbus-debug
+
+mbus-command_ldflags-${SSL_ENABLE} += \
+	${ssl_ldflags-y}
+
+mbus-command_ldflags-${ZLIB_ENABLE} += \
+	${zlib_ldflags-y}
 
 distdir = ../../dist
 

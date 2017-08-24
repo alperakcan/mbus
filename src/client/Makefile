@@ -1,11 +1,10 @@
 
-SSL_ENABLE  ?= y
-ZLIB_ENABLE ?= y
+include ../../Makefile.conf
 
 target.a-y = \
 	libmbus-client.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-client.so
 
 libmbus-client.so_files-y = \
@@ -18,8 +17,7 @@ libmbus-client.so_ldflags-y += \
 	-L../../dist/lib
 
 libmbus-client.so_cflags-${SSL_ENABLE} += \
-	-DSSL_ENABLE=1 \
-	$(shell pkg-config --cflags libssl)
+	${ssl_cflags-y}
 
 libmbus-client.so_ldflags-y += \
 	-lmbus-debug \
@@ -32,14 +30,11 @@ libmbus-client.so_ldflags-y += \
 	-lpthread
 
 libmbus-client.so_ldflags-${SSL_ENABLE} += \
-	$(shell pkg-config --libs libssl) \
-	$(shell pkg-config --libs libcrypto)
-
-libmbus-client.so_ldflags-${SSL_ENABLE} += \
+	${ssl_ldflags-y} \
 	-lpthread
 
 libmbus-client.so_cflags-${ZLIB_ENABLE} += \
-	-DZLIB_ENABLE=1
+	${zlib_cflags-y}
 
 libmbus-client.a_cflags-y = \
 	${libmbus-client.so_cflags-y}
@@ -55,7 +50,9 @@ dist.include-y = \
 	client.h
 
 dist.lib-y = \
-	libmbus-client.a \
+	libmbus-client.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-client.so
 
 include ../../Makefile.lib

@@ -1,11 +1,13 @@
 
+include ../../Makefile.conf
+
 subdir-y = \
 	cJSON
 
 target.a-y = \
 	libmbus-json.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-json.so
 
 libmbus-json.so_includes-y = \
@@ -38,7 +40,9 @@ dist.include-y = \
 	json.h
 
 dist.lib-y = \
-	libmbus-json.a \
+	libmbus-json.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-json.so
 
 include ../../Makefile.lib

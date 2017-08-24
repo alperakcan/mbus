@@ -1,12 +1,10 @@
 
-WS_ENABLE   ?= y
-SSL_ENABLE  ?= y
-ZLIB_ENABLE ?= y
+include ../../Makefile.conf
 
 target.a-y = \
 	libmbus-server.a
 
-target.so-y = \
+target.so-${SHARED_ENABLE} = \
 	libmbus-server.so
 
 libmbus-server.so_files-y = \
@@ -28,22 +26,22 @@ libmbus-server.so_ldflags-y += \
 	-lmbus-version
 
 libmbus-server.so_cflags-${SSL_ENABLE} += \
-	-DSSL_ENABLE=1 \
-	$(shell pkg-config --cflags libssl)
+	${ssl_cflags-y}
 
 libmbus-server.so_ldflags-${SSL_ENABLE} += \
-	$(shell pkg-config --libs libssl) \
-	$(shell pkg-config --libs libcrypto) \
+	${ssl_ldflags-y}
 
 libmbus-server.so_cflags-${WS_ENABLE} += \
-	-DWS_ENABLE=1 \
-	$(shell pkg-config --cflags libwebsockets)
+	${ws_cflags-y}
 
 libmbus-server.so_ldflags-${WS_ENABLE} += \
-	$(shell pkg-config --libs libwebsockets)
+	${ws_ldflags-y}
 
 libmbus-server.so_cflags-${ZLIB_ENABLE} += \
-	-DZLIB_ENABLE=1
+	${zlib_cflags-y}
+
+libmbus-server.so_ldflags-${ZLIB_ENABLE} += \
+	${zlib_ldflags-y}
 
 libmbus-server.so_ldflags-${ZLIB_ENABLE} += \
 	-lz
@@ -65,7 +63,9 @@ dist.include-y = \
 	server.h
 
 dist.lib-y = \
-	libmbus-server.a \
+	libmbus-server.a
+
+dist.lib-${SHARED_ENABLE} += \
 	libmbus-server.so
 
 include ../../Makefile.lib

@@ -35,17 +35,17 @@ install: app src test
 	install -m 0644 dist/include/mbus/version.h ${DESTDIR}/usr/local/include/mbus/version.h
 	
 	install -d ${DESTDIR}/usr/local/lib
-	install -m 0755 dist/lib/libmbus-buffer.so ${DESTDIR}/usr/local/lib/libmbus-buffer.so
-	install -m 0755 dist/lib/libmbus-client.so ${DESTDIR}/usr/local/lib/libmbus-client.so
-	install -m 0755 dist/lib/libmbus-clock.so ${DESTDIR}/usr/local/lib/libmbus-clock.so
-	install -m 0755 dist/lib/libmbus-compress.so ${DESTDIR}/usr/local/lib/libmbus-compress.so
-	install -m 0755 dist/lib/libmbus-debug.so ${DESTDIR}/usr/local/lib/libmbus-debug.so
-	install -m 0755 dist/lib/libmbus-json.so ${DESTDIR}/usr/local/lib/libmbus-json.so
-	install -m 0755 dist/lib/libmbus-json-cJSON.so ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so
-	install -m 0755 dist/lib/libmbus-server.so ${DESTDIR}/usr/local/lib/libmbus-server.so
-	install -m 0755 dist/lib/libmbus-socket.so ${DESTDIR}/usr/local/lib/libmbus-socket.so
-	install -m 0755 dist/lib/libmbus-version.so ${DESTDIR}/usr/local/lib/libmbus-version.so
-	
+	if [ -f dist/lib/libmbus-buffer.so ]; then install -m 0755 dist/lib/libmbus-buffer.so ${DESTDIR}/usr/local/lib/libmbus-buffer.so; fi
+	if [ -f dist/lib/libmbus-client.so ]; then install -m 0755 dist/lib/libmbus-client.so ${DESTDIR}/usr/local/lib/libmbus-client.so; fi
+	if [ -f dist/lib/libmbus-clock.so ]; then install -m 0755 dist/lib/libmbus-clock.so ${DESTDIR}/usr/local/lib/libmbus-clock.so; fi
+	if [ -f dist/lib/libmbus-compress.so ]; then install -m 0755 dist/lib/libmbus-compress.so ${DESTDIR}/usr/local/lib/libmbus-compress.so; fi
+	if [ -f dist/lib/libmbus-debug.so ]; then install -m 0755 dist/lib/libmbus-debug.so ${DESTDIR}/usr/local/lib/libmbus-debug.so; fi
+	if [ -f dist/lib/libmbus-json.so ]; then install -m 0755 dist/lib/libmbus-json.so ${DESTDIR}/usr/local/lib/libmbus-json.so; fi
+	if [ -f dist/lib/libmbus-json-cJSON.so ]; then install -m 0755 dist/lib/libmbus-json-cJSON.so ${DESTDIR}/usr/local/lib/libmbus-json-cJSON.so; fi
+	if [ -f dist/lib/libmbus-server.so ]; then install -m 0755 dist/lib/libmbus-server.so ${DESTDIR}/usr/local/lib/libmbus-server.so; fi
+	if [ -f dist/lib/libmbus-socket.so ]; then install -m 0755 dist/lib/libmbus-socket.so ${DESTDIR}/usr/local/lib/libmbus-socket.so; fi
+	if [ -f dist/lib/libmbus-version.so ]; then install -m 0755 dist/lib/libmbus-version.so ${DESTDIR}/usr/local/lib/libmbus-version.so; fi
+
 	install -d ${DESTDIR}/usr/local/lib
 	install -m 0644 dist/lib/libmbus-buffer.a ${DESTDIR}/usr/local/lib/libmbus-buffer.a
 	install -m 0644 dist/lib/libmbus-client.a ${DESTDIR}/usr/local/lib/libmbus-client.a
