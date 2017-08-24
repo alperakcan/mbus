@@ -59,8 +59,8 @@ install: app src test
 	install -m 0644 dist/lib/libmbus-version.a ${DESTDIR}/usr/local/lib/libmbus-version.a
 
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
-	install -m 0644 libmbus-client.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
-	install -m 0644 libmbus-json.pc ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
+	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-client.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
+	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-json.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
 
 uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
