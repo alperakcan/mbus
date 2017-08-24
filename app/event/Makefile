@@ -30,6 +30,10 @@ mbus-event_ldflags-${SSL_ENABLE} += \
 mbus-event_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
+mbus-event_ldflags-y += \
+	-lpthread \
+	-lm
+
 distdir = ../../dist
 
 dist.bin-y = \
