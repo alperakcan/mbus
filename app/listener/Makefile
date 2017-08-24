@@ -32,7 +32,8 @@ mbus-listener_ldflags-${ZLIB_ENABLE} += \
 
 mbus-listener_ldflags-y += \
 	-lpthread \
-	-lm
+	-lm \
+	-ldl
 
 distdir = ../../dist
 
