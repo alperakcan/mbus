@@ -35,7 +35,8 @@ mbus-controller_ldflags-${ZLIB_ENABLE} += \
 
 mbus-controller_ldflags-y += \
 	-lpthread \
-	-lm
+	-lm \
+	-ldl
 
 distdir = ../../dist
 
