@@ -29,6 +29,8 @@ enum mbus_json_type mbus_json_get_type (const struct mbus_json *json);
 const char * mbus_json_get_name (const struct mbus_json *json);
 const char * mbus_json_get_value_string (const struct mbus_json *json);
 int mbus_json_get_value_int (const struct mbus_json *json);
+double mbus_json_get_value_number (const struct mbus_json *json);
+int mbus_json_set_value_number (const struct mbus_json *json, double value);
 int mbus_json_get_value_bool (const struct mbus_json *json);
 
 int mbus_json_get_array_size (const struct mbus_json *json);
