@@ -105,6 +105,45 @@ void mbus_json_delete (struct mbus_json *json)
 	mbus_cJSON_Delete((mbus_cJSON *) json);
 }
 
+int mbus_json_compare (const struct mbus_json *a, const struct mbus_json *b)
+{
+	const struct mbus_json *ac;
+	const struct mbus_json *bc;
+	if (mbus_json_get_type(a) != mbus_json_get_type(b)) {
+		return -1;
+	}
+	switch (mbus_json_get_type(a)) {
+		case mbus_json_type_number:
+			if (mbus_json_get_value_number(a) != mbus_json_get_value_number(b)) {
+				return -1;
+			}
+			break;
+		case mbus_json_type_string:
+			if (strcmp(mbus_json_get_value_string(a), mbus_json_get_value_string(b)) != 0) {
+				return -1;
+			}
+			break;
+		default:
+			break;
+	}
+	ac = mbus_json_get_child(a);
+	bc = mbus_json_get_child(b);
+	while (ac != NULL && bc != NULL) {
+		if (mbus_json_compare(ac, bc) != 0) {
+			return -1;
+		}
+		ac = mbus_json_get_next(ac);
+		bc = mbus_json_get_next(bc);
+	}
+	if (ac == NULL && bc != NULL) {
+		return -1;
+	}
+	if (ac != NULL && bc == NULL) {
+		return -1;
+	}
+	return 0;
+}
+
 struct mbus_json * mbus_json_get_child (const struct mbus_json *json)
 {
 	return (struct mbus_json *) (((mbus_cJSON *) json)->child);
