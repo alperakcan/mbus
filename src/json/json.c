@@ -368,12 +368,12 @@ double mbus_json_get_number_value (const struct mbus_json *json, const char *nam
 
 int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number)
 {
-	mbus_cJSON *object;
-	object = mbus_cJSON_GetObjectItem((mbus_cJSON *) json, name);
+	struct mbus_json *object;
+	object = mbus_json_get_object(json, name);
 	if (object == NULL) {
 		return -1;
 	}
-	mbus_cJSON_SetNumberValue(object, number);
+	mbus_json_set_value_number(object, number);
 	return 0;
 }
 
