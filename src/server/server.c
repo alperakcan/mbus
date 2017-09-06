@@ -3537,7 +3537,6 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL_library_init();
 	SSL_load_error_strings();
-	OpenSSL_add_ssl_algorithms();
 #endif
 	server = malloc(sizeof(struct mbus_server));
 	if (server == NULL) {

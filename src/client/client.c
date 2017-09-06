@@ -1042,7 +1042,6 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL_library_init();
 	SSL_load_error_strings();
-	OpenSSL_add_ssl_algorithms();
 #endif
 
 	if (options.client.name == NULL) {
