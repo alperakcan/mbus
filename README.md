@@ -284,7 +284,7 @@ generate a certificate signing request to send to the ca
 
 send the csr to the ca, or sign it with you ca key
 
-    openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days <duration>
+    openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 365
 
 ## 8. contact ##
 
