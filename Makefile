@@ -60,7 +60,7 @@ install: app src test
 
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-client.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
-	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-controller.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-controller.pc
+	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-server.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-json.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
 
 uninstall:
@@ -105,5 +105,6 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-version.a
 
+	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc

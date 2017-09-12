@@ -1,11 +1,11 @@
-#libmbus-controller pkg-config source file
+#libmbus-server pkg-config source file
 
 prefix=/usr/local
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
-Name: libmbus-controller
+Name: libmbus-server
 Description: mBus is a lightweight messaging system
 Version: 1.0.0
 Requires:
