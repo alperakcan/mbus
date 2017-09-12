@@ -199,45 +199,6 @@ struct client {
 };
 TAILQ_HEAD(clients, client);
 
-struct mbus_server_options {
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-	} tcp;
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-	} uds;
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-	} ws;
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-		const char *certificate;
-		const char *privatekey;
-	} tcps;
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-		const char *certificate;
-		const char *privatekey;
-	} udss;
-	struct {
-		int enabled;
-		const char *address;
-		unsigned short port;
-		const char *certificate;
-		const char *privatekey;
-	} wss;
-};
-
 struct mbus_server {
 	struct mbus_server_options options;
 	struct listeners listeners;
@@ -330,7 +291,7 @@ static struct option longopts[] = {
 	{ NULL,					0,			NULL,	0 },
 };
 
-static void usage (void)
+void mbus_server_usage (void)
 {
 	fprintf(stdout, "mbus server arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level             : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
@@ -3515,15 +3476,206 @@ void mbus_server_destroy (struct mbus_server *server)
 	free(server);
 }
 
-struct mbus_server * mbus_server_create (int argc, char *_argv[])
+int mbus_server_options_default (struct mbus_server_options *options)
 {
-	int a;
-	int o;
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_server_options));
+	options->tcp.enabled = MBUS_SERVER_TCP_ENABLE;
+	options->tcp.address = MBUS_SERVER_TCP_ADDRESS;
+	options->tcp.port = MBUS_SERVER_TCP_PORT;
+
+	options->uds.enabled = MBUS_SERVER_UDS_ENABLE;
+	options->uds.address = MBUS_SERVER_UDS_ADDRESS;
+	options->uds.port = MBUS_SERVER_UDS_PORT;
+
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	options->ws.enabled = MBUS_SERVER_WS_ENABLE;
+	options->ws.address = MBUS_SERVER_WS_ADDRESS;
+	options->ws.port = MBUS_SERVER_WS_PORT;
+#endif
+
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	options->tcps.enabled = MBUS_SERVER_TCPS_ENABLE;
+	options->tcps.address = MBUS_SERVER_TCPS_ADDRESS;
+	options->tcps.port = MBUS_SERVER_TCPS_PORT;
+	options->tcps.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
+	options->tcps.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
+
+	options->udss.enabled = MBUS_SERVER_UDSS_ENABLE;
+	options->udss.address = MBUS_SERVER_UDSS_ADDRESS;
+	options->udss.port = MBUS_SERVER_UDSS_PORT;
+	options->udss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
+	options->udss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
+
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	options->wss.enabled = MBUS_SERVER_WSS_ENABLE;
+	options->wss.address = MBUS_SERVER_WSS_ADDRESS;
+	options->wss.port = MBUS_SERVER_WSS_PORT;
+	options->wss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
+	options->wss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
+#endif
+#endif
+	return 0;
+bail:	return -1;
+}
+
+int mbus_server_options_from_argv (struct mbus_server_options *options, int argc, char *argv[])
+{
 	int ch;
-	char **argv;
+	int o_optind;
+
+	int a;
+	char **_argv;
+
+	_argv = NULL;
+	o_optind = optind;
+
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_server_options_default(options);
+
+	optind = 1;
+	_argv = malloc(sizeof(char *) * argc);
+	for (a = 0; a < argc; a++) {
+		_argv[a] = argv[a];
+	}
+
+	while ((ch = getopt_long(argc, _argv, ":", longopts, NULL)) != -1) {
+		switch (ch) {
+			case OPTION_DEBUG_LEVEL:
+				mbus_debug_level = mbus_debug_level_from_string(optarg);
+				break;
+			case OPTION_SERVER_TCP_ENABLE:
+				options->tcp.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_TCP_ADDRESS:
+				options->tcp.address = optarg;
+				break;
+			case OPTION_SERVER_TCP_PORT:
+				options->tcp.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_UDS_ENABLE:
+				options->uds.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_UDS_ADDRESS:
+				options->uds.address = optarg;
+				break;
+			case OPTION_SERVER_UDS_PORT:
+				options->uds.port = atoi(optarg);
+				break;
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+			case OPTION_SERVER_WS_ENABLE:
+				options->ws.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_WS_ADDRESS:
+				options->ws.address = optarg;
+				break;
+			case OPTION_SERVER_WS_PORT:
+				options->ws.port = atoi(optarg);
+				break;
+#endif
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+			case OPTION_SERVER_TCPS_ENABLE:
+				options->tcps.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_TCPS_ADDRESS:
+				options->tcps.address = optarg;
+				break;
+			case OPTION_SERVER_TCPS_PORT:
+				options->tcps.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_TCPS_CERTIFICATE:
+				options->tcps.certificate = optarg;
+				break;
+			case OPTION_SERVER_TCPS_PRIVATEKEY:
+				options->tcps.privatekey = optarg;
+				break;
+			case OPTION_SERVER_UDSS_ENABLE:
+				options->udss.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_UDSS_ADDRESS:
+				options->udss.address = optarg;
+				break;
+			case OPTION_SERVER_UDSS_PORT:
+				options->udss.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_UDSS_CERTIFICATE:
+				options->tcps.certificate = optarg;
+				break;
+			case OPTION_SERVER_UDSS_PRIVATEKEY:
+				options->tcps.privatekey = optarg;
+				break;
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+			case OPTION_SERVER_WSS_ENABLE:
+				options->wss.enabled = !!atoi(optarg);
+				break;
+			case OPTION_SERVER_WSS_ADDRESS:
+				options->wss.address = optarg;
+				break;
+			case OPTION_SERVER_WSS_PORT:
+				options->wss.port = atoi(optarg);
+				break;
+			case OPTION_SERVER_WSS_CERTIFICATE:
+				options->wss.certificate = optarg;
+				break;
+			case OPTION_SERVER_WSS_PRIVATEKEY:
+				options->wss.privatekey = optarg;
+				break;
+#endif
+#endif
+			case OPTION_HELP:
+				mbus_server_usage();
+				goto bail;
+		}
+	}
+
+	optind = o_optind;
+	free(_argv);
+	return 0;
+bail:	if (_argv != NULL) {
+		free(_argv);
+	}
+	optind = o_optind;
+	return -1;
+}
+
+struct mbus_server * mbus_server_create (int argc, char *argv[])
+{
+	int rc;
+	struct mbus_server *server;
+	struct mbus_server_options options;
+	server = NULL;
+	rc = mbus_server_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	rc = mbus_server_options_from_argv(&options, argc, argv);
+	if (rc != 0) {
+		mbus_errorf("can not get options from argv");
+		goto bail;
+	}
+	server = mbus_server_create_with_options(&options);
+	if (server == NULL) {
+		mbus_errorf("can not create server with options");
+		goto bail;
+	}
+	return server;
+bail:	if (server != NULL) {
+		mbus_server_destroy(server);
+	}
+	return NULL;
+}
+
+struct mbus_server * mbus_server_create_with_options (const struct mbus_server_options *_options)
+{
 	struct mbus_server *server;
 
-	argv= NULL;
 	server = NULL;
 
 	{
@@ -3549,143 +3701,10 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 	TAILQ_INIT(&server->methods);
 	TAILQ_INIT(&server->listeners);
 
-	server->options.tcp.enabled = MBUS_SERVER_TCP_ENABLE;
-	server->options.tcp.address = MBUS_SERVER_TCP_ADDRESS;
-	server->options.tcp.port = MBUS_SERVER_TCP_PORT;
-
-	server->options.uds.enabled = MBUS_SERVER_UDS_ENABLE;
-	server->options.uds.address = MBUS_SERVER_UDS_ADDRESS;
-	server->options.uds.port = MBUS_SERVER_UDS_PORT;
-
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	server->options.ws.enabled = MBUS_SERVER_WS_ENABLE;
-	server->options.ws.address = MBUS_SERVER_WS_ADDRESS;
-	server->options.ws.port = MBUS_SERVER_WS_PORT;
-#endif
-
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	server->options.tcps.enabled = MBUS_SERVER_TCPS_ENABLE;
-	server->options.tcps.address = MBUS_SERVER_TCPS_ADDRESS;
-	server->options.tcps.port = MBUS_SERVER_TCPS_PORT;
-	server->options.tcps.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
-	server->options.tcps.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
-
-	server->options.udss.enabled = MBUS_SERVER_UDSS_ENABLE;
-	server->options.udss.address = MBUS_SERVER_UDSS_ADDRESS;
-	server->options.udss.port = MBUS_SERVER_UDSS_PORT;
-	server->options.udss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
-	server->options.udss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
-
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	server->options.wss.enabled = MBUS_SERVER_WSS_ENABLE;
-	server->options.wss.address = MBUS_SERVER_WSS_ADDRESS;
-	server->options.wss.port = MBUS_SERVER_WSS_PORT;
-	server->options.wss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
-	server->options.wss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
-#endif
-#endif
-
-	argv = malloc(sizeof(char *) * (argc + 1));
-	if (argv == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
+	mbus_server_options_default(&server->options);
+	if (_options != NULL) {
+		memcpy(&server->options, _options, sizeof(struct mbus_server_options));
 	}
-	for (a = 0; a < argc; a++) {
-		argv[a] = _argv[a];
-	}
-	argv[a] = NULL;
-
-	o = optind;
-	while ((ch = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
-		switch (ch) {
-			case OPTION_DEBUG_LEVEL:
-				mbus_debug_level = mbus_debug_level_from_string(optarg);
-				break;
-			case OPTION_SERVER_TCP_ENABLE:
-				server->options.tcp.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_TCP_ADDRESS:
-				server->options.tcp.address = optarg;
-				break;
-			case OPTION_SERVER_TCP_PORT:
-				server->options.tcp.port = atoi(optarg);
-				break;
-			case OPTION_SERVER_UDS_ENABLE:
-				server->options.uds.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_UDS_ADDRESS:
-				server->options.uds.address = optarg;
-				break;
-			case OPTION_SERVER_UDS_PORT:
-				server->options.uds.port = atoi(optarg);
-				break;
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-			case OPTION_SERVER_WS_ENABLE:
-				server->options.ws.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_WS_ADDRESS:
-				server->options.ws.address = optarg;
-				break;
-			case OPTION_SERVER_WS_PORT:
-				server->options.ws.port = atoi(optarg);
-				break;
-#endif
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			case OPTION_SERVER_TCPS_ENABLE:
-				server->options.tcps.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_TCPS_ADDRESS:
-				server->options.tcps.address = optarg;
-				break;
-			case OPTION_SERVER_TCPS_PORT:
-				server->options.tcps.port = atoi(optarg);
-				break;
-			case OPTION_SERVER_TCPS_CERTIFICATE:
-				server->options.tcps.certificate = optarg;
-				break;
-			case OPTION_SERVER_TCPS_PRIVATEKEY:
-				server->options.tcps.privatekey = optarg;
-				break;
-			case OPTION_SERVER_UDSS_ENABLE:
-				server->options.udss.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_UDSS_ADDRESS:
-				server->options.udss.address = optarg;
-				break;
-			case OPTION_SERVER_UDSS_PORT:
-				server->options.udss.port = atoi(optarg);
-				break;
-			case OPTION_SERVER_UDSS_CERTIFICATE:
-				server->options.tcps.certificate = optarg;
-				break;
-			case OPTION_SERVER_UDSS_PRIVATEKEY:
-				server->options.tcps.privatekey = optarg;
-				break;
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-			case OPTION_SERVER_WSS_ENABLE:
-				server->options.wss.enabled = !!atoi(optarg);
-				break;
-			case OPTION_SERVER_WSS_ADDRESS:
-				server->options.wss.address = optarg;
-				break;
-			case OPTION_SERVER_WSS_PORT:
-				server->options.wss.port = atoi(optarg);
-				break;
-			case OPTION_SERVER_WSS_CERTIFICATE:
-				server->options.wss.certificate = optarg;
-				break;
-			case OPTION_SERVER_WSS_PRIVATEKEY:
-				server->options.wss.privatekey = optarg;
-				break;
-#endif
-#endif
-			case OPTION_HELP:
-				usage();
-				optind = o;
-				goto bail;
-		}
-	}
-	optind = o;
 
 	if (server->options.tcp.enabled == 0 &&
 	    server->options.uds.enabled == 0 &&
@@ -3782,13 +3801,9 @@ struct mbus_server * mbus_server_create (int argc, char *_argv[])
 			goto bail;
 		}
 	}
-	free(argv);
 	server->running = 1;
 	return server;
 bail:	mbus_server_destroy(server);
-	if (argv != NULL) {
-		free(argv);
-	}
 	return NULL;
 }
 

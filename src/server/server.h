@@ -319,7 +319,52 @@
 
 struct mbus_server;
 
+struct mbus_server_options {
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+	} tcp;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+	} uds;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+	} ws;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+		const char *certificate;
+		const char *privatekey;
+	} tcps;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+		const char *certificate;
+		const char *privatekey;
+	} udss;
+	struct {
+		int enabled;
+		const char *address;
+		unsigned short port;
+		const char *certificate;
+		const char *privatekey;
+	} wss;
+};
+
+void mbus_server_usage (void);
+
+int mbus_server_options_default (struct mbus_server_options *options);
+int mbus_server_options_from_argv (struct mbus_server_options *options, int argc, char *argv[]);
+
 struct mbus_server * mbus_server_create (int argc, char *argv[]);
+struct mbus_server * mbus_server_create_with_options (const struct mbus_server_options *options);
 void mbus_server_destroy (struct mbus_server *server);
 
 int mbus_server_run (struct mbus_server *server);
