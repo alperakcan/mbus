@@ -71,6 +71,7 @@ enum mbus_debug_level mbus_debug_level_from_string (const char *string)
 
 int mbus_debug_printf (enum mbus_debug_level level, const char *name, const char *function, const char *file, int line, const char *fmt, ...)
 {
+	int rc;
 	char *str;
 	va_list ap;
 
@@ -84,7 +85,10 @@ int mbus_debug_printf (enum mbus_debug_level level, const char *name, const char
 	if (mbus_debug_level < level) {
 		goto out;
 	}
-	vasprintf(&str, fmt, ap);
+	rc = vasprintf(&str, fmt, ap);
+	if (rc < 0) {
+		goto bail;
+	}
 
 	gettimeofday(&timeval, NULL);
 
@@ -103,4 +107,9 @@ out:	va_end(ap);
 		free(str);
 	}
 	return 0;
+bail:	va_end(ap);
+	if (str != NULL) {
+		free(str);
+	}
+	return -1;
 }
