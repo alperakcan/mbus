@@ -1860,6 +1860,7 @@ bail:	if (socket != NULL) {
 		client_destroy(client);
 	}
 	return -2;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 reject:	if (socket != NULL) {
 		if (client == NULL ||
 		    client_get_socket(client) != socket) {
@@ -1870,6 +1871,7 @@ reject:	if (socket != NULL) {
 		client_destroy(client);
 	}
 	return -2;
+#endif
 }
 
 static int server_handle_command_create (struct mbus_server *server, struct method *method)
