@@ -110,6 +110,12 @@ int mbus_compress_data (enum mbus_compress_method compression, void **dst, int *
 	if (compression == mbus_compress_method_zlib) {
 		return zlib_compress_data(dst, dstlen, src, srclen);
 	}
+#else
+	(void) compression;
+	(void) dst;
+	(void) dstlen;
+	(void) src;
+	(void) srclen;
 #endif
 	return -1;
 }
@@ -120,6 +126,12 @@ int mbus_uncompress_data (enum mbus_compress_method compression, void **dst, int
 	if (compression == mbus_compress_method_zlib) {
 		return zlib_uncompress_data(dst, dstlen, src, srclen);
 	}
+#else
+	(void) compression;
+	(void) dst;
+	(void) dstlen;
+	(void) src;
+	(void) srclen;
 #endif
 	return -1;
 }
@@ -129,6 +141,8 @@ const char * mbus_compress_method_string (enum mbus_compress_method compression)
 	if (compression == mbus_compress_method_none) return "none";
 #if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
 	if (compression == mbus_compress_method_zlib) return "zlib";
+#else
+	(void) compression;
 #endif
 	return "none";
 }
