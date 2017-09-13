@@ -200,6 +200,21 @@ void mbus_client_usage (void)
 	fprintf(stdout, "  --mbus-help            : this text\n");
 }
 
+static char * __strndup (const char *s, size_t n)
+{
+	char *result;
+	size_t len = strlen (s);
+	if (n < len) {
+		len = n;
+	}
+	result = (char *) malloc (len + 1);
+	if (!result) {
+		return 0;
+	}
+	result[len] = '\0';
+	return (char *) memcpy (result, s, len);
+}
+
 static const char * callback_get_identifier (struct callback *callback)
 {
 	if (callback == NULL) {
@@ -848,7 +863,7 @@ static void * client_worker (void *arg)
 					}
 
 					mbus_debugf("message: '%.*s'", uncompressed, data);
-					string = strndup((char *) data, uncompressed);
+					string = __strndup((char *) data, uncompressed);
 					if (string == NULL) {
 						mbus_errorf("can not allocate memory");
 						if (data != ptr) {
