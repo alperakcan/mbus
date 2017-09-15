@@ -338,16 +338,13 @@ void mbus_server_usage (void)
 static char * _strndup (const char *s, size_t n)
 {
 	char *result;
-	size_t len = strlen (s);
-	if (n < len) {
-		len = n;
-	}
-	result = (char *) malloc (len + 1);
-	if (!result) {
-		return 0;
+	size_t len = strnlen(s, n);
+	result = (char *) malloc(len + 1);
+	if (result == NULL) {
+		return NULL;
 	}
 	result[len] = '\0';
-	return (char *) memcpy (result, s, len);
+	return (char *) memcpy(result, s, len);
 }
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
