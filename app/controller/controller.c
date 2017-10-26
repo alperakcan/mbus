@@ -28,6 +28,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <signal.h>
 
 #include "mbus/debug.h"
@@ -41,18 +42,64 @@ static void signal_handler (int signal)
 	g_running = 0;
 }
 
+#define OPTION_HELP		0x100
+#define OPTION_SUBSCRIBE	0x101
+static struct option longopts[] = {
+	{ "help",			no_argument,		NULL,	OPTION_HELP },
+	{ NULL,				0,			NULL,	0 },
+};
+
+static void usage (void)
+{
+	fprintf(stdout, "mbus controller arguments:\n");
+	fprintf(stdout, "  --help                   : this text\n");
+	fprintf(stdout, "  --mbus-help              : mbus help text\n");
+	mbus_server_usage();
+}
+
 int main (int argc, char *argv[])
 {
+	int c;
 	int rc;
+
+	int _argc;
+	char **_argv;
+	int _optind;
+
 	struct mbus_server *server;
+
 	g_running = 1;
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
+
+	server = NULL;
+	_argc = 0;
+	_argv = NULL;
+	_optind = optind;
+
+	optind = 1;
+	_argv = malloc(sizeof(char *) * argc);
+	for (_argc = 0; _argc < argc; _argc++) {
+		_argv[_argc] = argv[_argc];
+	}
+
+	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+		switch (c) {
+			case OPTION_HELP:
+				usage();
+				goto bail;
+		}
+	}
+
+	optind = _optind;
+	free(_argv);
+
 	server = mbus_server_create(argc, argv);
 	if (server == NULL) {
 		mbus_errorf("can not create server");
 		goto bail;
 	}
+
 	while (g_running) {
 		rc = mbus_server_run_timeout(server, MBUS_SERVER_DEFAULT_TIMEOUT);
 		if (rc < 0) {
@@ -63,10 +110,14 @@ int main (int argc, char *argv[])
 			break;
 		}
 	}
+
 	mbus_server_destroy(server);
 	return 0;
 bail:	if (server != NULL) {
 		mbus_server_destroy(server);
+	}
+	if (_argv != NULL) {
+		free(_argv);
 	}
 	return -1;
 }

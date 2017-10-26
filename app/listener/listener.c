@@ -91,7 +91,6 @@ static void listener_status_server_subscribed (struct mbus_client *client, const
 	(void) data;
 }
 
-
 #define OPTION_HELP		0x100
 #define OPTION_SUBSCRIBE	0x101
 static struct option longopts[] = {
@@ -106,19 +105,49 @@ static void usage (void)
 	fprintf(stdout, "  --subscribe              : subscribe to identifier\n");
 	fprintf(stdout, "  --help                   : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
+	mbus_client_usage();
 }
 
 int main (int argc, char *argv[])
 {
 	int c;
 	int rc;
+
+	int _argc;
+	char **_argv;
+	int _optind;
+
 	int all;
 	struct mbus_client *client;
+
+	client = NULL;
+	_argc = 0;
+	_argv = NULL;
+	_optind = optind;
+
+	optind = 1;
+	_argv = malloc(sizeof(char *) * argc);
+	for (_argc = 0; _argc < argc; _argc++) {
+		_argv[_argc] = argv[_argc];
+	}
+
+	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+		switch (c) {
+			case OPTION_HELP:
+				usage();
+				goto bail;
+		}
+	}
+
+	optind = _optind;
+	free(_argv);
+
 	client = mbus_client_create(MBUS_APP_LISTENER_NAME, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
+
 	all = 1;
 	while ((c = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
 		switch (c) {
@@ -135,6 +164,7 @@ int main (int argc, char *argv[])
 				goto bail;
 		}
 	}
+
 	if (all == 1) {
 		rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
 		if (rc != 0) {
@@ -152,15 +182,20 @@ int main (int argc, char *argv[])
 			goto bail;
 		}
 	}
+
 	rc = mbus_client_run(client);
 	if (rc != 0) {
 		mbus_errorf("client run failed");
 		goto bail;
 	}
+
 	mbus_client_destroy(client);
 	return 0;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
+	}
+	if (_argv != NULL) {
+		free(_argv);
 	}
 	return -1;
 }

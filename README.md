@@ -96,7 +96,7 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
   - --mbus-server-uds-address
   
-    server uds address, default: /tmp/mbus-server
+    server uds address, default: /tmp/mbus-server-uds
   
   - --mbus-server-uds-port
   
@@ -113,6 +113,66 @@ mBus client library (libmbus-client) is to simplify development of software usin
   - --mbus-server-ws-port
   
     server websocket port, default: 9000
+  
+  - --mbus-server-tcps-enable
+  
+    server tcps enable, default: 1
+  
+  - --mbus-server-tcps-address
+  
+    server tcps address, default: 127.0.0.1
+  
+  - --mbus-server-tcps-port
+  
+    server tcps port, default: 8000
+
+  - --mbus-server-tcps-certificate
+  
+    server tcps certificate (default: server.crt)
+  
+  - --mbus-server-tcps-privatekey
+  
+    server tcps privatekey (default: server.key)
+  
+  - --mbus-server-udss-enable
+  
+    server udss enable, default: 1
+  
+  - --mbus-server-udss-address
+  
+    server udss address, default: /tmp/mbus-server-udss
+  
+  - --mbus-server-udss-port
+  
+    server udss port, default: -1
+  
+  - --mbus-server-udps-certificate
+  
+    server udps certificate (default: server.crt)
+  
+  - --mbus-server-udps-privatekey
+  
+    server udps privatekey (default: server.key)
+  
+  - --mbus-server-wss-enable
+  
+    server websocket enable, default: 1
+    
+  - --mbus-server-wss-address
+  
+    server websocket address, default: 127.0.0.1
+  
+  - --mbus-server-wss-port
+  
+    server websocket port, default: 9000
+  
+  - --mbus-server-wss-certificate
+  
+    server wss certificate (default: server.crt)
+  
+  - --mbus-server-wss-privatekey
+  
+    server wss privatekey (default: server.key)
   
 ### 4.2 listener ###
 
