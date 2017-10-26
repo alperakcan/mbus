@@ -292,8 +292,8 @@ int main (int argc, char *argv[])
 				mbus_client = mbus_client_create_with_options(&mbus_client_options);
 				if (mbus_client == NULL) {
 					fprintf(stderr, "can not create mbus client\n");
-					if (o_reconnect) {
-						usleep(1000000);
+					if (o_reconnect > 0) {
+						usleep(o_reconnect * 1000);
 						continue;
 					} else {
 						goto bail;
@@ -302,10 +302,10 @@ int main (int argc, char *argv[])
 					rc = mbus_client_register(mbus_client, "command.execute", command_execute, NULL);
 					if (rc != 0) {
 						fprintf(stderr, "can not register command\n");
-						if (o_reconnect) {
+						if (o_reconnect  > 0) {
 							mbus_client_destroy(mbus_client);
 							mbus_client = NULL;
-							usleep(1000000);
+							usleep(o_reconnect * 1000);
 							continue;
 						} else {
 							goto bail;
@@ -316,10 +316,10 @@ int main (int argc, char *argv[])
 			rc = mbus_client_run_timeout(mbus_client, MBUS_CLIENT_DEFAULT_TIMEOUT);
 			if (rc < 0) {
 				fprintf(stderr, "client run failed: %d\n", rc);
-				if (o_reconnect) {
+				if (o_reconnect > 0) {
 					mbus_client_destroy(mbus_client);
 					mbus_client = NULL;
-					usleep(1000000);
+					usleep(o_reconnect * 1000);
 					continue;
 				} else {
 					goto bail;
@@ -327,10 +327,10 @@ int main (int argc, char *argv[])
 			}
 			if (rc > 1) {
 				fprintf(stderr, "client run exited: %d\n", rc);
-				if (o_reconnect) {
+				if (o_reconnect > 0) {
 					mbus_client_destroy(mbus_client);
 					mbus_client = NULL;
-					usleep(1000000);
+					usleep(o_reconnect * 1000);
 					continue;
 				} else {
 					goto bail;
