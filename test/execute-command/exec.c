@@ -16,8 +16,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <sys/prctl.h>
-
 #define MBUS_DEBUG_NAME	"command-exec"
 
 #include "mbus/debug.h"
