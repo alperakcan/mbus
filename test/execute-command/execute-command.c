@@ -92,7 +92,7 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 	argv[2] = (char *) shell;
 	argv[3] = NULL;
 
-	pid = command_exec(argv, NULL, io);
+	pid = command_exec(argv, io);
 	if (pid < 0) {
 		goto bail;
 	}

@@ -399,27 +399,27 @@ disp_distclean        = $($(verbose)_disp_distclean)
 #
 # _CMD
 #
-_cmd_depend.c       = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) $($1_cxxflags) \
+_cmd_depend.c       = $(CC) $(CFLAGS) $($1_cflags) \
                       $($1_includes) -M $$< | $(SED) 's,\($$*\.o\) *:,.$1/\1 \
                       $$@: ,' > $$@; \
                       $(CP) $$@ $$@.p; \
                       $(SED) -e 's/\#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$$$//' -e '/^$$$$/ d' -e 's/$$$$/ :/' < $$@ >> $$@.p; \
                       $(MV) $$@.p $$@
-_cmd_compile.c      = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) $($1_cxxflags) \
-                      $($1_includes) $$($1_$$<_cflags-y) $$($1_$$<_cxxflags-y) -c -o $$@ $$<
-_cmd_link.c         = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_compile.c      = $(CC) $(CFLAGS) $($1_cflags) \
+                      $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
+_cmd_link.c         = $(CC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                       $($1_ldflags) $(LDFLAGS)
-_cmd_link_so.c      = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_link_so.c      = $(CC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                       $($1_ldflags) $$(filter-out -static,$(LDFLAGS)) -shared
 
-_cmd_depend.c.host  = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) \
-                      $($1_cxxflags) $($1_includes) -M $$< | $(SED) \
+_cmd_depend.c.host  = $(HOSTCC) $(CFLAGS) $($1_cflags) \
+                      $($1_includes) -M $$< | $(SED) \
                       's,\($$*\.o\) *:,.$1/\1 $$@: ,' > $$@
-_cmd_compile.c.host = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) \
-                      $($1_cxxflags) $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
-_cmd_link.c.host    = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_compile.c.host = $(HOSTCC) $(CFLAGS) $($1_cflags) \
+                      $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
+_cmd_link.c.host    = $(HOSTCC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                       $($1_ldflags) $(LDFLAGS)
-_cmd_link_so.c.host = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_link_so.c.host = $(HOSTCC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                       $($1_ldflags) $$(filter-out -static,$(LDFLAGS)) -shared
 
 _cmd_depend.cxx       = $(CXX) $(CFLAGS) $(CXXFLAGS) $($1_cflags) $($1_cxxflags) \
@@ -446,24 +446,24 @@ _cmd_moc.cxx          = $(MOC) $$< -o $$@
 
 _cmd_moc.cxx.host     = $(HOSTMOC) $$< -o $$@
 
-_cmd_depend.m         = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) $($1_cxxflags) \
+_cmd_depend.m         = $(CC) $(CFLAGS) $($1_cflags) \
                         $($1_includes) -M $$< | $(SED) 's,\($$*\.o\) *:,.$1/\1 \
                         $$@: ,' > $$@
-_cmd_compile.m        = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) $($1_cxxflags) \
+_cmd_compile.m        = $(CC) $(CFLAGS) $($1_cflags) \
                         $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
-_cmd_link.m           = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_link.m           = $(CC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                         $($1_ldflags) $(LDFLAGS)
-_cmd_link_so.m        = $(CC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_link_so.m        = $(CC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                         $($1_ldflags) $$(filter-out -static,$(LDFLAGS)) -shared
 
-_cmd_depend.m.host    = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) \
-                        $($1_cxxflags) $($1_includes) -M $$< | $(SED) \
+_cmd_depend.m.host    = $(HOSTCC) $(CFLAGS) $($1_cflags) \
+                        $($1_includes) -M $$< | $(SED) \
                         's,\($$*\.o\) *:,.$1/\1 $$@: ,' > $$@
-_cmd_compile.m.host   = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_cflags) \
-                        $($1_cxxflags) $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
-_cmd_link.m.host      = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_compile.m.host   = $(HOSTCC) $(CFLAGS) $($1_cflags) \
+                        $($1_includes) $$($1_$$<_cflags-y) -c -o $$@ $$<
+_cmd_link.m.host      = $(HOSTCC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                         $($1_ldflags) $(LDFLAGS)
-_cmd_link_so.m.host   = $(HOSTCC) $(CFLAGS) $(CXXFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
+_cmd_link_so.m.host   = $(HOSTCC) $(CFLAGS) $($1_libraries) -o $$@ $$(filter-out __FORCE $($1_depends-y),$$^) \
                         $($1_ldflags) $$(filter-out -static,$(LDFLAGS)) -shared
 
 _cmd_ar               = $(AR) rcs $$@ $$(filter-out __FORCE $($1_depends-y),$$^)

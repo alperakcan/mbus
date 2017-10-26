@@ -21,15 +21,13 @@
 #include "mbus/debug.h"
 #include "exec.h"
 
-pid_t command_exec (char * const *args, const char **environment, int *io)
+pid_t command_exec (char * const *args, int *io)
 {
 	int i;
-	int j;
 	int n;
 	int in[2];
 	int out[2];
 	int err[2];
-	const char **env;
 	pid_t pid;
 
 	n = -1;
@@ -39,36 +37,6 @@ pid_t command_exec (char * const *args, const char **environment, int *io)
 	out[1] = -1;
 	err[0] = -1;
 	err[1] = -1;
-
-	env = NULL;
-
-	if (environment != NULL) {
-		for (i = 0; environ[i] != NULL; i++);
-		n = i;
-		for (i = 0; environment[i] != NULL; i++);
-		n += i;
-		env = malloc((n + 1) * sizeof(*env));
-		if (env == NULL) {
-			mbus_errorf("malloc(env) failed for command: %s", args[0]);
-			goto bail;
-		}
-		n = 0;
-		for (i = 0; environ[i] != NULL; i++) {
-			env[n++] = environ[i];
-		}
-		for (i = 0; environment[i] != NULL; i++) {
-			for (j = 0; j < n; j++) {
-				if (strncmp(env[j], environment[i], strcspn(environment[i], "=") + 1) == 0) {
-					env[j] = environment[i];
-					break;
-				}
-			}
-			if (j >= n) {
-				env[n++] = environment[i];
-			}
-		}
-		env[n++] = NULL;
-	}
 
 	if (io != NULL) {
 		if (pipe(in) < 0) {
@@ -95,9 +63,6 @@ pid_t command_exec (char * const *args, const char **environment, int *io)
 			close(in[0]);
 			close(out[1]);
 			close(err[1]);
-		}
-		if (env != NULL) {
-			free(env);
 		}
 		return pid;
 	} else if (pid == 0) {
@@ -136,11 +101,8 @@ pid_t command_exec (char * const *args, const char **environment, int *io)
 		for (i = 3; i < 1024 && 0; i++) {
 			close(i);
 		}
-		execvpe(args[0], args, (env != NULL) ? ((char * const *) env) : (environ));
-		mbus_errorf("execl(%s) failed", args[0]);
-		if (env != NULL) {
-			free(env);
-		}
+		execvp(args[0], args);
+		mbus_errorf("execvp(%s) failed", args[0]);
 		exit(-1);
 	}
 
@@ -155,9 +117,6 @@ bail:	if (io != NULL) {
 		close(err[1]);
 	} else {
 		close(n);
-	}
-	if (env != NULL) {
-		free(env);
 	}
 	return -1;
 }
