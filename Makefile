@@ -5,8 +5,7 @@ subdir-y = \
 	test
 
 app_depends-y = \
-	src \
-	test
+	src
 
 test_depends-y = \
 	src

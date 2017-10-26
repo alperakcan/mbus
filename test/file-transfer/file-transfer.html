@@ -1,0 +1,121 @@
+<html>
+	<head>
+    	<meta charset="utf-8"></meta>
+		<title>org.pipeline.mbus-file-transfer</title>
+		<script src="mbus-client.js"></script>
+	</head>
+	
+	<style>
+		.packets_table {
+			border: 0px solid black;
+			width: 100%;
+		}
+		.packets_table_tr {
+			border: 1px solid black;
+			width: 100%;
+		}
+		.packets_table_td {
+			border: 0px solid black;
+			text-align: center;
+			vertical-align: top;
+			font-family: monospace,monospace;
+		}
+		.packets_table_td_payload {
+			border: 0px solid black;
+			text-align: left;
+			font-family:monospace,monospace;
+		}
+	</style>
+
+	<body>
+	 	<script language="javascript" type="text/javascript">
+			var output;
+
+			var url = null;
+			var mbc = null;
+			var timer = null;
+
+			function init()
+			{
+				output = document.getElementById("output");
+				
+				mbc = new MBusClient();
+			
+				mbc.onConnected = function () {
+					console.log("connected to: " + url);
+					writeToScreen("connected to: " + url);
+				};
+			 
+				mbc.onDisconnected = function () {
+					console.log("disconnected from: " + url);
+					writeToScreen("disconnected from: " + url);
+					if (timer !== null) {
+						clearTimeout(timer);
+					}
+					timer = setTimeout(function () {
+						writeToScreen("connecting to: " + url);
+						mbc.connect(url);
+					}, 2000 + Math.floor(Math.random() * 2000));
+				}
+
+				if (typeof window.location.hostname !== 'string' ||
+				    window.location.hostname === '') {
+					url = "ws://localhost:9000";
+				} else {
+					url = "ws://" + window.location.hostname + ":9000";
+				}
+				
+				writeToScreen("connecting to: " + url);
+				mbc.connect(url);
+			}
+		
+
+			function _arrayBufferToBase64 (buffer)
+			{
+				var binary = '';
+				var bytes = new Uint8Array(buffer);
+				var len = bytes.byteLength;
+				for (var i = 0; i < len; i++) {
+					binary += String.fromCharCode(bytes[i]);
+				}
+				return window.btoa(binary);
+			}
+			
+			openFile = function (event) {
+				var input = event.target;
+				var reader = new FileReader();
+				reader.onload = function (event) {
+					var data = reader.result;
+					//var output = document.getElementById('output');
+					//output.innerHTML = dataURL;
+					writeToScreen(event.target.fileName + ":" + data);
+					//writeToScreen(_arrayBufferToBase64(data));
+					var request;
+					request = {};
+					request.source = event.target.fileName;
+					request.destination = event.target.fileName;
+					request.encoded = _arrayBufferToBase64(data);
+					mbc.command("org.pipeline.mbus-file-transfer", "command.put", request, function (result, payload) {
+						writeToScreen("result: " + result);
+					});
+				};
+				writeToScreen("sending file: " + input.files[0].name);
+				reader.fileName = input.files[0].name;
+				reader.readAsArrayBuffer(input.files[0]);
+			}
+			
+			function writeToScreen(message)
+			{
+				var pre = document.createElement("p");
+				pre.style.wordWrap = "break-word";
+				pre.innerHTML = message;
+				output.appendChild(pre);
+			}
+
+			window.addEventListener("load", init, false);
+		</script>
+		<h2>org.pipeline.mbus-file-transfer</h2>
+		<input type='file' accept='*/*' onchange='openFile(event)'><br>
+		<div id='output'></div>
+	</body>
+</html>
