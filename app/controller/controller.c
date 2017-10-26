@@ -92,7 +92,6 @@ int main (int argc, char *argv[])
 	}
 
 	optind = _optind;
-	free(_argv);
 
 	server = mbus_server_create(argc, argv);
 	if (server == NULL) {
@@ -112,6 +111,7 @@ int main (int argc, char *argv[])
 	}
 
 	mbus_server_destroy(server);
+	free(_argv);
 	return 0;
 bail:	if (server != NULL) {
 		mbus_server_destroy(server);
