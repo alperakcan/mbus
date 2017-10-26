@@ -241,7 +241,7 @@ int main (int argc, char *argv[])
 	mbus_client = NULL;
 	mbus_client_options_from_argv(&mbus_client_options, argc, argv);
 
-	while ((c = getopt_long(argc, argv, "rwi:l:c:t:", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, ":rwi:l:c:t:", options, NULL)) != -1) {
 		switch (c) {
 			case 'h':
 				print_help(argv[0]);
