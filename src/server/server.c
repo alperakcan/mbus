@@ -1956,7 +1956,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 			if (client->ping.interval > 0) {
 				client->ping.enabled = 1;
 			}
-			client->ping.ping_recv_tsms = mbus_clock_get();
+			client->ping.ping_recv_tsms = mbus_clock_get() - client->ping.interval;
 		}
 		{
 			int i;
@@ -2844,7 +2844,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		if (mbus_clock_after(current, client->ping.ping_recv_tsms + client->ping.interval + client->ping.timeout)) {
 			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_name(client), current, client->ping.ping_recv_tsms, client->ping.interval, client->ping.timeout);
 			client->ping.ping_missed_count += 1;
-			client->ping.ping_recv_tsms = current /* + client->ping.interval + client->ping.timeout */;
+			client->ping.ping_recv_tsms = client->ping.ping_recv_tsms + client->ping.interval;
 		}
 		if (client->ping.ping_missed_count > client->ping.threshold) {
 			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_name(client), client->ping.ping_missed_count, client->ping.threshold);
