@@ -32,6 +32,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -373,22 +374,38 @@ int mbus_socket_get_keepintvl (struct mbus_socket *socket)
 int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsigned short port)
 {
 	int rc;
-	struct sockaddr_in sockaddr_in;
-	struct sockaddr_un sockaddr_un;
 	if (address == NULL) {
 		mbus_errorf("address is null");
 		return -1;
 	}
 	if (socket->domain == AF_INET) {
-		sockaddr_in.sin_family = socket->domain;
-		rc = inet_pton(socket->domain, address, &sockaddr_in.sin_addr);
-		if (rc <= 0) {
-			mbus_errorf("inet_pton failed for: '%s'", address);
+		struct addrinfo hints;
+		struct addrinfo *result;
+		struct addrinfo *res;
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_family = PF_UNSPEC;
+		hints.ai_socktype = SOCK_STREAM;
+		rc = getaddrinfo(address, NULL, &hints, &result);
+		if (rc != 0) {
+			mbus_errorf("getaddrinfo failed for: %s", address);
 			goto bail;
 		}
-		sockaddr_in.sin_port = htons(port);
-		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_in , sizeof(sockaddr_in));
+		for (res = result; res; res = res->ai_next) {
+			struct sockaddr_in *sockaddr_in;
+			if (res->ai_family != AF_INET) {
+				continue;
+			}
+			mbus_errorf("connecting");
+			sockaddr_in = (struct sockaddr_in *) res->ai_addr;
+			sockaddr_in->sin_port = htons(port);
+			rc = connect(socket->fd, res->ai_addr, res->ai_addrlen);
+			if (rc != 0) {
+				continue;
+			}
+		}
+		freeaddrinfo(result);
 	} else if (socket->domain == AF_UNIX) {
+		struct sockaddr_un sockaddr_un;
 		sockaddr_un.sun_family = socket->domain;
 		snprintf(sockaddr_un.sun_path, sizeof(sockaddr_un.sun_path) - 1, "%s:%d", address, port);
 		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
