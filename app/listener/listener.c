@@ -140,7 +140,6 @@ int main (int argc, char *argv[])
 	}
 
 	optind = _optind;
-	free(_argv);
 
 	client = mbus_client_create(MBUS_APP_LISTENER_NAME, argc, argv);
 	if (client == NULL) {
@@ -190,6 +189,7 @@ int main (int argc, char *argv[])
 	}
 
 	mbus_client_destroy(client);
+	free(_argv);
 	return 0;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);

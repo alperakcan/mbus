@@ -128,7 +128,6 @@ int main (int argc, char *argv[])
 	}
 
 	optind = _optind;
-	free(_argv);
 
 	client = mbus_client_create(MBUS_APP_EVENT_NAME, argc, argv);
 	if (client == NULL) {
@@ -195,6 +194,7 @@ int main (int argc, char *argv[])
 	mbus_json_delete(arg.payload);
 	mbus_client_sync(client);
 	mbus_client_destroy(client);
+	free(_argv);
 	return arg.result;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
