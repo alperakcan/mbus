@@ -391,11 +391,13 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 			goto bail;
 		}
 		for (res = result; res; res = res->ai_next) {
+			char str[INET_ADDRSTRLEN];
 			struct sockaddr_in *sockaddr_in;
 			if (res->ai_family != AF_INET) {
 				continue;
 			}
-			mbus_errorf("connecting");
+			inet_ntop(AF_INET, &(((struct sockaddr_in *) res->ai_addr)->sin_addr), str, sizeof(str));
+			mbus_infof("connecting to: %s:%d", str, port);
 			sockaddr_in = (struct sockaddr_in *) res->ai_addr;
 			sockaddr_in->sin_port = htons(port);
 			rc = connect(socket->fd, res->ai_addr, res->ai_addrlen);
