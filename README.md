@@ -5,7 +5,7 @@ and applications. enabling development of component based distributed applicatio
 
 1. <a href="#1-overview">overview</a>
 2. <a href="#2-download">download</a>
-3. <a href="#3-build">download</a>
+3. <a href="#3-build">build</a>
 4. <a href="#4-applications">applications</a>
     - <a href="#41-controller">controller</a>
         - <a href="#411-command-line-options">command line options</a>
@@ -207,6 +207,18 @@ mBus client library (libmbus-client) is to simplify development of software usin
   - --mbus-client-name
   
     set client name, default: org.mbus.app.listener
+
+  - --mbus-ping-interval
+
+    ping interval. default: 180000
+
+  - --mbus-ping-timeout
+
+    ping timeout. default: 5000
+
+  --mbus-ping-threshold
+
+    ping threshold. default: 2
 
 ### 4.3 event ###
 
