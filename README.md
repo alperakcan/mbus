@@ -216,7 +216,7 @@ mBus client library (libmbus-client) is to simplify development of software usin
 
     ping timeout. default: 5000
 
-  --mbus-ping-threshold
+  - --mbus-ping-threshold
 
     ping threshold. default: 2
 
