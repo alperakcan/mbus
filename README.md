@@ -254,6 +254,18 @@ mBus client library (libmbus-client) is to simplify development of software usin
   
     set client name, default: org.mbus.app.cli
 
+  - --mbus-ping-interval
+
+    ping interval. default: 180000
+
+  - --mbus-ping-timeout
+
+    ping timeout. default: 5000
+
+  - --mbus-ping-threshold
+
+    ping threshold. default: 2
+
 ### 4.4 command ###
 
 #### 4.4.1 command line options ####
@@ -287,6 +299,18 @@ mBus client library (libmbus-client) is to simplify development of software usin
   - --mbus-client-name
   
     set client name, default: org.mbus.app.cli
+
+  - --mbus-ping-interval
+
+    ping interval. default: 180000
+
+  - --mbus-ping-timeout
+
+    ping timeout. default: 5000
+
+  - --mbus-ping-threshold
+
+    ping threshold. default: 2
 
 ## 5. library ##
 
