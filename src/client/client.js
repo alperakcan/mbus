@@ -453,7 +453,7 @@ MBusClient.prototype.event = function (identifier, event) {
 		identifier: identifier,
 		event: event,
 	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
