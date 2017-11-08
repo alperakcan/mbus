@@ -39,7 +39,6 @@
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
-#include "command.h"
 
 #define OPTION_HELP		0x100
 #define OPTION_DESTINATION	0x101
@@ -134,7 +133,7 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
-	client = mbus_client_create(MBUS_APP_COMMAND_NAME, argc, argv);
+	client = mbus_client_create(NULL, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
