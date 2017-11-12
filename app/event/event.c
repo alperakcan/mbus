@@ -39,7 +39,6 @@
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
-#include "event.h"
 
 #define OPTION_HELP		0x100
 #define OPTION_DESTINATION	0x101
@@ -83,7 +82,7 @@ static void event_status_server_connected (struct mbus_client *client, const cha
 	(void) source;
 	(void) status;
 	(void) payload;
-	while (arg->flood--) {
+	while (arg->flood-- > 0) {
 		rc = mbus_client_event_sync_to(client, arg->destination, arg->event, arg->payload);
 		if (rc != 0) {
 			mbus_errorf("can not call event");
@@ -129,7 +128,7 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
-	client = mbus_client_create(MBUS_APP_EVENT_NAME, argc, argv);
+	client = mbus_client_create(NULL, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
