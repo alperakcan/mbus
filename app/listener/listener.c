@@ -38,7 +38,6 @@
 #include "mbus/method.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
-#include "listener.h"
 
 static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data)
 {
@@ -141,7 +140,7 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
-	client = mbus_client_create(MBUS_APP_LISTENER_NAME, argc, argv);
+	client = mbus_client_create(NULL, argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;

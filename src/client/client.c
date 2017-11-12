@@ -1310,9 +1310,8 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[
 		goto bail;
 	}
 	options.client.name = name;
-	if (name == NULL) {
+	if (options.client.name == NULL) {
 		options.client.name = "";
-		goto bail;
 	}
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
