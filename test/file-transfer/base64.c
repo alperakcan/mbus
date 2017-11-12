@@ -71,8 +71,9 @@ unsigned char * base64_encode (const unsigned char *src, size_t len, size_t *out
 	}
 
 	*pos = '\0';
-	if (out_len)
+	if (out_len) {
 		*out_len = pos - out;
+	}
 	return out;
 }
 
@@ -140,8 +141,9 @@ unsigned char * base64_decode (const unsigned char *src, size_t len, size_t *out
 			pos--;
 	}
 
-	*out_len = pos - out;
+	if (out_len != NULL) {
+		*out_len = pos - out;
+	}
 	*pos = '\0';
 	return out;
 }
-
