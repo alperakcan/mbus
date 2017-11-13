@@ -640,7 +640,8 @@ static void * client_worker (void *arg)
 	while (1) {
 		current = mbus_clock_get();
 		sched_yield();
-		if (client->ping.interval > 0) {
+		if (client->state == client_state_created &&
+		    client->ping.interval > 0) {
 			if (mbus_clock_after(current, client->ping.ping_send_tsms + client->ping.interval)) {
 				mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping.ping_send_tsms, client->ping.interval, client->ping.timeout);
 				client->ping.ping_send_tsms = current;

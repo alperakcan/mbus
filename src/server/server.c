@@ -2441,7 +2441,7 @@ static int server_handle_methods (struct mbus_server *server)
 			mbus_debugf("  push to trash");
 			rc = server_send_event_to(server, client_get_name(method_get_source(method)), method_get_request_destination(method), method_get_request_identifier(method), method_get_request_payload(method));
 			if (rc != 0) {
-				mbus_errorf("can not send event");
+				mbus_errorf("can not send event: %s", method_get_source(method));
 			}
 			method_destroy(method);
 		}
