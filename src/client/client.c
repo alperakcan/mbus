@@ -126,7 +126,6 @@ struct mbus_client {
 		struct mbus_buffer *out;
 	} buffer;
 	struct {
-		int enabled;
 		int interval;
 		int timeout;
 		int threshold;
@@ -615,9 +614,6 @@ static int mbus_client_handle_command_create_result (struct mbus_client *client,
 		client->ping.interval = mbus_json_get_int_value(result, "ping/interval", -1);
 		client->ping.timeout = mbus_json_get_int_value(result, "ping/timeout", -1);
 		client->ping.threshold = mbus_json_get_int_value(result, "ping/threshold", -1);
-		if (client->ping.interval > 0) {
-			client->ping.enabled = 1;
-		}
 	}
 	return 0;
 }
@@ -644,7 +640,7 @@ static void * client_worker (void *arg)
 	while (1) {
 		current = mbus_clock_get();
 		sched_yield();
-		if (client->ping.enabled == 1) {
+		if (client->ping.interval > 0) {
 			if (mbus_clock_after(current, client->ping.ping_send_tsms + client->ping.interval)) {
 				mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping.ping_send_tsms, client->ping.interval, client->ping.timeout);
 				client->ping.ping_send_tsms = current;
@@ -1272,7 +1268,6 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	mbus_infof("  name       : %s", client->name);
 	mbus_infof("  compression: %s", mbus_compress_method_string(client->compression));
 	mbus_infof("  ping");
-	mbus_infof("    enabled  : %d", client->ping.enabled);
 	mbus_infof("    interval : %d", client->ping.interval);
 	mbus_infof("    timeout  : %d", client->ping.timeout);
 	mbus_infof("    threshold: %d", client->ping.threshold);

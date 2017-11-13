@@ -244,8 +244,9 @@ function MBusClient (name = "", options = {} ) {
 			if (this._ping !== undefined &&
 				this._ping !== null &&
 				this._ping['interval'] > 0) {
-				this._pingTimer = setInterval(this._pingSend, this._ping['interval'], this);
 				this.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
+				this._pingSend(this);
+				this._pingTimer = setInterval(this._pingSend, this._ping['interval'], this);
 			}
 			this.onConnected();
 		} else if (request._type == MBUS_METHOD_TYPE_COMMAND &&
@@ -337,7 +338,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		options = {};
 		options['name'] = this._cname;
 		options['ping'] = {};
-		options['ping']['interval'] = 180000;
+		options['ping']['interval'] = 1800000;
 		options['ping']['timeout'] = 5000;
 		options['ping']['threshold'] = 2;
 		options['compression'] = [];
