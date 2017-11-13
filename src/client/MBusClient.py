@@ -116,7 +116,7 @@ class MBusClientRequest:
         request['payload'] = self.payload
         return json.dumps(request)
 
-class MBusClientCallback:
+class MBusClientSubscription:
     
      def __init__ (self, source, event, callback, context = None):
         self._source = source;
@@ -136,7 +136,7 @@ class MBusClient:
         
         self._requests = collections.deque()
         self._pendings = collections.deque()
-        self._callbacks = collections.deque()
+        self._subscriptions = collections.deque()
         self._incoming = ""
         self._outgoing = ""
         
@@ -268,8 +268,8 @@ class MBusClient:
                 request._callback(self, request._context, object['result'], object['payload']);
 
     def _handleEvent (self, object):
-        callbacks = self._callbacks.__copy__()
-        for c in callbacks:
+        subscriptions = self._subscriptions.__copy__()
+        for c in subscriptions:
             s = 0
             e = 0
             if (c._source == MBUS_METHOD_EVENT_SOURCE_ALL):
@@ -287,8 +287,8 @@ class MBusClient:
                 c._callback(self, c._context, object['source'], object['identifier'], object['payload']);
         
     def _handleStatus (self, object):
-        callbacks = self._callbacks.__copy__()
-        for c in callbacks:
+        subscriptions = self._subscriptions.__copy__()
+        for c in subscriptions:
             s = 0
             e = 0
             if (object['source'] == c._source):
@@ -317,8 +317,8 @@ class MBusClient:
         if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
             self._sequence = MBUS_METHOD_SEQUENCE_START
         self._requests.append(request)
-        callback = MBusClientCallback(source, event, callback, context)
-        self._callbacks.append(callback)
+        subsription = MBusClientSubscription(source, event, callback, context)
+        self._subscriptions.append(subsription)
         return 0
         
     def run (self, timeout = MBUS_CLIENT_RUN_TIMEOUT):
