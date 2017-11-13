@@ -38,6 +38,7 @@ mbus-listener_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-listener
+	mbus-listener \
+	mbus-listener.py
 
 include ../../Makefile.lib

@@ -460,4 +460,4 @@ class MBusClient:
                     
     def loop (self):
         while (True):
-            self.run(10000)
+            self.run()

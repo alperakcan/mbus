@@ -55,6 +55,10 @@ dist.lib-y = \
 dist.lib-${SHARED_ENABLE} += \
 	libmbus-client.so
 
+dist.lib-y += \
+	MBusClient.js \
+	MBusClient.py
+
 include ../../Makefile.lib
 
 clean:
