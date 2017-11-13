@@ -106,13 +106,14 @@ class MBusClientOptions:
 
 class MBusClientRequest:
     
-    def __init__ (self, type, destination, identifier, sequence, payload = None, callback = None):
+    def __init__ (self, type, destination, identifier, sequence, payload = None, callback = None, context = None):
         self.type = type
         self.destination = destination
         self.identifier = identifier
         self.sequence = sequence
         self.payload = payload
         self.callback = callback
+        self.context = context;
 
     def __str__ (self):
         request = {}
@@ -277,7 +278,7 @@ class MBusClient:
                 self.onSubscribed(self, pending.payload['source'], pending.payload['event'])
         else:
             if pending.callback != None:
-                pending.callback(self, pending.context, object['result'], object['payload'])
+                pending.callback(self, pending.context, pending.destination, pending.identifier, object['result'], object['payload'])
 
     def _handleEvent (self, object):
         subscriptions = self._subscriptions.__copy__()
@@ -360,12 +361,15 @@ class MBusClient:
         self._requests.append(request)
 
     def eventSync (self, event, payload = None):
-        request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, event, self._sequence, payload)
+        self.eventToSync(MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, event, payload)
+
+    def command (self, destination, command, payload, callback, context):
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, command, self._sequence, payload, callback, context)
         self._sequence += 1
         if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
             self._sequence = MBUS_METHOD_SEQUENCE_START
         self._requests.append(request)
-
+        
     def run (self, timeout = MBUS_CLIENT_RUN_TIMEOUT):
         if (self._state == MBUS_CLIENT_STATE_CONNECTING):
             rc = self._connect()
