@@ -47,10 +47,10 @@ const MBUS_SERVER_EVENT_UNSUBSCRIBED				= "event.unsubscribed";
 const MBUS_SERVER_EVENT_PING						= "event.ping";
 const MBUS_SERVER_EVENT_PONG						= "event.pong";
 
-function MBusClientRequest (type, destination, identifier, sequence, payload, callback)
+function MBusClientRequest (type, destination, identifier, sequence, payload, callback, context)
 {
 	if (this instanceof MBusClientRequest == false) {
-		return new MBusClientRequest(type, destination, identifier, sequence, payload, callback);
+		return new MBusClientRequest(type, destination, identifier, sequence, payload, callback, context);
 	}
 	if (typeof type !== 'string') {
 		return null;
@@ -80,6 +80,7 @@ function MBusClientRequest (type, destination, identifier, sequence, payload, ca
 	this._sequence = sequence;
 	this._payload = payload;
 	this._callback = callback;
+	this._context = context;
 }
 
 MBusClientRequest.prototype.stringify = function () {
@@ -261,7 +262,7 @@ function MBusClient (name = "", options = {} ) {
 			//console.log("return.payload:", object['payload']);
 			//console.log("return.result:", object['result']);
 			if (request._callback !== null) {
-				request._callback(object['result'], object['payload']);
+				request._callback(object['result'], object['payload'], request._context);
 			}
 		} 
 	}
@@ -466,7 +467,7 @@ MBusClient.prototype.eventTo = function (to, identifier, event) {
 	this._scheduleRequests();
 }
 
-MBusClient.prototype.command = function (destination, identifier, command, callback) {
+MBusClient.prototype.command = function (destination, identifier, command, callback, context) {
 	var request;
 	if (command == null) {
 		command = {};
@@ -474,7 +475,7 @@ MBusClient.prototype.command = function (destination, identifier, command, callb
 	if (callback == null) {
 		callback = function () { };
 	}
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, identifier, this._sequence, command, callback);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, identifier, this._sequence, command, callback, context);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;

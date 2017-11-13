@@ -84,22 +84,18 @@ class MBusClientOptions:
         self.pingThreshold = None
     
     def __str__ (self):
-        return "serverProtocol: {}\n" \
-               "serverAddress : {}\n" \
-               "serverPort    : {}\n" \
-               "clientName    : {}\n" \
-               "pingInterval  : {}\n" \
-               "pingTimeout   : {}\n" \
-               "pingThreshold : {}" \
-               .format( \
-                        self.serverProtocol, \
-                        self.serverAddress, \
-                        self.serverPort, \
-                        self.clientName, \
-                        self.pingInterval, \
-                        self.pingTimeout, \
-                        self.pingThreshold \
-                        )
+        options = {}
+        options['server'] = {}
+        options['server']['protocol'] = self.serverProtocol
+        options['server']['address'] = self.serverAddress
+        options['server']['port'] = self.serverPort
+        options['client'] = {}
+        options['client']['name'] = self.clientName
+        options['ping'] = {}
+        options['ping']['interval'] = self.pingInterval
+        options['ping']['timeout'] = self.pingTimeout
+        options['ping']['threshold'] = self.pingThreshold
+        return json.dumps(options)
 
 class MBusClientRequest:
     
@@ -119,23 +115,39 @@ class MBusClientRequest:
         request['sequence'] = self.sequence
         request['payload'] = self.payload
         return json.dumps(request)
-            
+
+class MBusClientCallback:
+    
+     def __init__ (self, source, event, callback, context = None):
+        self._source = source;
+        self._event = event;
+        self._callback = callback;
+        self._context = context;
+
 class MBusClient:
     
     def __init__ (self, options = None):
+        self.onConnected = None
+        self.onSubscribed = None
+        
         self._state = MBUS_CLIENT_STATE_INITIAL
         self._socket = None
         self._sequence = MBUS_METHOD_SEQUENCE_START
         
         self._requests = collections.deque()
         self._pendings = collections.deque()
+        self._callbacks = collections.deque()
         self._incoming = ""
+        self._outgoing = ""
         
         self._name = None
         self._pingInterval = None
         self._pingTimeout = None
         self._pingThreshold = None
         self._compression = None
+
+        self._pingWaitPong = 0;
+        self._pingMissedCount = 0;
 
         if (options == None):
             self._options = MBusClientOptions()
@@ -160,18 +172,15 @@ class MBusClient:
             self._options.pingThreshold = MBUS_CLIENT_OPTIONS_DEFAULT_PING_THRESHOLD
 
     def __str__ (self):
-        return "state: {}\n" \
-               "sequence: {}\n" \
-               "options:\n" \
-               "{}" \
-               .format( \
-                        self._state,
-                        self._sequence,
-                        self._options
-                    )
-    
-    def connect (self):
-        self._state = MBUS_CLIENT_STATE_CONNECTING
+        client = {}
+        client['name'] = self._name
+        client['ping'] = {}
+        client['ping']['interval'] = self._pingInterval
+        client['ping']['timeout'] = self._pingTimeout
+        client['ping']['threshold'] = self._pingThreshold
+        client['compression'] = self._compression
+        client['options'] = self._options.__str__()
+        return json.dumps(client)
     
     def _connect (self):
 
@@ -184,12 +193,16 @@ class MBusClient:
         self._requests.clear()
         self._pendings.clear()
         self._incoming = ""
-        
+        self._outgoing = ""
+
         self._name = None
         self._pingInterval = None
         self._pingTimeout = None
         self._pingThreshold = None
         self._compression = None
+
+        self._pingWaitPong = 0;
+        self._pingMissedCount = 0;
 
         if (self._options.serverProtocol.lower() == "tcp".lower()):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -220,6 +233,10 @@ class MBusClient:
         
         return 0
     
+    def _pongRecv (self):
+        self._pingWaitPong = 0;
+        self._pingMissedCount = 0;
+        
     def _handleResult (self, object):
         pending = None
         for p in self._pendings:
@@ -237,9 +254,72 @@ class MBusClient:
             self._pingTimeout = object['payload']['ping']['timeout']
             self._pingThreshold = object['payload']['ping']['threshold']
             self._compression = object['payload']['compression']
-            self.onConnected();
-            
-        print(self._pendings)
+            if (self._pingInterval > 0):
+                self.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, self._pongRecv, self)
+            if (self.onConnected != None):
+                self.onConnected(self);
+        elif (pending.type == MBUS_METHOD_TYPE_COMMAND and \
+            pending.destination == MBUS_SERVER_NAME and \
+            pending.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
+            if (self.onSubscribed != None):
+                self.onSubscribed(self, pending.payload['source'], pending.payload['event'])
+        else:
+            if request._callback != None:
+                request._callback(self, request._context, object['result'], object['payload']);
+
+    def _handleEvent (self, object):
+        callbacks = self._callbacks.__copy__()
+        for c in callbacks:
+            s = 0
+            e = 0
+            if (c._source == MBUS_METHOD_EVENT_SOURCE_ALL):
+                s = 1
+            else:
+                if (object['source'] == c._source):
+                    s = 1
+                    
+            if (c._event == MBUS_METHOD_EVENT_IDENTIFIER_ALL):
+                e = 1
+            else:
+                if (object['identifier'] == c._event):
+                    e = 1
+            if (s == 1 and e == 1):
+                c._callback(self, c._context, object['source'], object['identifier'], object['payload']);
+        
+    def _handleStatus (self, object):
+        callbacks = self._callbacks.__copy__()
+        for c in callbacks:
+            s = 0
+            e = 0
+            if (object['source'] == c._source):
+                s = 1
+                    
+            if (c._event == MBUS_METHOD_STATUS_IDENTIFIER_ALL):
+                e = 1
+            else:
+                if (object['identifier'] == c._event):
+                    e = 1
+            if (s == 1 and e == 1):
+                c._callback(self, c._context, object['source'], object['identifier'], object['payload']);
+
+    def name (self):
+        return self._name
+    
+    def connect (self):
+        self._state = MBUS_CLIENT_STATE_CONNECTING
+    
+    def subscribe (self, source, event, callback, context):
+        payload = {}
+        payload['source'] = source
+        payload['event'] = event
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, self._sequence, payload)
+        self._sequence += 1
+        if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
+            self._sequence = MBUS_METHOD_SEQUENCE_START
+        self._requests.append(request)
+        callback = MBusClientCallback(source, event, callback, context)
+        self._callbacks.append(callback)
+        return 0
         
     def run (self, timeout = MBUS_CLIENT_RUN_TIMEOUT):
         if (self._state == MBUS_CLIENT_STATE_CONNECTING):
@@ -251,9 +331,18 @@ class MBusClient:
                 return 0
         
         if (self._state == MBUS_CLIENT_STATE_CONNECTED):
+            while (len(self._requests) > 0):
+                request = self._requests.popleft()
+                data = request.__str__()
+                dlen = struct.pack("!I", len(data))
+                self._outgoing += dlen
+                self._outgoing += data
+                if request.type.lower() != MBUS_METHOD_TYPE_EVENT:
+                    self._pendings.append(request) 
+
             rlist = [ self._socket ]
             wlist = [ ]
-            if (len(self._requests) > 0):
+            if (len(self._outgoing) > 0):
                 wlist = [ self._socket ]
             
             try:
@@ -274,18 +363,19 @@ class MBusClient:
                 except socket.error as error:
                     if error.errno == EAGAIN:
                         pass
-                    print(error)
                     return -1
                 self._incoming += data
             
             if self._socket in socklist[1]:
-                request = self._requests.popleft()
-                data = request.__str__()
-                dlen = struct.pack("!I", len(data))
-                self._socket.send(dlen)
-                self._socket.send(data)
-                if request.type.lower() != MBUS_METHOD_TYPE_EVENT:
-                    self._pendings.append(request) 
+                dlen = 0
+                try:
+                    dlen = self._socket.send(self._outgoing)
+                except socket.error as error:
+                    if error.errno == EAGAIN:
+                        pass
+                    return -1
+                if (dlen > 0):
+                    self._outgoing = self._outgoing[dlen:] 
             
             while len(self._incoming) >= 4:
                 dlen, = struct.unpack("!I", str(self._incoming[0:4]))
@@ -293,10 +383,13 @@ class MBusClient:
                     break
                 slice = self._incoming[4:4 + dlen]
                 self._incoming = self._incoming[4 + dlen:]
-                print("{}, {}".format(dlen, slice))
                 object = json.loads(slice)
                 if (object['type'].lower() == MBUS_METHOD_TYPE_RESULT.lower()):
                     self._handleResult(object)
+                elif (object['type'].lower() == MBUS_METHOD_TYPE_STATUS.lower()):
+                    self._handleStatus(object)
+                elif (object['type'].lower() == MBUS_METHOD_TYPE_EVENT.lower()):
+                    self._handleEvent(object)
             
             return 0
                     
@@ -304,14 +397,28 @@ class MBusClient:
         while (True):
             self.run(10000)
 
+def onEventAllAll (self, context, source, event, payload):
+    print("{}: onEventAllAll {}.{}: {}".format(self.name(), source, event, json.dumps(payload)));
+    
+def onStatusConnected (self, context, source, event, payload):
+    print("{}: onStatusConnected".format(self.name()));
+
+def onStatusSubscribed (self, context, source, event, payload):
+    print("{}: onStatusSubscribed to {}.{}".format(self.name(), payload['destination'], payload['identifier']));
+
 def onConnected (self):
-    print("{} connected".format(self));
+    print("{}: onConnected".format(self.name()));
+    client.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, onStatusConnected, None)
+    client.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, onStatusSubscribed, None)
+    client.subscribe(MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
 
+def onSubscribed (self, source, event):
+    print("{}: onSubscribed to {}.{}".format(self.name(), source, event));
+    
 options = MBusClientOptions()
-print options
-
-client = MBusClient()
-client.onConnected = onConnected 
+client = MBusClient(options)
+client.onConnected = onConnected
+client.onSubscribed = onSubscribed
 
 client.connect()
 client.loop()
