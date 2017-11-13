@@ -424,10 +424,12 @@ class MBusClient:
             if self._socket in socklist[0]:
                 dlen = 0
                 try:
-                    data = self._socket.recv(1)
+                    data = self._socket.recv(4096)
                 except socket.error as error:
                     if error.errno == EAGAIN:
                         pass
+                    return -1
+                if (len(data) == 0):
                     return -1
                 self._incoming += data
             
@@ -460,4 +462,6 @@ class MBusClient:
                     
     def loop (self):
         while (True):
-            self.run()
+            rc = self.run()
+            if (rc == -1):
+                return -1
