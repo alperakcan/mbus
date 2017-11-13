@@ -72,16 +72,10 @@ static __attribute__((__unused__)) char __sizeof_check_buffer_in[BUFFER_IN_CHUNK
 struct method {
 	TAILQ_ENTRY(method) methods;
 	struct {
-		const char *type;
-		const char *destination;
-		const char *identifier;
-		int sequence;
-		struct mbus_json *payload;
 		struct mbus_json *json;
 		char *string;
 	} request;
 	struct {
-		struct mbus_json *payload;
 		struct mbus_json *json;
 		char *string;
 	} result;
@@ -536,20 +530,20 @@ bail:	subscription_destroy(subscription);
 	return NULL;
 }
 
-static const char * method_get_request_destination (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return method->request.destination;
-}
-
 static const char * method_get_request_type (struct method *method)
 {
 	if (method == NULL) {
 		return NULL;
 	}
-	return method->request.type;
+	return mbus_json_get_string_value(method->request.json, "type", NULL);
+}
+
+static const char * method_get_request_destination (struct method *method)
+{
+	if (method == NULL) {
+		return NULL;
+	}
+	return mbus_json_get_string_value(method->request.json, "destination", NULL);
 }
 
 static const char * method_get_request_identifier (struct method *method)
@@ -557,7 +551,15 @@ static const char * method_get_request_identifier (struct method *method)
 	if (method == NULL) {
 		return NULL;
 	}
-	return method->request.identifier;
+	return mbus_json_get_string_value(method->request.json, "identifier", NULL);
+}
+
+static int method_get_request_sequence (struct method *method)
+{
+	if (method == NULL) {
+		return -1;
+	}
+	return mbus_json_get_int_value(method->request.json, "sequence", -1);
 }
 
 static struct mbus_json * method_get_request_payload (struct method *method)
@@ -565,55 +567,7 @@ static struct mbus_json * method_get_request_payload (struct method *method)
 	if (method == NULL) {
 		return NULL;
 	}
-	return method->request.payload;
-}
-
-static int method_set_result_code (struct method *method, int code)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	mbus_json_add_number_to_object_cs(method->result.json, "result", code);
-	return 0;
-}
-
-static int method_add_result_payload (struct method *method, const char *name, struct mbus_json *payload)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	mbus_json_add_item_to_object_cs(method->result.payload, name, payload);
-	return 0;
-}
-
-static int method_set_result_payload (struct method *method, struct mbus_json *payload)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	mbus_json_delete_item_from_object(method->result.json, "payload");
-	mbus_json_add_item_to_object_cs(method->result.json, "payload", payload);
-	return 0;
-}
-
-static struct mbus_json * method_get_result_payload (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return method->result.payload;
-}
-
-static char * method_get_result_string (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	if (method->result.string != NULL) {
-		free(method->result.string);
-	}
-	method->result.string = mbus_json_print_unformatted(method->result.json);
-	return method->result.string;
+	return mbus_json_get_object(method->request.json, "payload");
 }
 
 static char * method_get_request_string (struct method *method)
@@ -628,13 +582,37 @@ static char * method_get_request_string (struct method *method)
 	return method->request.string;
 }
 
-static int method_get_request_sequence (struct method *method)
+static int method_set_result_code (struct method *method, int code)
 {
 	if (method == NULL) {
 		return -1;
 	}
-	return method->request.sequence;
+	mbus_json_add_number_to_object_cs(method->result.json, "result", code);
+	return 0;
 }
+
+static int method_set_result_payload (struct method *method, struct mbus_json *payload)
+{
+	if (method == NULL) {
+		return -1;
+	}
+	mbus_json_delete_item_from_object(method->result.json, "payload");
+	mbus_json_add_item_to_object_cs(method->result.json, "payload", payload);
+	return 0;
+}
+
+static char * method_get_result_string (struct method *method)
+{
+	if (method == NULL) {
+		return NULL;
+	}
+	if (method->result.string != NULL) {
+		free(method->result.string);
+	}
+	method->result.string = mbus_json_print_unformatted(method->result.json);
+	return method->result.string;
+}
+
 
 static struct client * method_get_source (struct method *method)
 {
@@ -664,16 +642,10 @@ static void method_destroy (struct method *method)
 	free(method);
 }
 
-static struct method * method_create_from_string (struct client *source, const char *string)
+static struct method * method_create_request (struct client *source, const char *string)
 {
 	struct method *method;
 	method = NULL;
-#if 0
-	if (source == NULL) {
-		mbus_errorf("source is null");
-		goto bail;
-	}
-#endif
 	if (string == NULL) {
 		mbus_errorf("string is null");
 		goto bail;
@@ -689,41 +661,44 @@ static struct method * method_create_from_string (struct client *source, const c
 		mbus_errorf("can not parse method");
 		goto bail;
 	}
-	method->request.type = mbus_json_get_string_value(method->request.json, "type", NULL);
-	method->request.destination = mbus_json_get_string_value(method->request.json, "destination", NULL);
-	method->request.identifier = mbus_json_get_string_value(method->request.json, "identifier", NULL);
-	method->request.sequence = mbus_json_get_int_value(method->request.json, "sequence", -1);
-	method->request.payload = mbus_json_get_object(method->request.json, "payload");
-	if ((method->request.destination == NULL) ||
-	    (method->request.type == NULL) ||
-	    (method->request.identifier == NULL) ||
-	    (method->request.sequence == -1) ||
-	    (method->request.payload == NULL)) {
-		mbus_errorf("invalid method: '%s'", string);
+	if (mbus_json_get_string_value(method->request.json, "type", NULL) == NULL) {
+		mbus_errorf("invalid method type: '%s'", string);
+		goto bail;
+	}
+	if (mbus_json_get_string_value(method->request.json, "destination", NULL) == NULL) {
+		mbus_errorf("invalid method destination: '%s'", string);
+		goto bail;
+	}
+	if (mbus_json_get_string_value(method->request.json, "identifier", NULL) == NULL) {
+		mbus_errorf("invalid method identifier: '%s'", string);
+		goto bail;
+	}
+	if (mbus_json_get_int_value(method->request.json, "sequence", -1) == -1) {
+		mbus_errorf("invalid method sequence: '%s'", string);
+		goto bail;
+	}
+	if (mbus_json_get_object(method->request.json, "payload") == NULL) {
+		mbus_errorf("invalid method payload: '%s'", string);
 		goto bail;
 	}
 	method->result.json = mbus_json_create_object();
 	if (method->result.json == NULL) {
-		mbus_errorf("can not create result");
-		goto bail;
-	}
-	method->result.payload = mbus_json_create_object();
-	if (method->result.payload == NULL) {
-		mbus_errorf("can not create result payload");
+		mbus_errorf("can not create object");
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(method->result.json, "type", MBUS_METHOD_TYPE_RESULT);
-	mbus_json_add_number_to_object_cs(method->result.json, "sequence", method->request.sequence);
-	mbus_json_add_item_to_object_cs(method->result.json, "payload", method->result.payload);
+	mbus_json_add_number_to_object_cs(method->result.json, "sequence", method_get_request_sequence(method));
+	mbus_json_add_item_to_object_cs(method->result.json, "payload", mbus_json_create_object());
 	method->source = source;
 	return method;
 bail:	method_destroy(method);
 	return NULL;
 }
 
-static struct method * method_create (const char *type, const char *source, const char *destination, const char *identifier, int sequence, const struct mbus_json *payload)
+static struct method * method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload)
 {
 	struct method *method;
+	struct mbus_json *data;
 	method = NULL;
 	if (type == NULL) {
 		mbus_errorf("type is null");
@@ -731,10 +706,6 @@ static struct method * method_create (const char *type, const char *source, cons
 	}
 	if (source == NULL) {
 		mbus_errorf("source is null");
-		goto bail;
-	}
-	if (destination == NULL) {
-		mbus_errorf("destination is null");
 		goto bail;
 	}
 	if (identifier == NULL) {
@@ -745,35 +716,31 @@ static struct method * method_create (const char *type, const char *source, cons
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
+	if (payload == NULL) {
+		data = mbus_json_create_object();
+	} else {
+		data = mbus_json_duplicate(payload, 1);
+	}
+	if (data == NULL) {
+		mbus_errorf("can not create payload");
+		goto bail;
+	}
 	method = malloc(sizeof(struct method));
 	if (method == NULL) {
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
 	memset(method, 0, sizeof(struct method));
-	method->request.sequence = sequence;
-	if (payload == NULL) {
-		method->request.payload = mbus_json_create_object();
-	} else {
-		method->request.payload = mbus_json_duplicate((struct mbus_json *) payload, 1);
-	}
-	if (method->request.payload == NULL) {
-		mbus_errorf("can not create method payload");
-		goto bail;
-	}
 	method->request.json = mbus_json_create_object();
 	if (method->request.json == NULL) {
 		mbus_errorf("can not create method object");
-		mbus_json_delete(method->request.payload);
-		method->request.payload = NULL;
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(method->request.json, "type", type);
 	mbus_json_add_string_to_object_cs(method->request.json, "source", source);
-	mbus_json_add_string_to_object_cs(method->request.json, "destination", destination);
 	mbus_json_add_string_to_object_cs(method->request.json, "identifier", identifier);
 	mbus_json_add_number_to_object_cs(method->request.json, "sequence", sequence);
-	mbus_json_add_item_to_object_cs(method->request.json, "payload", method->request.payload);
+	mbus_json_add_item_to_object_cs(method->request.json, "payload", data);
 	return method;
 bail:	if (method != NULL) {
 		method_destroy(method);
@@ -1212,6 +1179,21 @@ static int client_get_results_count (struct client *client)
 	return client->results.count;
 }
 
+static int client_push_wait (struct client *client, struct method *wait)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	if (wait == NULL) {
+		mbus_errorf("wait is null");
+		goto bail;
+	}
+	TAILQ_INSERT_TAIL(&client->waits, wait, methods);
+	return 0;
+bail:	return -1;
+}
+
 static int client_push_result (struct client *client, struct method *result)
 {
 	if (client == NULL) {
@@ -1493,7 +1475,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		}
 	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_ALL) == 0) {
 		TAILQ_FOREACH(client, &server->clients, clients) {
-			method = method_create(MBUS_METHOD_TYPE_EVENT, source, client_get_name(client), identifier, client->esequence, payload);
+			method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
 				goto bail;
@@ -1522,7 +1504,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 						continue;
 					}
 				}
-				method = method_create(MBUS_METHOD_TYPE_EVENT, source, client_get_name(client), identifier, client->esequence, payload);
+				method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 				if (method == NULL) {
 					mbus_errorf("can not create method");
 					goto bail;
@@ -1548,7 +1530,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			if (strcmp(client_get_name(client), destination) != 0) {
 				continue;
 			}
-			method = method_create(MBUS_METHOD_TYPE_EVENT, source, client_get_name(client), identifier, client->esequence, payload);
+			method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
 				goto bail;
@@ -1598,7 +1580,7 @@ static int server_send_status_to (struct mbus_server *server, const char *destin
 		if (strcmp(client_get_name(client), destination) != 0) {
 			continue;
 		}
-		method = method_create(MBUS_METHOD_TYPE_STATUS, MBUS_SERVER_NAME, client_get_name(client), identifier, client->ssequence, payload);
+		method = method_create_response(MBUS_METHOD_TYPE_STATUS, MBUS_SERVER_NAME, identifier, client->ssequence, payload);
 		if (method == NULL) {
 			mbus_errorf("can not create method");
 			goto bail;
@@ -1977,14 +1959,17 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	mbus_infof("    timeout  : %d", client->ping.timeout);
 	mbus_infof("    threshold: %d", client->ping.threshold);
 	{
+		struct mbus_json *payload;
 		struct mbus_json *ping;
-		mbus_json_add_string_to_object_cs(method_get_result_payload(method), "name", client_get_name(method_get_source(method)));
-		mbus_json_add_string_to_object_cs(method_get_result_payload(method), "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+		payload = mbus_json_create_object();
+		mbus_json_add_string_to_object_cs(payload, "name", client_get_name(method_get_source(method)));
+		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
 		ping = mbus_json_create_object();
 		mbus_json_add_number_to_object_cs(ping, "interval", client->ping.interval);
 		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping.timeout);
 		mbus_json_add_number_to_object_cs(ping, "threshold", client->ping.threshold);
-		mbus_json_add_item_to_object_cs(method_get_result_payload(method), "ping", ping);
+		mbus_json_add_item_to_object_cs(payload, "ping", ping);
+		method_set_result_payload(method, payload);
 	}
 	return 0;
 bail:	return -1;
@@ -2155,7 +2140,7 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 			mbus_json_add_string_to_object_cs(object, "identifier", command_get_identifier(command));
 		}
 	}
-	method_add_result_payload(method, "clients", clients);
+	method_set_result_payload(method, clients);
 	return 0;
 bail:	if (clients != NULL) {
 		mbus_json_delete(clients);
@@ -2228,7 +2213,7 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 		mbus_json_add_item_to_array(commands, object);
 		mbus_json_add_string_to_object_cs(object, "identifier", command_get_identifier(command));
 	}
-	method_add_result_payload(method, "client", result);
+	method_set_result_payload(method, result);
 	return 0;
 bail:	if (result != NULL) {
 		mbus_json_delete(result);
@@ -2264,7 +2249,7 @@ static int server_handle_command_clients (struct mbus_server *server, struct met
 		}
 		mbus_json_add_item_to_array(clients, source);
 	}
-	method_add_result_payload(method, "clients", clients);
+	method_set_result_payload(method, clients);
 	return 0;
 bail:	if (clients != NULL) {
 		mbus_json_delete(clients);
@@ -2274,10 +2259,8 @@ bail:	if (clients != NULL) {
 
 static int server_handle_command_close (struct mbus_server *server, struct method *method)
 {
-	struct mbus_json *clients;
 	struct client *client;
 	const char *source;
-	clients = NULL;
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		goto bail;
@@ -2315,11 +2298,9 @@ bail:	return -1;
 
 static int server_handle_command_call (struct mbus_server *server, struct method *method)
 {
-	const char *identifier;
 	struct method *request;
 	struct client *client;
 	struct command *command;
-	struct mbus_json *call;
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		goto bail;
@@ -2350,7 +2331,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		mbus_errorf("client: %s does not have such command: %s", method_get_request_destination(method), method_get_request_identifier(method));
 		goto bail;
 	}
-	request = method_create(MBUS_METHOD_TYPE_COMMAND, client_get_name(method_get_source(method)), method_get_request_destination(method), identifier, method_get_request_sequence(method), call);
+	request = method_create_response(MBUS_METHOD_TYPE_COMMAND, client_get_name(method_get_source(method)), method_get_request_identifier(method), method_get_request_sequence(method), method_get_request_payload(method));
 	if (request == NULL) {
 		mbus_errorf("can not create call method");
 		goto bail;
@@ -2386,10 +2367,10 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 			if (sequence != method_get_request_sequence(wait)) {
 				continue;
 			}
-			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "destination", NULL), source) != 0) {
+			if (strcmp(method_get_request_destination(wait), source) != 0) {
 				continue;
 			}
-			if (strcmp(mbus_json_get_string_value(method_get_request_payload(wait), "identifier", NULL), identifier) != 0) {
+			if (strcmp(method_get_request_identifier(wait), identifier) != 0) {
 				continue;
 			}
 			TAILQ_REMOVE(&client->waits, wait, methods);
@@ -2414,57 +2395,55 @@ static int server_handle_methods (struct mbus_server *server)
 		goto bail;
 	}
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
-		rc = -1;
-		response = 1;
 		mbus_debugf("handle method: %s, %s, %s", method_get_request_type(method), method_get_request_identifier(method), method_get_request_destination(method));
-		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
-			if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
-				rc = server_handle_command_create(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
-				rc = server_handle_command_subscribe(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
-				rc = server_handle_command_register(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {
-				rc = server_handle_command_result(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_EVENT) == 0) {
-				rc = server_handle_command_event(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_STATUS) == 0) {
-				rc = server_handle_command_status(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENT) == 0) {
-				rc = server_handle_command_client(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENTS) == 0) {
-				rc = server_handle_command_clients(server, method);
-			} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLOSE) == 0) {
-				rc = server_handle_command_close(server, method);
+		TAILQ_REMOVE(&server->methods, method, methods);
+		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
+			if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
+				response = 1;
+				if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
+					rc = server_handle_command_create(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					rc = server_handle_command_subscribe(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					rc = server_handle_command_register(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {
+					rc = server_handle_command_result(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_EVENT) == 0) {
+					rc = server_handle_command_event(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_STATUS) == 0) {
+					rc = server_handle_command_status(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENT) == 0) {
+					rc = server_handle_command_client(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENTS) == 0) {
+					rc = server_handle_command_clients(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLOSE) == 0) {
+					rc = server_handle_command_close(server, method);
+				} else {
+					rc = -1;
+				}
 			} else {
-				rc = -1;
+				response = 0;
+				rc = server_handle_command_call(server, method);
 			}
-		} else {
-			response = server_handle_command_call(server, method);
-			if (response < 0) {
-				rc = response;
-			} else {
-				rc = 0;
+			if (rc != 0) {
+				mbus_errorf("can not execute method type: '%s', identifier: '%s'", method_get_request_type(method), method_get_request_identifier(method));
 			}
-		}
-		if (rc != 0) {
-			mbus_errorf("can not execute method type: '%s', identifier: '%s'", method_get_request_type(method), method_get_request_identifier(method));
-		}
-		if (strcmp(method_get_request_destination(method), MBUS_SERVER_NAME) == 0) {
-			TAILQ_REMOVE(&server->methods, method, methods);
-		}
-		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
-			mbus_debugf("  push to trash");
-			method_destroy(method);
-		} else {
 			if (response == 1 || rc != 0) {
 				mbus_debugf("  push to result");
 				method_set_result_code(method, rc);
 				client_push_result(method_get_source(method), method);
 			} else {
 				mbus_debugf("  push to wait");
-				TAILQ_INSERT_TAIL(&method_get_source(method)->waits, method, methods);
+				client_push_wait(method_get_source(method), method);
 			}
+		}
+		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+			mbus_debugf("  push to trash");
+			rc = server_send_event_to(server, client_get_name(method_get_source(method)), method_get_request_destination(method), method_get_request_identifier(method), method_get_request_payload(method));
+			if (rc != 0) {
+				mbus_errorf("can not send event");
+			}
+			method_destroy(method);
 		}
 	}
 	return 0;
@@ -2487,7 +2466,7 @@ static int server_handle_method (struct mbus_server *server, struct client *clie
 {
 	int rc;
 	struct method *method;
-	method = method_create_from_string(client, string);
+	method = method_create_request(client, string);
 	if (method == NULL) {
 		mbus_errorf("invalid method");
 		goto bail;
@@ -3420,7 +3399,7 @@ out:
 		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
 			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
 				if (client_get_name(client) != NULL &&
-				    strcmp(mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL), client_get_name(client)) == 0) {
+				    strcmp(method_get_request_destination(method), client_get_name(client)) == 0) {
 					TAILQ_REMOVE(&wclient->waits, method, methods);
 					method_set_result_code(method, -1);
 					client_push_result(wclient, method);

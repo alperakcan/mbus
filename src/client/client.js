@@ -3,7 +3,6 @@
 //TextEncoder = require('text-encoder-lite');
 //module.exports = MBusClient
 
-const MBUS_METHOD_TYPE_CREATE					= "org.mbus.method.type.create";
 const MBUS_METHOD_TYPE_COMMAND					= "org.mbus.method.type.command";
 const MBUS_METHOD_TYPE_STATUS					= "org.mbus.method.type.status";
 const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
@@ -25,9 +24,9 @@ const MBUS_SERVER_NAME							= "org.mbus.server";
 
 const MBUS_SERVER_COMMAND_CREATE					= "command.create";
 const MBUS_SERVER_COMMAND_EVENT					= "command.event";
-const MBUS_SERVER_COMMAND_CALL					= "command.call";
 const MBUS_SERVER_COMMAND_RESULT					= "command.result";
 const MBUS_SERVER_COMMAND_STATUS					= "command.status";
+const MBUS_SERVER_COMMAND_CLIENT				= "command.client";
 const MBUS_SERVER_COMMAND_CLIENTS				= "command.clients";
 const MBUS_SERVER_COMMAND_SUBSCRIBE				= "command.subscribe";
 const MBUS_SERVER_COMMAND_REGISTER				= "command.register";
@@ -48,15 +47,12 @@ const MBUS_SERVER_EVENT_UNSUBSCRIBED				= "event.unsubscribed";
 const MBUS_SERVER_EVENT_PING						= "event.ping";
 const MBUS_SERVER_EVENT_PONG						= "event.pong";
 
-function MBusClientRequest (type, source, destination, identifier, sequence, payload, callback)
+function MBusClientRequest (type, destination, identifier, sequence, payload, callback)
 {
 	if (this instanceof MBusClientRequest == false) {
-		return new MBusClientRequest(type, source, destination, identifier, sequence, payload, callback);
+		return new MBusClientRequest(type, destination, identifier, sequence, payload, callback);
 	}
 	if (typeof type !== 'string') {
-		return null;
-	}
-	if (typeof source !== 'string') {
 		return null;
 	}
 	if (typeof destination !== 'string') {
@@ -79,7 +75,6 @@ function MBusClientRequest (type, source, destination, identifier, sequence, pay
 	}
 	this.type = 'MBusClientRequest';
 	this._type = type;
-	this._source = source;
 	this._destination = destination;
 	this._identifier = identifier;
 	this._sequence = sequence;
@@ -339,6 +334,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		var request;
 		var options;
 		options = {};
+		options['name'] = this._cname;
 		options['ping'] = {};
 		options['ping']['interval'] = 180000;
 		options['ping']['timeout'] = 5000;
@@ -357,7 +353,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		this._pingTimer = null;
 		this._pingCheckTimer = null;
 		this._compression = null;
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._cname, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 			this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -429,7 +425,7 @@ MBusClient.prototype.subscribe = function (source, event, callback, context) {
 		source: source,
 		event: event,
 	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -444,16 +440,10 @@ MBusClient.prototype.subscribe = function (source, event, callback, context) {
 
 MBusClient.prototype.event = function (identifier, event) {
 	var request;
-	var payload;
 	if (event == null) {
 		event = {};
 	}
-	payload = {
-		destination: MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS,
-		identifier: identifier,
-		event: event,
-	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, identifier, this._sequence, event);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -464,16 +454,10 @@ MBusClient.prototype.event = function (identifier, event) {
 
 MBusClient.prototype.eventTo = function (to, identifier, event) {
 	var request;
-	var payload;
 	if (event == null) {
 		event = {};
 	}
-	payload = {
-		destination: to,
-		identifier: identifier,
-		event: event,
-	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, to, identifier, this._sequence, event);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -484,19 +468,13 @@ MBusClient.prototype.eventTo = function (to, identifier, event) {
 
 MBusClient.prototype.command = function (destination, identifier, command, callback) {
 	var request;
-	var payload;
 	if (command == null) {
 		command = {};
 	}
 	if (callback == null) {
 		callback = function () { };
 	}
-	payload = {
-		destination: destination,
-		identifier: identifier,
-		call: command,
-	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, this._name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, this._sequence, payload, callback);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, identifier, this._sequence, command, callback);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;

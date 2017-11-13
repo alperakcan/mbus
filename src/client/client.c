@@ -69,7 +69,6 @@ struct method {
 	TAILQ_ENTRY(method) methods;
 	const char *type;
 	const char *source;
-	const char *destination;
 	const char *identifier;
 	int sequence;
 	int result;
@@ -420,7 +419,6 @@ static struct method * method_create_from_string (const char *string)
 	}
 	method->type = mbus_json_get_string_value(method->json, "type", NULL);
 	method->source = mbus_json_get_string_value(method->json, "source", NULL);
-	method->destination = mbus_json_get_string_value(method->json, "destination", NULL);
 	method->identifier = mbus_json_get_string_value(method->json, "identifier", NULL);
 	method->sequence = mbus_json_get_int_value(method->json, "sequence", -1);
 	method->result = mbus_json_get_int_value(method->json, "result", -1);
@@ -432,37 +430,34 @@ static struct method * method_create_from_string (const char *string)
 	if (strcmp(method->type, MBUS_METHOD_TYPE_RESULT) == 0) {
 		if ((method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_EVENT) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_STATUS) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_COMMAND) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else {
@@ -1955,10 +1950,8 @@ bail:	if (payload != NULL) {
 int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
 {
 	struct mbus_json *data;
-	struct mbus_json *payload;
 	struct request *request;
 	data = NULL;
-	payload = NULL;
 	request = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is null");
@@ -1983,16 +1976,7 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create command payload");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(payload, "destination", to);
-	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
-	mbus_json_add_item_to_object_cs(payload, "event", data);
-	data = NULL;
-	request = request_create(MBUS_METHOD_TYPE_EVENT, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_EVENT, to, identifier, client->sequence, data);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -2004,13 +1988,9 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 	}
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
 	request->state = request_state_request;
-	mbus_json_delete(payload);
 	pthread_mutex_unlock(&client->mutex);
 	return 0;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	if (data != NULL) {
+bail:	if (data != NULL) {
 		mbus_json_delete(data);
 	}
 	if (request != NULL) {
