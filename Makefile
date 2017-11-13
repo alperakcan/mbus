@@ -136,6 +136,6 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-execute-command
 	rm -f ${DESTDIR}/usr/local/bin/mbus-file-transfer
 	
-	rm -r ${DESTDIR}/var/www/html/mbus/MBusClient.js
-	rm -r ${DESTDIR}/var/www/html/mbus/mbus-listener.html
-	rm -r ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html
+	rm -f ${DESTDIR}/var/www/html/mbus/MBusClient.js
+	rm -f ${DESTDIR}/var/www/html/mbus/mbus-listener.html
+	rm -f ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html
