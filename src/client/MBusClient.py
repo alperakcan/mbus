@@ -396,29 +396,3 @@ class MBusClient:
     def loop (self):
         while (True):
             self.run(10000)
-
-def onEventAllAll (self, context, source, event, payload):
-    print("{}: onEventAllAll {}.{}: {}".format(self.name(), source, event, json.dumps(payload)));
-    
-def onStatusConnected (self, context, source, event, payload):
-    print("{}: onStatusConnected".format(self.name()));
-
-def onStatusSubscribed (self, context, source, event, payload):
-    print("{}: onStatusSubscribed to {}.{}".format(self.name(), payload['destination'], payload['identifier']));
-
-def onConnected (self):
-    print("{}: onConnected".format(self.name()));
-    client.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, onStatusConnected, None)
-    client.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, onStatusSubscribed, None)
-    client.subscribe(MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
-
-def onSubscribed (self, source, event):
-    print("{}: onSubscribed to {}.{}".format(self.name(), source, event));
-    
-options = MBusClientOptions()
-client = MBusClient(options)
-client.onConnected = onConnected
-client.onSubscribed = onSubscribed
-
-client.connect()
-client.loop()

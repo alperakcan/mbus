@@ -56,3 +56,6 @@ dist.lib-${SHARED_ENABLE} += \
 	libmbus-client.so
 
 include ../../Makefile.lib
+
+clean:
+	${Q}${RM} *.pyc
