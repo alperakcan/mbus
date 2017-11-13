@@ -26,7 +26,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define MBUS_METHOD_TYPE_CREATE					"org.mbus.method.type.create"
 #define MBUS_METHOD_TYPE_COMMAND				"org.mbus.method.type.command"
 #define MBUS_METHOD_TYPE_STATUS					"org.mbus.method.type.status"
 #define MBUS_METHOD_TYPE_EVENT					"org.mbus.method.type.event"
@@ -43,36 +42,6 @@
 #define MBUS_METHOD_EVENT_IDENTIFIER_ALL			"org.mbus.method.event.identifier.all"
 
 #define MBUS_METHOD_STATUS_IDENTIFIER_ALL			"org.mbus.method.event.status.all"
-
-/* command json model
- *
- * client  -- request --> server
- *
- * server:
- *   process command
- *
- * client <-- result  --  server
- *
- * request: {
- *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
- *   "destination" : "unique identifier",
- *   "identifier"  : "unique identifier",
- *   "sequence"    : sequence number,
- *   "payload"     : {
- *     "comment": "command specific json object goes here"
- *   }
- * }
- *
- * result: {
- *   "type"        : MBUS_METHOD_TYPE_RESULT,
- *   "sequence"    : sequence number,
- *   "result"      : integer return code,
- *   "payload"     : {
- *     "comment": "result specific json object goes here"
- *   }
- * }
- */
 
 /* status json model
  *
@@ -102,36 +71,10 @@
  *
  *   push result to source client queue
  *
- * client <-- result  --  server
  * server --  event   --> client(s)
  *
  * request: {
- *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
- *   "destination" : MBUS_SERVER_NAME,
- *   "identifier"  : MBUS_SERVER_COMMAND_EVENT,
- *   "sequence"    : sequence number,
- *   "payload"     : {
- *     "destination" : "unique identifier",
- *     "identifier"  : "unique identifier",
- *     "event"       : {
- *       "comment": "event specific data object goes here"
- *     }
- *   }
- * }
- *
- * result: {
- *   "type"        : MBUS_METHOD_TYPE_RESULT,
- *   "sequence"    : sequence number,
- *   "result"      : integer return code,
- *   "payload"     : {
- *     "comment": "result specific json object goes here"
- *   }
- * }
- *
- * event: {
  *   "type"        : MBUS_METHOD_TYPE_EVENT,
- *   "source"      : "unique identifier",
  *   "destination" : "unique identifier",
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
@@ -141,38 +84,38 @@
  * }
  */
 
-/* call json model
+/* command json model
  *
  * client  -- request --> server
  *
  * server:
- *   for each client
- *     if client matches with identifier
- *       push call to client queue
+ *   if destination is MBUS_SERVER_NAME
+ *     process command
+ *   else
+ *     for each client
+ *       if client identifier matches with destination and
+ *          client has registered command with identifier
+ *         push call to client queue
  *
- * server  -- call    --> callee
- * server <-- result  --  callee
+ * if destination is not MBUS_SERVER_NAME
+ *   server  -- call    --> callee
+ *   server <-- result  --  callee
+ *
  * client <-- result  --  server
  *
  * request: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
- *   "destination" : MBUS_SERVER_NAME,
- *   "identifier"  : MBUS_SERVER_COMMAND_CALL,
+ *   "destination" : "unique identifier",
+ *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
  *   "payload"     : {
- *     "destination" : "unique identifier",
- *     "identifier"  : "unique identifier",
- *     "call"        : {
- *       "comment": "call specific data object goes here"
- *     }
+ *     "comment": "command specific data object goes here"
  *   }
  * }
  *
  * call: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
  *   "source"      : "unique identifier",
- *   "destination" : "unique identifier",
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
  *   "payload"        : {
@@ -182,7 +125,6 @@
  *
  * result: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
  *   "destination" : MBUS_SERVER_NAME,
  *   "identifier"  : MBUS_SERVER_COMMAND_RESULT,
  *   "sequence"    : sequence number,
@@ -191,7 +133,7 @@
  *     "identifier"  : "call identifier",
  *     "sequence"    : call sequence number,
  *     "return"      : integer return code,
- *     "result"        : {
+ *     "result"      : {
  *       "comment": "result specific data object goes here"
  *     }
  *   }

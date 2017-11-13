@@ -86,14 +86,6 @@
  */
 #define MBUS_SERVER_COMMAND_EVENT		"command.event"
 
-/* command call
- *
- * {
- *   "comment": "call specific json object goes here"
- * }
- */
-#define MBUS_SERVER_COMMAND_CALL		"command.call"
-
 /* command result
  *
  * {

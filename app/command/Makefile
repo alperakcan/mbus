@@ -38,6 +38,7 @@ mbus-command_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-command
+	mbus-command \
+	mbus-command.py
 
 include ../../Makefile.lib

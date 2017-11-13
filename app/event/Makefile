@@ -38,6 +38,7 @@ mbus-event_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-event
+	mbus-event \
+	mbus-event.py
 
 include ../../Makefile.lib

@@ -69,7 +69,6 @@ struct method {
 	TAILQ_ENTRY(method) methods;
 	const char *type;
 	const char *source;
-	const char *destination;
 	const char *identifier;
 	int sequence;
 	int result;
@@ -127,7 +126,6 @@ struct mbus_client {
 		struct mbus_buffer *out;
 	} buffer;
 	struct {
-		int enabled;
 		int interval;
 		int timeout;
 		int threshold;
@@ -420,7 +418,6 @@ static struct method * method_create_from_string (const char *string)
 	}
 	method->type = mbus_json_get_string_value(method->json, "type", NULL);
 	method->source = mbus_json_get_string_value(method->json, "source", NULL);
-	method->destination = mbus_json_get_string_value(method->json, "destination", NULL);
 	method->identifier = mbus_json_get_string_value(method->json, "identifier", NULL);
 	method->sequence = mbus_json_get_int_value(method->json, "sequence", -1);
 	method->result = mbus_json_get_int_value(method->json, "result", -1);
@@ -432,37 +429,34 @@ static struct method * method_create_from_string (const char *string)
 	if (strcmp(method->type, MBUS_METHOD_TYPE_RESULT) == 0) {
 		if ((method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_EVENT) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_STATUS) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else if (strcmp(method->type, MBUS_METHOD_TYPE_COMMAND) == 0) {
 		if ((method->source == NULL) ||
-		    (method->destination == NULL) ||
 		    (method->type == NULL) ||
 		    (method->identifier == NULL) ||
 		    (method->sequence == -1) ||
 		    (method->payload == NULL)) {
-			mbus_errorf("invalid method");
+			mbus_errorf("invalid method: %s", string);
 			goto bail;
 		}
 	} else {
@@ -536,16 +530,12 @@ static void request_destroy (struct request *request)
 	free(request);
 }
 
-static struct request * request_create (const char *type, const char *source, const char *destination, const char *identifier, int sequence, const struct mbus_json *payload)
+static struct request * request_create (const char *type, const char *destination, const char *identifier, int sequence, const struct mbus_json *payload)
 {
 	struct request *request;
 	request = NULL;
 	if (type == NULL) {
 		mbus_errorf("type is null");
-		goto bail;
-	}
-	if (source == NULL) {
-		mbus_errorf("source is null");
 		goto bail;
 	}
 	if (destination == NULL) {
@@ -560,12 +550,6 @@ static struct request * request_create (const char *type, const char *source, co
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
-#if 0
-	if (payload == NULL) {
-		mbus_errorf("payload is null");
-		goto bail;
-	}
-#endif
 	request = malloc(sizeof(struct request));
 	if (request == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -596,7 +580,6 @@ static struct request * request_create (const char *type, const char *source, co
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(request->json, "type", type);
-	mbus_json_add_string_to_object_cs(request->json, "source", source);
 	mbus_json_add_string_to_object_cs(request->json, "destination", destination);
 	mbus_json_add_string_to_object_cs(request->json, "identifier", identifier);
 	mbus_json_add_number_to_object_cs(request->json, "sequence", sequence);
@@ -631,9 +614,6 @@ static int mbus_client_handle_command_create_result (struct mbus_client *client,
 		client->ping.interval = mbus_json_get_int_value(result, "ping/interval", -1);
 		client->ping.timeout = mbus_json_get_int_value(result, "ping/timeout", -1);
 		client->ping.threshold = mbus_json_get_int_value(result, "ping/threshold", -1);
-		if (client->ping.interval > 0) {
-			client->ping.enabled = 1;
-		}
 	}
 	return 0;
 }
@@ -660,7 +640,7 @@ static void * client_worker (void *arg)
 	while (1) {
 		current = mbus_clock_get();
 		sched_yield();
-		if (client->ping.enabled == 1) {
+		if (client->ping.interval > 0) {
 			if (mbus_clock_after(current, client->ping.ping_send_tsms + client->ping.interval)) {
 				mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping.ping_send_tsms, client->ping.interval, client->ping.timeout);
 				client->ping.ping_send_tsms = current;
@@ -1248,6 +1228,7 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 		request = NULL;
 		result = NULL;
 		request = mbus_json_create_object();
+		mbus_json_add_string_to_object_cs(request, "name", client->name);
 		request_ping = mbus_json_create_object();
 		mbus_json_add_number_to_object_cs(request_ping, "interval", client->ping.interval);
 		mbus_json_add_number_to_object_cs(request_ping, "timeout", client->ping.timeout);
@@ -1287,7 +1268,6 @@ struct mbus_client * mbus_client_create_with_options (const struct mbus_client_o
 	mbus_infof("  name       : %s", client->name);
 	mbus_infof("  compression: %s", mbus_compress_method_string(client->compression));
 	mbus_infof("  ping");
-	mbus_infof("    enabled  : %d", client->ping.enabled);
 	mbus_infof("    interval : %d", client->ping.interval);
 	mbus_infof("    timeout  : %d", client->ping.timeout);
 	mbus_infof("    threshold: %d", client->ping.threshold);
@@ -1298,7 +1278,7 @@ bail:	if (client != NULL) {
 	return NULL;
 }
 
-struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[])
+struct mbus_client * mbus_client_create (int argc, char *argv[])
 {
 	int rc;
 	struct mbus_client *client;
@@ -1308,10 +1288,6 @@ struct mbus_client * mbus_client_create (const char *name, int argc, char *argv[
 	if (rc != 0) {
 		mbus_errorf("can not get default options");
 		goto bail;
-	}
-	options.client.name = name;
-	if (options.client.name == NULL) {
-		options.client.name = "";
 	}
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
@@ -1581,7 +1557,7 @@ static int mbus_client_result (struct mbus_client *client, struct mbus_json *pay
 		goto bail;
 	}
 	pthread_mutex_lock(&client->mutex);
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_RESULT, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_RESULT, client->sequence, payload);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -1825,7 +1801,7 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, client->sequence, payload);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -1918,7 +1894,7 @@ int mbus_client_register (struct mbus_client *client, const char *command, int (
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, client->sequence, payload);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -1969,10 +1945,8 @@ bail:	if (payload != NULL) {
 int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
 {
 	struct mbus_json *data;
-	struct mbus_json *payload;
 	struct request *request;
 	data = NULL;
-	payload = NULL;
 	request = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is null");
@@ -1997,16 +1971,7 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create command payload");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(payload, "destination", to);
-	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
-	mbus_json_add_item_to_object_cs(payload, "event", data);
-	data = NULL;
-	request = request_create(MBUS_METHOD_TYPE_EVENT, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_EVENT, to, identifier, client->sequence, data);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -2018,13 +1983,9 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 	}
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
 	request->state = request_state_request;
-	mbus_json_delete(payload);
 	pthread_mutex_unlock(&client->mutex);
 	return 0;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	if (data != NULL) {
+bail:	if (data != NULL) {
 		mbus_json_delete(data);
 	}
 	if (request != NULL) {
@@ -2080,7 +2041,7 @@ int mbus_client_event_sync_to (struct mbus_client *client, const char *to, const
 	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
 	mbus_json_add_item_to_object_cs(payload, "event", data);
 	data = NULL;
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, payload);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -2141,14 +2102,10 @@ int mbus_client_command (struct mbus_client *client, const char *destination, co
 int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **rslt, int timeout)
 {
 	int rc;
-	struct mbus_json *data;
 	struct mbus_json *answer;
-	struct mbus_json *payload;
 	struct method *result;
 	struct request *request;
 	(void) timeout;
-	data = NULL;
-	payload = NULL;
 	request = NULL;
 	if (rslt != NULL) {
 		*rslt = NULL;
@@ -2165,30 +2122,13 @@ int mbus_client_command_timeout (struct mbus_client *client, const char *destina
 		mbus_errorf("command is null");
 		goto bail;
 	}
-	if (call == NULL) {
-		data = mbus_json_create_object();
-	} else {
-		data = mbus_json_duplicate(call, 1);
-	}
-	if (data == NULL) {
-		mbus_errorf("can not create data");
-		goto bail;
-	}
 	pthread_mutex_lock(&client->mutex);
 	if (client->error != 0) {
 		mbus_errorf("client is in error state");
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create command payload");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(payload, "destination", destination);
-	mbus_json_add_string_to_object_cs(payload, "identifier", command);
-	mbus_json_add_item_to_object_cs(payload, "call", data);
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, client->name, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CALL, client->sequence, payload);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, destination, command, client->sequence, call);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -2228,13 +2168,9 @@ int mbus_client_command_timeout (struct mbus_client *client, const char *destina
 	client->incommand = 0;
 	pthread_cond_broadcast(&client->cond);
 	pthread_mutex_unlock(&client->mutex);
-	mbus_json_delete(payload);
 	request_destroy(request);
 	return rc;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	if (request != NULL) {
+bail:	if (request != NULL) {
 		request_destroy(request);
 	}
 	return -1;
