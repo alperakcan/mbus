@@ -237,6 +237,7 @@ class MBusClient:
             self._pingTimeout = object['payload']['ping']['timeout']
             self._pingThreshold = object['payload']['ping']['threshold']
             self._compression = object['payload']['compression']
+            self.onConnected();
             
         print(self._pendings)
         
@@ -302,12 +303,15 @@ class MBusClient:
     def loop (self):
         while (True):
             self.run(10000)
-        
+
+def onConnected (self):
+    print("{} connected".format(self));
+
 options = MBusClientOptions()
 print options
 
 client = MBusClient()
-print client
+client.onConnected = onConnected 
 
 client.connect()
 client.loop()
