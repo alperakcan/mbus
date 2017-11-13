@@ -128,7 +128,7 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
-	client = mbus_client_create(NULL, argc, argv);
+	client = mbus_client_create(argc, argv);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;

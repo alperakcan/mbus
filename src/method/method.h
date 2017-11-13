@@ -55,8 +55,7 @@
  *
  * request: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
- *   "destination" : "unique identifier",
+ *   "destination" : MBUS_SERVER_NAME,
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
  *   "payload"     : {
@@ -141,38 +140,38 @@
  * }
  */
 
-/* call json model
+/* command json model
  *
  * client  -- request --> server
  *
  * server:
- *   for each client
- *     if client matches with identifier
- *       push call to client queue
+ *   if destination is MBUS_SERVER_NAME
+ *     process command
+ *   else
+ *     for each client
+ *       if client identifier matches with destination and
+ *          client has registered command with identifier
+ *         push call to client queue
  *
- * server  -- call    --> callee
- * server <-- result  --  callee
+ * if destination is not MBUS_SERVER_NAME
+ *   server  -- call    --> callee
+ *   server <-- result  --  callee
+ *
  * client <-- result  --  server
  *
  * request: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "source"      : "unique identifier",
- *   "destination" : MBUS_SERVER_NAME,
- *   "identifier"  : MBUS_SERVER_COMMAND_CALL,
+ *   "destination" : "unique identifier",
+ *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
  *   "payload"     : {
- *     "destination" : "unique identifier",
- *     "identifier"  : "unique identifier",
- *     "call"        : {
- *       "comment": "call specific data object goes here"
- *     }
+ *     "comment": "command specific data object goes here"
  *   }
  * }
  *
  * call: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
  *   "source"      : "unique identifier",
- *   "destination" : "unique identifier",
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
  *   "payload"        : {
