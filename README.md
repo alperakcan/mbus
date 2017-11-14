@@ -61,6 +61,13 @@ mBus client library (libmbus-client) is to simplify development of software usin
 
 ## 3. build ##
 
+    apt install gcc
+    apt install make
+    apt install pkg-config
+    apt install libssl-dev
+    apt install zlib1g-dev
+    apt install libwebsockets-dev
+
     cd mbus
     make
 
