@@ -346,6 +346,22 @@ int mbus_json_get_int_value (const struct mbus_json *json, const char *name, int
 	return mbus_cJSON->valueint;
 }
 
+int mbus_json_get_bool_value (const struct mbus_json *json, const char *name, int value)
+{
+	struct mbus_cJSON *mbus_cJSON;
+	mbus_cJSON = (struct mbus_cJSON *) mbus_json_get_object(json, name);
+	if (mbus_cJSON == NULL) {
+		return value;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_true) {
+		return 1;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_false) {
+		return 0;
+	}
+	return value;
+}
+
 const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value)
 {
 	struct mbus_cJSON *mbus_cJSON;

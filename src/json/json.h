@@ -55,8 +55,9 @@ int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, co
 int mbus_json_add_string_to_object_cs (struct mbus_json *json, const char *name, const char *string);
 
 int mbus_json_get_int_value (const struct mbus_json *json, const char *name, int value);
-const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value);
 double mbus_json_get_number_value (const struct mbus_json *json, const char *name, double value);
+const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value);
+int mbus_json_get_bool_value (const struct mbus_json *json, const char *name, int value);
 
 int mbus_json_set_number_value (struct mbus_json *json, const char *name, double number);
 

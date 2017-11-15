@@ -151,7 +151,7 @@ int main (int argc, char *argv[])
 			case OPTION_PAYLOAD:
 				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
-					mbus_errorf("invalid payload");
+					mbus_errorf("invalid payload: %s", optarg);
 					goto bail;
 				}
 				break;
