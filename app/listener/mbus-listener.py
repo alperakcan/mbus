@@ -63,16 +63,15 @@ for opt, arg in options:
         mbus_ping_threshold = arg
 
 def onEventAllAll (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload)));
+    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
     
 def onEventAllEvent (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload)));
+    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
     
 def onStatusServerAll (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload)));
+    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
     
 def onConnected (self):
-    print("{}: onConnected".format(self.name()));
     if (len(subscriptions) == 0):
         client.subscribe(MBusClient.MBUS_SERVER_NAME, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
         client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)

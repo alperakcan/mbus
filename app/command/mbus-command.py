@@ -88,15 +88,16 @@ if g_payload == None:
     exit(-1)
 
 def onCommandResult (self, context, source, command, result, payload):
-    print("{}.{}: {}, {}".format(source, command, result, json.dumps(payload, sort_keys=True, indent=4)))
-    
-def onStatusConnected (self, context, source, event, payload):
     global g_finished
-    client.command(g_destination, g_command, g_payload, onCommandResult, None)
+    if (result != 0):
+        print("{}".format(result))
+    print("{}".format(json.dumps(payload, sort_keys=True, indent=4)))
     g_finished = 1
     
+def onStatusConnected (self, context, source, event, payload):
+    client.command(g_destination, g_command, g_payload, onCommandResult, None)
+    
 def onConnected (self):
-    print("{}: onConnected".format(self.name()));
     client.subscribe(MBusClient.MBUS_SERVER_NAME, MBusClient.MBUS_SERVER_STATUS_CONNECTED, onStatusConnected, None)
 
 options = MBusClient.MBusClientOptions()
