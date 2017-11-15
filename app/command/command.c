@@ -141,6 +141,14 @@ int main (int argc, char *argv[])
 				goto bail;
 		}
 	}
+	if (arg.destination == NULL) {
+		mbus_errorf("destination is null");
+		goto bail;
+	}
+	if (arg.command == NULL) {
+		mbus_errorf("command is null");
+		goto bail;
+	}
 
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
@@ -152,37 +160,11 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not create client");
 		goto bail;
 	}
-
-	optind = 1;
-	while ((c = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
-		switch (c) {
-			case OPTION_DESTINATION:
-				arg.destination = optarg;
-				break;
-			case OPTION_COMMAND:
-				arg.command = optarg;
-				break;
-			case OPTION_PAYLOAD:
-				arg.payload = mbus_json_parse(optarg);
-				if (arg.payload == NULL) {
-					mbus_errorf("invalid payload: %s", optarg);
-					goto bail;
-				}
-				break;
-			case OPTION_HELP:
-				usage();
-				goto bail;
-		}
-	}
-	if (arg.destination == NULL) {
-		mbus_errorf("destination is null");
+	rc = mbus_client_connect(client);
+	if (rc != 0) {
+		mbus_errorf("can not connect client");
 		goto bail;
 	}
-	if (arg.command == NULL) {
-		mbus_errorf("command is null");
-		goto bail;
-	}
-
 	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, command_status_server_connected, &arg);
 	if (rc != 0) {
 		mbus_errorf("can not subscribe to events");
