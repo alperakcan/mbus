@@ -104,20 +104,18 @@ int main (int argc, char *argv[])
 
 	int _argc;
 	char **_argv;
-	int _optind;
 
 
 	struct arg arg;
 	struct mbus_client *client;
+	struct mbus_client_options options;
 
 	client = NULL;
 	memset(&arg, 0, sizeof(struct arg));
 
 	_argc = 0;
 	_argv = NULL;
-	_optind = optind;
 
-	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);
 	for (_argc = 0; _argc < argc; _argc++) {
 		_argv[_argc] = argv[_argc];
@@ -125,15 +123,31 @@ int main (int argc, char *argv[])
 
 	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
 		switch (c) {
+			case OPTION_DESTINATION:
+				arg.destination = optarg;
+				break;
+			case OPTION_COMMAND:
+				arg.command = optarg;
+				break;
+			case OPTION_PAYLOAD:
+				arg.payload = mbus_json_parse(optarg);
+				if (arg.payload == NULL) {
+					mbus_errorf("invalid payload: %s", optarg);
+					goto bail;
+				}
+				break;
 			case OPTION_HELP:
 				usage();
 				goto bail;
 		}
 	}
 
-	optind = _optind;
-
-	client = mbus_client_create(argc, argv);
+	rc = mbus_client_options_from_argv(&options, argc, argv);
+	if (rc != 0) {
+		mbus_errorf("can not parse options");
+		goto bail;
+	}
+	client = mbus_client_create(&options);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
@@ -176,7 +190,7 @@ int main (int argc, char *argv[])
 	}
 
 	while (1) {
-		rc = mbus_client_run_timeout(client, MBUS_CLIENT_DEFAULT_TIMEOUT);
+		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_TIMEOUT);
 		if (rc != 0) {
 			mbus_errorf("client run failed");
 			goto bail;
