@@ -1945,9 +1945,7 @@ bail:	if (payload != NULL) {
 
 int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event)
 {
-	struct mbus_json *data;
 	struct request *request;
-	data = NULL;
 	request = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is null");
@@ -1957,22 +1955,13 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 		mbus_errorf("identifier is null");
 		goto bail;
 	}
-	if (event == NULL) {
-		data = mbus_json_create_object();
-	} else {
-		data = mbus_json_duplicate(event, 1);
-	}
-	if (data == NULL) {
-		mbus_errorf("can not create data");
-		goto bail;
-	}
 	pthread_mutex_lock(&client->mutex);
 	if (client->error != 0) {
 		mbus_errorf("client is in error state");
 		pthread_mutex_unlock(&client->mutex);
 		goto bail;
 	}
-	request = request_create(MBUS_METHOD_TYPE_EVENT, to, identifier, client->sequence, data);
+	request = request_create(MBUS_METHOD_TYPE_EVENT, to, identifier, client->sequence, event);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		pthread_mutex_unlock(&client->mutex);
@@ -1986,10 +1975,7 @@ int mbus_client_event_to (struct mbus_client *client, const char *to, const char
 	request->state = request_state_request;
 	pthread_mutex_unlock(&client->mutex);
 	return 0;
-bail:	if (data != NULL) {
-		mbus_json_delete(data);
-	}
-	if (request != NULL) {
+bail:	if (request != NULL) {
 		request_destroy(request);
 	}
 	return -1;
