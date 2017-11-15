@@ -349,7 +349,7 @@ class MBusClient:
     def event (self, event, payload = None):
         self.eventTo(MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, event, payload)
 
-    def eventToSync (self, destination, event, payload = None):
+    def eventSyncTo (self, destination, event, payload = None):
         data = {}
         data['destination'] = destination
         data['identifier'] = event
@@ -361,7 +361,7 @@ class MBusClient:
         self._requests.append(request)
 
     def eventSync (self, event, payload = None):
-        self.eventToSync(MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, event, payload)
+        self.eventSyncTo(MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, event, payload)
 
     def command (self, destination, command, payload, callback, context):
         request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, command, self._sequence, payload, callback, context)

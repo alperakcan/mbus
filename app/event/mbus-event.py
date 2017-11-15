@@ -89,7 +89,7 @@ if g_payload == None:
     
 def onStatusConnected (self, context, source, event, payload):
     global g_finished
-    client.eventToSync(g_destination, g_event, g_payload)
+    client.eventSyncTo(g_destination, g_event, g_payload)
     g_finished = 1
     
 def onConnected (self):
