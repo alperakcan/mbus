@@ -97,11 +97,11 @@ bail:	if (subscription != NULL) {
 	return NULL;
 }
 
-static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
 {
 	int rc;
 	struct arg *arg = context;
-	if (status == mbus_client_connect_status_success) {
+	if (status == mbus_client_create_status_success) {
 		if (arg->subscriptions->count > 0) {
 			struct subscription *subscription;
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
@@ -218,7 +218,7 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not parse options");
 		goto bail;
 	}
-	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;
 	options.callbacks.context = &arg;

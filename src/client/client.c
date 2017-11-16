@@ -348,6 +348,11 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	mbus_infof("    timeout  : %d", client->ping_timeout);
 	mbus_infof("    threshold: %d", client->ping_threshold);
 	client->state = mbus_client_state_created;
+	if (client->options->callbacks.create != NULL) {
+		mbus_client_unlock(client);
+		client->options->callbacks.create(client, client->options->callbacks.context, mbus_client_create_status_success);
+		mbus_client_lock(client);
+	}
 	mbus_client_unlock(client);
 	return;
 bail:	mbus_errorf("client command create failed");
@@ -640,6 +645,7 @@ static int mbus_client_message_handle_event (struct mbus_client *client, const s
 		message.type = mbus_client_message_type_event;
 		message.u.event.payload = json;
 		mbus_client_unlock(client);
+		client->options->callbacks.message(client, client->options->callbacks.context, &message);
 		mbus_client_lock(client);
 	}
 
@@ -713,6 +719,8 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 
 		duplicate->callbacks.connect = options->callbacks.connect;
 		duplicate->callbacks.disconnect = options->callbacks.disconnect;
+		duplicate->callbacks.create = options->callbacks.create;
+		duplicate->callbacks.status = options->callbacks.status;
 		duplicate->callbacks.message = options->callbacks.message;
 		duplicate->callbacks.publish = options->callbacks.publish;
 		duplicate->callbacks.subscribe = options->callbacks.subscribe;
@@ -1007,12 +1015,12 @@ enum mbus_client_state mbus_client_state (struct mbus_client *client)
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	state = client->state;
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 	return state;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return mbus_client_state_unknown;
 }
@@ -1024,12 +1032,12 @@ const char * mbus_client_name (struct mbus_client *client)
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	name = client->name;
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 	return name;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return NULL;
 }
@@ -1040,12 +1048,12 @@ int mbus_client_connect (struct mbus_client *client)
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	client->state = mbus_client_state_connecting;
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 	return 0;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return -1;
 }
@@ -1056,11 +1064,11 @@ int mbus_client_disconnect (struct mbus_client *client)
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	client->state = mbus_client_state_disconnecting;
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return -1;
 }
@@ -1128,12 +1136,12 @@ int mbus_client_publish_to (struct mbus_client *client, const char *destination,
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	rc = mbus_client_publish_to_unlocked(client, destination, event, payload);
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return -1;
 }
@@ -1199,12 +1207,12 @@ int mbus_client_command_timeout (struct mbus_client *client, const char *destina
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 	rc = mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, timeout);
-	pthread_mutex_unlock(&client->mutex);
+	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return -1;
 }
@@ -1256,7 +1264,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		goto bail;
 	}
 
-	pthread_mutex_lock(&client->mutex);
+	mbus_client_lock(client);
 
 	if (client->state == mbus_client_state_connecting) {
 		mbus_debugf("connecting");
@@ -1268,6 +1276,11 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		client->state = mbus_client_state_connected;
 	} else if (client->state == mbus_client_state_connected) {
 		mbus_debugf("connected");
+		if (client->options->callbacks.connect != NULL) {
+			mbus_client_unlock(client);
+			client->options->callbacks.connect(client, client->options->callbacks.context, mbus_client_connect_status_success);
+			mbus_client_lock(client);
+		}
 		client->state = mbus_client_state_creating;
 		rc = mbus_client_command_create_request(client);
 		if (rc != 0) {
@@ -1331,9 +1344,9 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		if (mbus_buffer_length(client->outgoing) > 0) {
 			pollfds[0].events |= POLLOUT;
 		}
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 		rc = poll(pollfds, 1, timeout);
-		pthread_mutex_lock(&client->mutex);
+		mbus_client_lock(client);
 		if (rc == 0) {
 			goto out;
 		}
@@ -1501,10 +1514,10 @@ incoming_bail:			if (json != NULL) {
 		}
 	}
 
-out:	pthread_mutex_unlock(&client->mutex);
+out:	mbus_client_unlock(client);
 	return 0;
 bail:	if (client != NULL) {
-		pthread_mutex_unlock(&client->mutex);
+		mbus_client_unlock(client);
 	}
 	return -1;
 }
@@ -1543,7 +1556,7 @@ const struct mbus_json * mbus_client_message_event_payload (struct mbus_client_m
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	if (message->type != mbus_client_message_type_command) {
+	if (message->type != mbus_client_message_type_event) {
 		mbus_errorf("message is invalid");
 		goto bail;
 	}

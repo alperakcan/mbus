@@ -52,9 +52,13 @@ enum mbus_client_state {
 
 enum mbus_client_connect_status {
 	mbus_client_connect_status_success,
-	mbus_client_connect_status_server_unavailable,
-	mbus_client_connect_status_invalid_protocol_version,
-	mbus_client_connect_status_invalid_client_identfier,
+	mbus_client_connect_status_server_unavailable
+};
+
+enum mbus_client_create_status {
+	mbus_client_create_status_success,
+	mbus_client_create_status_invalid_protocol_version,
+	mbus_client_create_status_invalid_client_identfier
 };
 
 enum mbus_client_disconnect_status {
@@ -92,6 +96,7 @@ struct mbus_client_options {
 	struct {
 		void (*connect) (struct mbus_client *client, void *context, enum mbus_client_connect_status status);
 		void (*disconnect) (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status);
+		void (*create) (struct mbus_client *client, void *context, enum mbus_client_create_status status);
 		void (*status) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 		void (*message) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 		void (*publish) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status);
