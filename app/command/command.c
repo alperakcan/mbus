@@ -76,15 +76,15 @@ static void mbus_client_callback_command (struct mbus_client *client, void *cont
 	struct arg *arg = context;
 	char *string;
 	(void) client;
-	if (mbus_client_message_response_result(message) == 0) {
-		string = mbus_json_print(mbus_client_message_response_payload(message));
+	if (mbus_client_message_command_response_result(message) == 0) {
+		string = mbus_json_print(mbus_client_message_command_response_payload(message));
 		if (string == NULL) {
 			return;
 		}
 		fprintf(stdout, "%s\n", string);
 		free(string);
 	}
-	arg->result = mbus_client_message_response_result(message);
+	arg->result = mbus_client_message_command_response_result(message);
 	arg->finished = 1;
 }
 

@@ -133,16 +133,16 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 bail:	return;
 }
 
-static void mbus_client_callback_message (struct mbus_client *client, void *context, const char *source, const char *event, struct mbus_client_message *message)
+static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
 	char *string;
 	(void) client;
 	(void) context;
-	string = mbus_json_print(mbus_client_message_payload(message));
+	string = mbus_json_print(mbus_client_message_event_payload(message));
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 	} else {
-		fprintf(stdout, "%s.%s: %s\n", source, event, string);
+		fprintf(stdout, "%s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 		free(string);
 	}
 }
