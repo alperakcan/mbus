@@ -71,28 +71,34 @@ struct arg {
 	int result;
 };
 
+static void mbus_client_callback_command (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	struct arg *arg = context;
+	char *string;
+	(void) client;
+	if (mbus_client_message_return(message) == 0) {
+		string = mbus_json_print(mbus_client_message_response(message));
+		if (string == NULL) {
+			return;
+		}
+		fprintf(stdout, "%s\n", string);
+		free(string);
+	}
+	arg->result = mbus_client_message_return(message);
+	arg->finished = 1;
+}
+
 static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
 	struct arg *arg = context;
-	char *string;
-	struct mbus_json *result;
 	if (status == mbus_client_connect_status_success) {
-		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, &result);
+		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, mbus_client_callback_command, arg);
 		if (rc != 0) {
 			mbus_errorf("can not call command");
+			arg->result = -1;
+			arg->finished = 1;
 		}
-		if (result != NULL) {
-			string = mbus_json_print(result);
-			if (string == NULL) {
-				return;
-			}
-			fprintf(stdout, "%s\n", string);
-			free(string);
-			mbus_json_delete(result);
-		}
-		arg->result = rc;
-		arg->finished = 1;
 	} else {
 		arg->result = -1;
 		arg->finished = 1;

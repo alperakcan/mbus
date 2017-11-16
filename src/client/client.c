@@ -706,33 +706,51 @@ int mbus_client_publish_sync_to (struct mbus_client *client, const char *destina
 	return -1;
 }
 
-int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result)
+int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
-	return mbus_client_command_timeout(client, destination, command, payload, result, client->client_command_timeout);
+	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->client_command_timeout);
 }
 
-int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result, int milliseconds)
+int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int milliseconds)
 {
 	(void) client;
 	(void) destination;
 	(void) command;
 	(void) payload;
-	(void) result;
+	(void) callback;
+	(void) context;
 	(void) milliseconds;
 	return -1;
+}
+
+static void mbus_client_command_create_result (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	(void) client;
+	(void) context;
+	(void) message;
 }
 
 static int mbus_client_run_connect (struct mbus_client *client)
 {
 	int rc;
+	enum mbus_client_state state;
+
+	struct mbus_json *payload;
+	struct mbus_json *payload_ping;
+	struct mbus_json *payload_compression;
+
+	enum mbus_socket_type socket_type;
+	enum mbus_socket_domain socket_domain;
 
 	struct request *request;
 	struct request *nrequest;
 	struct command *command;
 	struct command *ncommand;
 
-	enum mbus_socket_type socket_type;
-	enum mbus_socket_domain socket_domain;
+	state = client->state;
+	payload = NULL;
+	payload_ping = NULL;
+	payload_compression = NULL;
 
 	if (client->socket != NULL) {
 		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
@@ -839,8 +857,82 @@ static int mbus_client_run_connect (struct mbus_client *client)
 
 	client->state = mbus_client_state_connected;
 
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+
+	payload_ping = mbus_json_create_object();
+	if (payload_ping == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+	rc = mbus_json_add_number_to_object_cs(payload_ping, "interval", client->options->ping.interval);
+	if (rc != 0) {
+		mbus_errorf("can not add number to json object");
+		goto bail;
+	}
+	rc = mbus_json_add_number_to_object_cs(payload_ping, "timeout", client->options->ping.timeout);
+	if (rc != 0) {
+		mbus_errorf("can not add item to json object");
+		goto bail;
+	}
+	rc = mbus_json_add_number_to_object_cs(payload_ping, "threshold", client->options->ping.threshold);
+	if (rc != 0) {
+		mbus_errorf("can not add item to json object");
+		goto bail;
+	}
+	rc = mbus_json_add_item_to_object_cs(payload, "ping", payload_ping);
+	if (rc != 0) {
+		mbus_errorf("can not add item to json object");
+		goto bail;
+	}
+	payload_ping = NULL;
+
+	payload_compression = mbus_json_create_array();
+	if (payload_compression == NULL) {
+		mbus_errorf("can not create json array");
+		goto bail;
+	}
+	rc = mbus_json_add_item_to_array(payload_compression, mbus_json_create_string("none"));
+	if (rc != 0) {
+		mbus_errorf("can not add item to json array");
+		goto bail;
+	}
+#if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
+	rc = mbus_json_add_item_to_array(payload_compression, mbus_json_create_string("zlib"));
+	if (rc != 0) {
+		mbus_errorf("can not add item to json array");
+		goto bail;
+	}
+#endif
+	rc = mbus_json_add_item_to_object_cs(payload, "compression", payload_compression);
+	if (rc != 0) {
+		mbus_errorf("can not add item to json array");
+		goto bail;
+	}
+	payload_compression = NULL;
+
+	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, payload, mbus_client_command_create_result, client);
+	if (rc != 0) {
+		mbus_errorf("can not queue client command");
+		goto bail;
+	}
+
+	mbus_json_delete(payload);
 	return 0;
-bail:	return -1;
+bail:	client->state = state;
+	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	if (payload_ping != NULL) {
+		mbus_json_delete(payload_ping);
+	}
+	if (payload_compression != NULL) {
+		mbus_json_delete(payload_compression);
+	}
+	return -1;
 }
 
 int mbus_client_run (struct mbus_client *client, int milliseconds)
@@ -853,6 +945,9 @@ int mbus_client_run (struct mbus_client *client, int milliseconds)
 	pthread_mutex_lock(&client->mutex);
 	if (client->state == mbus_client_state_connecting) {
 		rc = mbus_client_run_connect(client);
+		if (rc != 0) {
+			mbus_errorf("can not connect client");
+		}
 	}
 	(void) milliseconds;
 	pthread_mutex_unlock(&client->mutex);
