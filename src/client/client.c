@@ -97,6 +97,7 @@ struct command {
 };
 
 struct mbus_client {
+	struct mbus_client_options *options;
 	enum mbus_client_state state;
 	struct mbus_socket *socket;
 	struct requests requests;
@@ -105,8 +106,9 @@ struct mbus_client {
 	struct mbus_buffer *incoming;
 	struct mbus_buffer *outgoing;
 	char *name;
-	int command_timeout;
-	int publish_timeout;
+	char *client_name;
+	int client_command_timeout;
+	int client_publish_timeout;
 	int ping_interval;
 	int ping_timeout;
 	int ping_threshold;
@@ -237,6 +239,85 @@ void mbus_client_usage (void)
 	fprintf(stdout, "  --mbus-ping-timeout          : ping timeout (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
 	fprintf(stdout, "  --mbus-ping-threshold        : ping threshold (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
 	fprintf(stdout, "  --mbus-help                  : this text\n");
+}
+
+static void mbus_client_options_destroy (struct mbus_client_options *options)
+{
+	if (options == NULL) {
+		return;
+	}
+	if (options->server.protocol != NULL) {
+		free(options->server.protocol);
+	}
+	if (options->server.address != NULL) {
+		free(options->server.address);
+	}
+	if (options->client.name != NULL) {
+		free(options->client.name);
+	}
+	free(options);
+}
+
+static struct mbus_client_options * mbus_client_options_duplicate (const struct mbus_client_options *options)
+{
+	int rc;
+	struct mbus_client_options *duplicate;
+	duplicate = malloc(sizeof(struct mbus_client_options));
+	if (duplicate == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	memset(duplicate, 0, sizeof(struct mbus_client_options));
+	if (options == NULL) {
+		rc = mbus_client_options_default(duplicate);
+		if (rc != 0) {
+			mbus_errorf("can not set default options");
+			goto bail;
+		}
+	} else {
+		if (options->server.protocol != NULL) {
+			duplicate->server.protocol = strdup(options->server.protocol);
+			if (duplicate->server.protocol == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+		}
+		if (options->server.address != NULL) {
+			duplicate->server.address = strdup(options->server.address);
+			if (duplicate->server.address == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+		}
+		duplicate->server.port = options->server.port;
+
+		if (options->client.name != NULL) {
+			duplicate->client.name = strdup(options->client.name);
+			if (duplicate->client.name == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+		}
+		duplicate->client.command_timeout = options->client.command_timeout;
+		duplicate->client.publish_timeout = options->client.publish_timeout;
+
+		duplicate->ping.interval = options->ping.interval;
+		duplicate->ping.timeout = options->ping.timeout;
+		duplicate->ping.threshold = options->ping.threshold;
+
+		duplicate->callbacks.connect = options->callbacks.connect;
+		duplicate->callbacks.disconnect = options->callbacks.disconnect;
+		duplicate->callbacks.message = options->callbacks.message;
+		duplicate->callbacks.publish = options->callbacks.publish;
+		duplicate->callbacks.subscribe = options->callbacks.subscribe;
+		duplicate->callbacks.unsubscribe = options->callbacks.unsubscribe;
+		duplicate->callbacks.context = options->callbacks.context;
+	}
+	return duplicate;
+bail:	if (duplicate != NULL) {
+		mbus_client_options_destroy(duplicate);
+	}
+	return NULL;
 }
 
 int mbus_client_options_default (struct mbus_client_options *options)
@@ -407,6 +488,11 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	memset(client, 0, sizeof(struct mbus_client));
 
 	pthread_mutex_init(&client->mutex,NULL);
+	client->options = mbus_client_options_duplicate(&options);
+	if (client->options == NULL) {
+		mbus_errorf("can not create options");
+		goto bail;
+	}
 	client->state = mbus_client_state_initial;
 	client->socket = NULL;
 	TAILQ_INIT(&client->requests);
@@ -464,6 +550,9 @@ void mbus_client_destroy (struct mbus_client *client)
 	if (client->name != NULL) {
 		free(client->name);
 	}
+	if (client->options != NULL) {
+		mbus_client_options_destroy(client->options);
+	}
 	pthread_mutex_destroy(&client->mutex);
 	free(client);
 }
@@ -511,6 +600,7 @@ int mbus_client_connect (struct mbus_client *client)
 	pthread_mutex_lock(&client->mutex);
 	client->state = mbus_client_state_connecting;
 	pthread_mutex_unlock(&client->mutex);
+	return 0;
 bail:	if (client != NULL) {
 		pthread_mutex_unlock(&client->mutex);
 	}
@@ -618,7 +708,7 @@ int mbus_client_publish_sync_to (struct mbus_client *client, const char *destina
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result)
 {
-	return mbus_client_command_timeout(client, destination, command, payload, result, client->command_timeout);
+	return mbus_client_command_timeout(client, destination, command, payload, result, client->client_command_timeout);
 }
 
 int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result, int milliseconds)
@@ -632,10 +722,137 @@ int mbus_client_command_timeout (struct mbus_client *client, const char *destina
 	return -1;
 }
 
+static int mbus_client_run_connect (struct mbus_client *client)
+{
+	int rc;
+
+	struct request *request;
+	struct request *nrequest;
+	struct command *command;
+	struct command *ncommand;
+
+	enum mbus_socket_type socket_type;
+	enum mbus_socket_domain socket_domain;
+
+	if (client->socket != NULL) {
+		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
+		mbus_socket_destroy(client->socket);
+		client->socket = NULL;
+	}
+	mbus_buffer_reset(client->incoming);
+	mbus_buffer_reset(client->outgoing);
+	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
+		TAILQ_REMOVE(&client->requests, request, requests);
+		request_destroy(request);
+	}
+	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
+		TAILQ_REMOVE(&client->pendings, request, requests);
+		request_destroy(request);
+	}
+	TAILQ_FOREACH_SAFE(command, &client->commands, commands, ncommand) {
+		TAILQ_REMOVE(&client->commands, command, commands);
+		command_destroy(command);
+	}
+	if (client->name != NULL) {
+		free(client->name);
+		client->name = NULL;
+	}
+
+	if (strcmp(client->options->server.protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
+		if (client->options->server.port <= 0) {
+			client->options->server.port = MBUS_SERVER_TCP_PORT;
+		}
+		if (client->options->server.address == NULL) {
+			client->options->server.address = MBUS_SERVER_TCP_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_inet;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(client->options->server.protocol, MBUS_SERVER_UDS_PROTOCOL) == 0) {
+		if (client->options->server.port <= 0) {
+			client->options->server.port = MBUS_SERVER_UDS_PORT;
+		}
+		if (client->options->server.address == NULL) {
+			client->options->server.address = MBUS_SERVER_UDS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_unix;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(client->options->server.protocol, MBUS_SERVER_TCPS_PROTOCOL) == 0) {
+		if (client->options->server.port <= 0) {
+			client->options->server.port = MBUS_SERVER_TCPS_PORT;
+		}
+		if (client->options->server.address == NULL) {
+			client->options->server.address = MBUS_SERVER_TCPS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_inet;
+		socket_type = mbus_socket_type_sock_stream;
+	} else if (strcmp(client->options->server.protocol, MBUS_SERVER_UDSS_PROTOCOL) == 0) {
+		if (client->options->server.port <= 0) {
+			client->options->server.port = MBUS_SERVER_UDSS_PORT;
+		}
+		if (client->options->server.address == NULL) {
+			client->options->server.address = MBUS_SERVER_UDSS_ADDRESS;
+		}
+		socket_domain = mbus_socket_domain_af_unix;
+		socket_type = mbus_socket_type_sock_stream;
+	} else {
+		mbus_errorf("invalid server protocol: %s", client->options->server.protocol);
+		goto bail;
+	}
+
+	mbus_infof("connecting to server: '%s:%s:%d'", client->options->server.protocol, client->options->server.address, client->options->server.port);
+	client->socket = mbus_socket_create(socket_domain, socket_type, mbus_socket_protocol_any);
+	if (client->socket == NULL) {
+		mbus_errorf("can not create event socket");
+		goto bail;
+	}
+	rc = mbus_socket_set_reuseaddr(client->socket, 1);
+	if (rc != 0) {
+		mbus_errorf("can not reuse event");
+		goto bail;
+	}
+	if (socket_domain == mbus_socket_domain_af_inet &&
+	    socket_type == mbus_socket_type_sock_stream) {
+		mbus_socket_set_keepalive(client->socket, 1);
+#if 0
+		mbus_socket_set_keepcnt(client->socket, 5);
+		mbus_socket_set_keepidle(client->socket, 180);
+		mbus_socket_set_keepintvl(client->socket, 60);
+#endif
+	}
+	rc = mbus_socket_connect(client->socket, client->options->server.address, client->options->server.port);
+	if (rc != 0) {
+		mbus_errorf("can not connect to server: '%s:%s:%d'", client->options->server.protocol, client->options->server.address, client->options->server.port);
+		goto bail;
+	}
+	rc = mbus_socket_set_blocking(client->socket, 0);
+	if (rc != 0) {
+		mbus_errorf("can not set socket to nonblocking");
+		goto bail;
+	}
+
+	client->state = mbus_client_state_connected;
+
+	return 0;
+bail:	return -1;
+}
+
 int mbus_client_run (struct mbus_client *client, int milliseconds)
 {
-	(void) client;
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	pthread_mutex_lock(&client->mutex);
+	if (client->state == mbus_client_state_connecting) {
+		rc = mbus_client_run_connect(client);
+	}
 	(void) milliseconds;
+	pthread_mutex_unlock(&client->mutex);
+	return 0;
+bail:	if (client != NULL) {
+		pthread_mutex_unlock(&client->mutex);
+	}
 	return -1;
 }
 

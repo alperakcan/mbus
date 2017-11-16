@@ -1,8 +1,9 @@
 
 struct mbus_buffer;
 
-void mbus_buffer_destroy (struct mbus_buffer *buffer);
 struct mbus_buffer * mbus_buffer_create (void);
+void mbus_buffer_destroy (struct mbus_buffer *buffer);
+int mbus_buffer_reset (struct mbus_buffer *buffer);
 unsigned int mbus_buffer_size (struct mbus_buffer *buffer);
 unsigned int mbus_buffer_length (struct mbus_buffer *buffer);
 int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length);

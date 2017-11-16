@@ -73,12 +73,12 @@ enum mbus_client_unsubscribe_status {
 
 struct mbus_client_options {
 	struct {
-		const char *protocol;
-		const char *address;
+		char *protocol;
+		char *address;
 		int port;
 	} server;
 	struct {
-		const char *name;
+		char *name;
 		int command_timeout;
 		int publish_timeout;
 	} client;

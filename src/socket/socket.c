@@ -121,15 +121,25 @@ void mbus_socket_destroy (struct mbus_socket *socket)
 	free(socket);
 }
 
-void mbus_socket_close (struct mbus_socket *socket)
+int mbus_socket_shutdown (struct mbus_socket *socket, enum mbus_socket_shutdown _shutdown)
 {
+	int how;
 	if (socket == NULL) {
-		return;
+		return -1;
 	}
-	if (socket->fd >= 0) {
-		close(socket->fd);
-		socket->fd = -1;
+	if (_shutdown == mbus_socket_shutdown_rd) {
+		how = SHUT_RD;
+	} else if (_shutdown == mbus_socket_shutdown_wr) {
+		how = SHUT_WR;
+	} else if (_shutdown == mbus_socket_shutdown_rdwr) {
+		how = SHUT_RDWR;
+	} else {
+		return -1;
 	}
+	if (socket->fd < 0) {
+		return -1;
+	}
+	return shutdown(socket->fd, how);
 }
 
 int mbus_socket_get_fd (struct mbus_socket *socket)
@@ -416,7 +426,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		goto bail;
 	}
 	if (rc < 0) {
-		mbus_errorf("connect failed");
+		mbus_errorf("connect failed: %s", strerror(errno));
 		goto bail;
 	}
 	return 0;

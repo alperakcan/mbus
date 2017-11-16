@@ -45,17 +45,6 @@ struct mbus_buffer {
 	uint8_t *buffer;
 };
 
-void mbus_buffer_destroy (struct mbus_buffer *buffer)
-{
-	if (buffer == NULL) {
-		return;
-	}
-	if (buffer->buffer != NULL) {
-		free(buffer->buffer);
-	}
-	free(buffer);
-}
-
 struct mbus_buffer * mbus_buffer_create (void)
 {
 	struct mbus_buffer *buffer;
@@ -70,6 +59,29 @@ bail:	if (buffer != NULL) {
 		mbus_buffer_destroy(buffer);
 	}
 	return NULL;
+}
+
+void mbus_buffer_destroy (struct mbus_buffer *buffer)
+{
+	if (buffer == NULL) {
+		return;
+	}
+	if (buffer->buffer != NULL) {
+		free(buffer->buffer);
+	}
+	free(buffer);
+}
+
+int mbus_buffer_reset (struct mbus_buffer *buffer)
+{
+	if (buffer == NULL) {
+		return -1;
+	}
+	if (buffer->buffer != NULL) {
+		free(buffer->buffer);
+	}
+	buffer->length = 0;
+	return 0;
 }
 
 unsigned int mbus_buffer_size (struct mbus_buffer *buffer)
