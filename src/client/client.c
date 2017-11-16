@@ -757,6 +757,13 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		free(client->name);
 		client->name = NULL;
 	}
+	client->ping_interval = 0;
+	client->ping_timeout = 0;
+	client->ping_threshold = 0;
+	client->ping_send_tsms = 0;
+	client->pong_recv_tsms = 0;
+	client->ping_wait_pong = 0;
+	client->pong_missed_count = 0;
 
 	if (strcmp(client->options->server.protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
 		if (client->options->server.port <= 0) {
