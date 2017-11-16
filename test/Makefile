@@ -1,5 +1,5 @@
 
-subdir-y = \
+subdir-n = \
 	file-transfer \
 	execute-command
 

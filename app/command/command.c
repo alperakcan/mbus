@@ -71,30 +71,32 @@ struct arg {
 	int result;
 };
 
-static void command_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
+static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
-	struct arg *arg = data;
+	struct arg *arg = context;
 	char *string;
 	struct mbus_json *result;
-	(void) source;
-	(void) status;
-	(void) payload;
-	rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, &result);
-	if (rc != 0) {
-		mbus_errorf("can not call command");
-	}
-	if (result != NULL) {
-		string = mbus_json_print(result);
-		if (string == NULL) {
-			return;
+	if (status == mbus_client_connect_status_success) {
+		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, &result);
+		if (rc != 0) {
+			mbus_errorf("can not call command");
 		}
-		fprintf(stdout, "%s\n", string);
-		free(string);
-		mbus_json_delete(result);
+		if (result != NULL) {
+			string = mbus_json_print(result);
+			if (string == NULL) {
+				return;
+			}
+			fprintf(stdout, "%s\n", string);
+			free(string);
+			mbus_json_delete(result);
+		}
+		arg->result = rc;
+		arg->finished = 1;
+	} else {
+		arg->result = -1;
+		arg->finished = 1;
 	}
-	arg->result = rc;
-	arg->finished = 1;
 }
 
 int main (int argc, char *argv[])
@@ -155,6 +157,8 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not parse options");
 		goto bail;
 	}
+	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
@@ -165,14 +169,14 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not connect client");
 		goto bail;
 	}
-	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, command_status_server_connected, &arg);
+	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED);
 	if (rc != 0) {
 		mbus_errorf("can not subscribe to events");
 		goto bail;
 	}
 
 	while (1) {
-		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_TIMEOUT);
+		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
 			mbus_errorf("client run failed");
 			goto bail;

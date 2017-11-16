@@ -28,6 +28,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -36,18 +37,108 @@
 #include "mbus/debug.h"
 #include "mbus/json.h"
 #include "mbus/method.h"
+#include "mbus/tailq.h"
 #include "mbus/client.h"
 #include "mbus/server.h"
 
-static void listener_event_all_all (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data)
+TAILQ_HEAD(subscriptions, subscription);
+struct subscription {
+	TAILQ_ENTRY(subscription) subscriptions;
+	char *source;
+	char *event;
+};
+
+struct arg {
+	struct subscriptions *subscriptions;
+};
+
+static void subscription_destroy (struct subscription *subscription)
+{
+	if (subscription == NULL) {
+		return;
+	}
+	if (subscription->source != NULL) {
+		free(subscription->source);
+	}
+	if (subscription->event != NULL) {
+		free(subscription->event);
+	}
+	free(subscription);
+}
+
+static struct subscription * subscription_create (const char *topic)
+{
+	struct subscription *subscription;
+	subscription = NULL;
+	if (topic == NULL) {
+		mbus_errorf("topic is invalid");
+		goto bail;
+	}
+	subscription = malloc(sizeof(struct subscription));
+	if (subscription == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	memset(subscription, 0, sizeof(struct subscription));
+	subscription->source = strdup(MBUS_METHOD_EVENT_SOURCE_ALL);
+	if (subscription->source == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	subscription->event = strdup(topic);
+	if (subscription->event == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	return subscription;
+bail:	if (subscription != NULL) {
+		subscription_destroy(subscription);
+	}
+	return NULL;
+}
+
+static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+{
+	int rc;
+	struct arg *arg = context;
+	if (status == mbus_client_connect_status_success) {
+		if (arg->subscriptions->count > 0) {
+			struct subscription *subscription;
+			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
+				rc = mbus_client_subscribe(client, subscription->source, subscription->event);
+				if (rc != 0) {
+					mbus_errorf("can not subscribe to event");
+					goto bail;
+				}
+			}
+		} else {
+			rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+			if (rc != 0) {
+				mbus_errorf("can not subscribe to events");
+				goto bail;
+			}
+			rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED);
+			if (rc != 0) {
+				mbus_errorf("can not subscribe to events");
+				goto bail;
+			}
+			rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED);
+			if (rc != 0) {
+				mbus_errorf("can not subscribe to events");
+				goto bail;
+			}
+		}
+	}
+	return;
+bail:	return;
+}
+
+static void mbus_client_callback_message (struct mbus_client *client, void *context, const char *source, const char *event, struct mbus_client_message *message)
 {
 	char *string;
 	(void) client;
-	(void) source;
-	(void) event;
-	(void) payload;
-	(void) data;
-	string = mbus_json_print(payload);
+	(void) context;
+	string = mbus_json_print(mbus_client_message_payload(message));
 	if (string == NULL) {
 		mbus_errorf("can not allocate memory");
 	} else {
@@ -56,42 +147,8 @@ static void listener_event_all_all (struct mbus_client *client, const char *sour
 	}
 }
 
-static void listener_status_server_connected (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
-{
-	int rc;
-	char *string;
-	struct mbus_json *result;
-	(void) client;
-	(void) source;
-	(void) status;
-	(void) payload;
-	(void) data;
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_STATUS, NULL, &result);
-	if (rc != 0) {
-		mbus_errorf("can not call command");
-	}
-	if (result != NULL) {
-		string = mbus_json_print(result);
-		if (string == NULL) {
-			return;
-		}
-		fprintf(stdout, "%s.%s: %s\n", MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_STATUS, string);
-		free(string);
-		mbus_json_delete(result);
-	}
-}
-
-static void listener_status_server_subscribed (struct mbus_client *client, const char *source, const char *status, struct mbus_json *payload, void *data)
-{
-	(void) client;
-	(void) source;
-	(void) status;
-	(void) payload;
-	(void) data;
-}
-
 #define OPTION_HELP		0x100
-#define OPTION_SUBSCRIBE	0x101
+#define OPTION_SUBSCRIBE		0x101
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "subscribe",			required_argument,	NULL,	OPTION_SUBSCRIBE },
@@ -116,10 +173,18 @@ int main (int argc, char *argv[])
 	char **_argv;
 	int _optind;
 
-	int all;
+	struct subscription *subscription;
+	struct subscription *nsubscription;
+	struct subscriptions subscriptions;
+
+	struct arg arg;
 	struct mbus_client *client;
+	struct mbus_client_options options;
 
 	client = NULL;
+	TAILQ_INIT(&subscriptions);
+	memset(&arg, 0, sizeof(struct arg));
+
 	_argc = 0;
 	_argv = NULL;
 	_optind = optind;
@@ -132,6 +197,14 @@ int main (int argc, char *argv[])
 
 	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
 		switch (c) {
+			case OPTION_SUBSCRIBE:
+				subscription = subscription_create(optarg);
+				if (subscription == NULL) {
+					mbus_errorf("can not create subscription");
+					goto bail;
+				}
+				TAILQ_INSERT_TAIL(&subscriptions, subscription, subscriptions);
+				break;
 			case OPTION_HELP:
 				usage();
 				goto bail;
@@ -140,51 +213,37 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
-	client = mbus_client_create(argc, argv);
+	rc = mbus_client_options_from_argv(&options, argc, argv);
+	if (rc != 0) {
+		mbus_errorf("can not parse options");
+		goto bail;
+	}
+	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.message = mbus_client_callback_message;
+	arg.subscriptions = &subscriptions;
+	options.callbacks.context = &arg;
+	client = mbus_client_create(&options);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
-
-	all = 1;
-	while ((c = getopt_long(argc, argv, ":", longopts, NULL)) != -1) {
-		switch (c) {
-			case OPTION_SUBSCRIBE:
-				rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, optarg, listener_event_all_all, NULL);
-				if (rc != 0) {
-					mbus_errorf("can not subscribe to events");
-					goto bail;
-				}
-				all = 0;
-				break;
-			case OPTION_HELP:
-				usage();
-				goto bail;
-		}
-	}
-
-	if (all == 1) {
-		rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL, listener_event_all_all, NULL);
-		if (rc != 0) {
-			mbus_errorf("can not subscribe to events");
-			goto bail;
-		}
-		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED, listener_status_server_connected, NULL);
-		if (rc != 0) {
-			mbus_errorf("can not subscribe to events");
-			goto bail;
-		}
-		rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED, listener_status_server_subscribed, NULL);
-		if (rc != 0) {
-			mbus_errorf("can not subscribe to events");
-			goto bail;
-		}
-	}
-
-	rc = mbus_client_run(client);
+	rc = mbus_client_connect(client);
 	if (rc != 0) {
-		mbus_errorf("client run failed");
+		mbus_errorf("can not connect client");
 		goto bail;
+	}
+
+	while (1) {
+		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
+		if (rc != 0) {
+			mbus_errorf("client run failed");
+			goto bail;
+		}
+	}
+
+	TAILQ_FOREACH_SAFE(subscription, &subscriptions, subscriptions, nsubscription) {
+		TAILQ_REMOVE(&subscriptions, subscription, subscriptions);
+		subscription_destroy(subscription);
 	}
 
 	mbus_client_destroy(client);
@@ -192,6 +251,10 @@ int main (int argc, char *argv[])
 	return 0;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
+	}
+	TAILQ_FOREACH_SAFE(subscription, &subscriptions, subscriptions, nsubscription) {
+		TAILQ_REMOVE(&subscriptions, subscription, subscriptions);
+		subscription_destroy(subscription);
 	}
 	if (_argv != NULL) {
 		free(_argv);

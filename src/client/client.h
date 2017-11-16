@@ -26,7 +26,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define MBUS_CLIENT_DEFAULT_TIMEOUT		250
+#define MBUS_CLIENT_DEFAULT_RUN_TIMEOUT		250
+
+#define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	180000
+#define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	180000
 
 #define MBUS_CLIENT_DEFAULT_PING_INTERVAL	180000
 #define MBUS_CLIENT_DEFAULT_PING_TIMEOUT	5000
@@ -34,6 +37,39 @@
 
 struct mbus_json;
 struct mbus_client;
+struct mbus_client_message;
+
+enum mbus_client_state {
+	mbus_client_state_unknown,
+	mbus_client_state_initial,
+	mbus_client_state_connecting,
+	mbus_client_state_connected,
+	mbus_client_state_disconnecting,
+	mbus_client_state_disconnected
+};
+
+enum mbus_client_connect_status {
+	mbus_client_connect_status_success,
+	mbus_client_connect_status_server_unavailable,
+	mbus_client_connect_status_invalid_protocol_version,
+	mbus_client_connect_status_invalid_client_identfier,
+};
+
+enum mbus_client_disconnect_status {
+	mbus_client_disconnect_status_success
+};
+
+enum mbus_client_publish_status {
+	mbus_client_publish_status_success
+};
+
+enum mbus_client_subscribe_status {
+	mbus_client_subscribe_status_success
+};
+
+enum mbus_client_unsubscribe_status {
+	mbus_client_unsubscribe_status_success
+};
 
 struct mbus_client_options {
 	struct {
@@ -43,6 +79,8 @@ struct mbus_client_options {
 	} server;
 	struct {
 		const char *name;
+		int command_timeout;
+		int publish_timeout;
 	} client;
 	struct {
 		int interval;
@@ -50,9 +88,12 @@ struct mbus_client_options {
 		int threshold;
 	} ping;
 	struct {
-		void (*connected) (struct mbus_client *client, void *context);
-		void (*subscribed) (struct mbus_client *client, void *context, const char *source, const char *event);
-		void (*disconnected) (struct mbus_client *client, void *context);
+		void (*connect) (struct mbus_client *client, void *context, enum mbus_client_connect_status status);
+		void (*disconnect) (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status);
+		void (*message) (struct mbus_client *client, void *context, const char *source, const char *event, struct mbus_client_message *message);
+		void (*publish) (struct mbus_client *client, void *context, const char *source, const char *event, struct mbus_client_message *message, enum mbus_client_publish_status status);
+		void (*subscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status);
+		void (*unsubscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status);
 		void *context;
 	} callbacks;
 };
@@ -65,26 +106,30 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 struct mbus_client * mbus_client_create (const struct mbus_client_options *options);
 void mbus_client_destroy (struct mbus_client *client);
 
+enum mbus_client_state mbus_client_state (struct mbus_client *client);
 const char * mbus_client_name (struct mbus_client *client);
 
 int mbus_client_connect (struct mbus_client *client);
 int mbus_client_disconnect (struct mbus_client *client);
 
-int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event, void (*function) (struct mbus_client *client, const char *source, const char *event, struct mbus_json *payload, void *data), void *data);
-int mbus_client_register (struct mbus_client *client, const char *command, int (*function) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data), void *data);
+int mbus_client_register (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context), void *context);
 
-int mbus_client_event (struct mbus_client *client, const char *identifier, const struct mbus_json *event);
-int mbus_client_event_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event);
+int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event);
 
-int mbus_client_event_sync (struct mbus_client *client, const char *identifier, const struct mbus_json *event);
-int mbus_client_event_sync_to (struct mbus_client *client, const char *to, const char *identifier, const struct mbus_json *event);
+int mbus_client_publish (struct mbus_client *client, const char *event, const struct mbus_json *payload);
+int mbus_client_publish_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
 
-int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **result);
-int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *call, struct mbus_json **result, int timeout);
+int mbus_client_publish_sync (struct mbus_client *client, const char *event, const struct mbus_json *payload);
+int mbus_client_publish_sync_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
+
+int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result);
+int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, struct mbus_json *payload, struct mbus_json **result, int milliseconds);
 
 int mbus_client_fd (struct mbus_client *client);
+int mbus_client_break (struct mbus_client *client);
+int mbus_client_pending (struct mbus_client *client);
+
 int mbus_client_run (struct mbus_client *client, int milliseconds);
 int mbus_client_loop (struct mbus_client *client);
 
-int mbus_client_break (struct mbus_client *client);
-int mbus_client_pending (struct mbus_client *client);
+const struct mbus_json * mbus_client_message_payload (struct mbus_client_message *message);
