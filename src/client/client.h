@@ -69,7 +69,8 @@ enum mbus_client_create_status {
 
 enum mbus_client_disconnect_status {
 	mbus_client_disconnect_status_success,
-	mbus_client_disconnect_status_generic_error
+	mbus_client_disconnect_status_generic_error,
+	mbus_client_disconnect_status_connection_closed
 };
 
 enum mbus_client_publish_status {

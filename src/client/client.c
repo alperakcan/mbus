@@ -85,6 +85,10 @@ static struct option longopts[] = {
 	{ NULL,					0,			NULL,	0 },
 };
 
+enum wakeup_reason {
+	wakeup_reason_break,
+};
+
 enum method_type {
 	method_type_unknown,
 	method_type_status,
@@ -129,6 +133,7 @@ struct mbus_client {
 	int pong_missed_count;
 	enum mbus_compress_method compression;
 	int sequence;
+	int wakeup[2];
 	pthread_mutex_t mutex;
 };
 
@@ -836,6 +841,7 @@ bail:	if (_argv != NULL) {
 
 struct mbus_client * mbus_client_create (const struct mbus_client_options *_options)
 {
+	int rc;
 	struct mbus_client *client;
 	struct mbus_client_options options;
 
@@ -922,18 +928,20 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct mbus_client));
-
 	pthread_mutex_init(&client->mutex,NULL);
+	client->state = mbus_client_state_initial;
+	client->socket = NULL;
+	client->wakeup[0] = -1;
+	client->wakeup[1] = -1;
+	TAILQ_INIT(&client->requests);
+	TAILQ_INIT(&client->pendings);
+	TAILQ_INIT(&client->commands);
+
 	client->options = mbus_client_options_duplicate(&options);
 	if (client->options == NULL) {
 		mbus_errorf("can not create options");
 		goto bail;
 	}
-	client->state = mbus_client_state_initial;
-	client->socket = NULL;
-	TAILQ_INIT(&client->requests);
-	TAILQ_INIT(&client->pendings);
-	TAILQ_INIT(&client->commands);
 	client->incoming = mbus_buffer_create();
 	if (client->incoming == NULL) {
 		mbus_errorf("can not create incoming buffer");
@@ -946,6 +954,12 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	}
 	client->sequence = MBUS_METHOD_SEQUENCE_START;
 	client->compression = mbus_compress_method_none;
+
+	rc = pipe(client->wakeup);
+	if (rc != 0) {
+		mbus_errorf("can not create wakeup");
+		goto bail;
+	}
 
 	return client;
 bail:	if (client != NULL) {
@@ -989,6 +1003,12 @@ void mbus_client_destroy (struct mbus_client *client)
 	}
 	if (client->options != NULL) {
 		mbus_client_options_destroy(client->options);
+	}
+	if (client->wakeup[0] >= 0) {
+		close(client->wakeup[0]);
+	}
+	if (client->wakeup[1] >= 0) {
+		close(client->wakeup[1]);
 	}
 	pthread_mutex_destroy(&client->mutex);
 	free(client);
@@ -1263,7 +1283,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 
 	int read_rc;
 	int write_rc;
-	struct pollfd pollfds[1];
+	struct pollfd pollfds[2];
 
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
@@ -1311,6 +1331,12 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		mbus_debugf("creating");
 	} else if (client->state == mbus_client_state_creating) {
 	} else if (client->state == mbus_client_state_created) {
+	} else if (client->state == mbus_client_state_disconnected) {
+		if (client->options->client.connect_interval > 0) {
+			client->state = mbus_client_state_connecting;
+		} else {
+			goto bail;
+		}
 	} else {
 		mbus_errorf("client state: %d is invalid", client->state);
 		goto bail;
@@ -1364,8 +1390,11 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		if (mbus_buffer_length(client->outgoing) > 0) {
 			pollfds[0].events |= POLLOUT;
 		}
+		pollfds[1].events = POLLIN;
+		pollfds[1].revents = 0;
+		pollfds[1].fd = client->wakeup[0];
 		mbus_client_unlock(client);
-		rc = poll(pollfds, 1, timeout);
+		rc = poll(pollfds, 2, timeout);
 		mbus_client_lock(client);
 		if (rc == 0) {
 			goto out;
@@ -1375,6 +1404,14 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			goto bail;
 		}
 
+		if (pollfds[1].revents & POLLIN) {
+			enum wakeup_reason reason;
+			rc = read(pollfds[1].fd, &reason, sizeof(reason));
+			if (rc != sizeof(reason)) {
+				mbus_errorf("can not read wakeup reason");
+				goto bail;
+			}
+		}
 		if (pollfds[0].revents & POLLIN) {
 			rc = mbus_buffer_reserve(client->incoming, mbus_buffer_length(client->incoming) + 1024);
 			if (rc != 0) {
@@ -1389,8 +1426,14 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				} else if (errno == EAGAIN) {
 				} else if (errno == EWOULDBLOCK) {
 				} else {
-					mbus_debugf("can not read data from server");
-					goto bail;
+					mbus_errorf("connection reset by server");
+					client->state = mbus_client_state_disconnected;
+					if (client->options->callbacks.disconnect != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.disconnect(client, client->options->callbacks.context, mbus_client_disconnect_status_connection_closed);
+						mbus_client_lock(client);
+					}
+					goto out;
 				}
 			} else {
 				rc = mbus_buffer_set_length(client->incoming, mbus_buffer_length(client->incoming) + read_rc);
@@ -1412,7 +1455,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				} else if (errno == EAGAIN) {
 				} else if (errno == EWOULDBLOCK) {
 				} else {
-					mbus_debugf("can not write string to client");
+					mbus_errorf("can not write string to client");
 					goto bail;
 				}
 			} else {
@@ -1524,6 +1567,36 @@ incoming_bail:			if (json != NULL) {
 					free(data);
 				}
 				goto bail;
+			}
+		}
+	} else if (client->state == mbus_client_state_connecting) {
+		if (client->options->client.connect_interval > 0) {
+			pollfds[0].events = POLLIN;
+			pollfds[0].revents = 0;
+			pollfds[0].fd = client->wakeup[0];
+			if (timeout <= 0) {
+				timeout = client->options->client.connect_interval;
+			} else {
+				timeout = (timeout < client->options->client.connect_interval) ? (timeout) : (client->options->client.connect_interval);
+			}
+			mbus_client_unlock(client);
+			rc = poll(pollfds, 1, timeout);
+			mbus_client_lock(client);
+			if (rc == 0) {
+				goto out;
+			}
+			if (rc < 0) {
+				mbus_errorf("poll error");
+				goto bail;
+			}
+
+			if (pollfds[1].revents & POLLIN) {
+				enum wakeup_reason reason;
+				rc = read(pollfds[1].fd, &reason, sizeof(reason));
+				if (rc != sizeof(reason)) {
+					mbus_errorf("can not read wakeup reason");
+					goto bail;
+				}
 			}
 		}
 	}
