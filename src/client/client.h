@@ -144,7 +144,9 @@ int mbus_client_publish_to (struct mbus_client *client, const char *destination,
 int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
 
 int mbus_client_publish_sync (struct mbus_client *client, const char *event, const struct mbus_json *payload);
+int mbus_client_publish_sync_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload);
 int mbus_client_publish_sync_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
+int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
 int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);

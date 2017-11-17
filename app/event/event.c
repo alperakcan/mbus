@@ -75,6 +75,20 @@ struct arg {
 	int result;
 };
 
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+{
+	struct arg *arg = context;
+	(void) client;
+	(void) message;
+	if (status == mbus_client_publish_status_success) {
+		arg->result = 0;
+		arg->finished = 1;
+	} else {
+		arg->result = -1;
+		arg->finished = 1;
+	}
+}
+
 static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
 {
 	int rc;
@@ -87,10 +101,12 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 				break;
 			}
 		}
-		arg->result = rc;
-		arg->finished = 1;
+		if (rc != 0) {
+			arg->result = rc;
+			arg->finished = 1;
+		}
 	} else {
-		arg->result = -1;
+		arg->result = 0;
 		arg->finished = 1;
 	}
 }
@@ -163,6 +179,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	options.callbacks.create = mbus_client_callback_create;
+	options.callbacks.publish = mbus_client_callback_publish;
 	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
