@@ -87,6 +87,8 @@ static struct option longopts[] = {
 
 enum wakeup_reason {
 	wakeup_reason_break,
+	wakeup_reason_connect,
+	wakeup_reason_disconnect
 };
 
 enum method_type {
@@ -809,6 +811,12 @@ bail:	if (duplicate != NULL) {
 	return NULL;
 }
 
+static int mbus_client_wakeup (struct client *client, enum wakeup_reason reason)
+{
+	int rc;
+	rc = write(client->)
+}
+
 void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
@@ -1141,12 +1149,18 @@ bail:	if (client != NULL) {
 
 int mbus_client_connect (struct mbus_client *client)
 {
+	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
 	mbus_client_lock(client);
 	client->state = mbus_client_state_connecting;
+	rc = mbus_client_wakeup(client, wakeup_reason_connect);
+	if (rc != 0) {
+		mbus_errorf("can not wakeup client");
+		goto bail;
+	}
 	mbus_client_unlock(client);
 	return 0;
 bail:	if (client != NULL) {
@@ -1157,12 +1171,18 @@ bail:	if (client != NULL) {
 
 int mbus_client_disconnect (struct mbus_client *client)
 {
+	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
 	mbus_client_lock(client);
 	client->state = mbus_client_state_disconnecting;
+	rc = mbus_client_wakeup(client, wakeup_reason_disconnect);
+	if (rc != 0) {
+		mbus_errorf("can not wakeup client");
+		goto bail;
+	}
 	mbus_client_unlock(client);
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
@@ -1458,6 +1478,44 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
 	return 0;
 bail:	return -1;
+}
+
+int mbus_client_fd (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_socket_get_fd(client->socket);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_break (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_wakeup(client, wakeup_reason_break);
+	if (rc != 0) {
+		mbus_errorf("can not wakeup client");
+		goto bail;
+	}
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
 }
 
 int mbus_client_pending (struct mbus_client *client)

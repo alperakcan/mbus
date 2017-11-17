@@ -158,7 +158,6 @@ int mbus_client_break (struct mbus_client *client);
 int mbus_client_pending (struct mbus_client *client);
 
 int mbus_client_run (struct mbus_client *client, int timeout);
-int mbus_client_loop (struct mbus_client *client);
 
 const char * mbus_client_message_event_source (struct mbus_client_message *message);
 const char * mbus_client_message_event_identifier (struct mbus_client_message *message);
