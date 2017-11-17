@@ -95,7 +95,7 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 	if (status == mbus_client_create_status_success) {
 		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, mbus_client_callback_command, arg);
 		if (rc != 0) {
-			mbus_errorf("can not call command");
+			fprintf(stderr, "can not call command\n");
 			arg->result = -1;
 			arg->finished = 1;
 		}
@@ -140,7 +140,7 @@ int main (int argc, char *argv[])
 			case OPTION_PAYLOAD:
 				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
-					mbus_errorf("invalid payload: %s", optarg);
+					fprintf(stderr, "invalid payload: %s\n", optarg);
 					goto bail;
 				}
 				break;
@@ -150,39 +150,40 @@ int main (int argc, char *argv[])
 		}
 	}
 	if (arg.destination == NULL) {
-		mbus_errorf("destination is null");
+		fprintf(stderr, "destination is invalid\n");
 		goto bail;
 	}
 	if (arg.command == NULL) {
-		mbus_errorf("command is null");
+		fprintf(stderr, "command is invalid\n");
 		goto bail;
 	}
 
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
-		mbus_errorf("can not parse options");
+		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
 	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
-		mbus_errorf("can not create client");
+		fprintf(stderr, "can not create client\n");
 		goto bail;
 	}
 	rc = mbus_client_connect(client);
 	if (rc != 0) {
-		mbus_errorf("can not connect client");
+		fprintf(stderr, "can not connect client\n");
 		goto bail;
 	}
 
 	while (1) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
-			mbus_errorf("client run failed");
+			fprintf(stderr, "client run failed\n");
 			goto bail;
 		}
-		if (arg.finished != 0) {
+		if (arg.finished == 1 &&
+		    mbus_client_pending(client) == 0) {
 			break;
 		}
 	}
