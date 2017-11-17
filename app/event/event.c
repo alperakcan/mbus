@@ -102,7 +102,6 @@ int main (int argc, char *argv[])
 
 	int _argc;
 	char **_argv;
-	int _optind;
 
 	struct arg arg;
 	struct mbus_client *client;
@@ -116,9 +115,7 @@ int main (int argc, char *argv[])
 
 	_argc = 0;
 	_argv = NULL;
-	_optind = optind;
 
-	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);
 	for (_argc = 0; _argc < argc; _argc++) {
 		_argv[_argc] = argv[_argc];

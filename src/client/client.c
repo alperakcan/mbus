@@ -1102,9 +1102,7 @@ bail:	if (client != NULL) {
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event)
 {
 	int rc;
-	struct request *request;
 	struct mbus_json *payload;
-	request = NULL;
 	payload = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
