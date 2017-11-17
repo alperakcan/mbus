@@ -71,23 +71,23 @@ static struct subscription * subscription_create (const char *topic)
 	struct subscription *subscription;
 	subscription = NULL;
 	if (topic == NULL) {
-		mbus_errorf("topic is invalid");
+		fprintf(stderr, "topic is invalid\n");
 		goto bail;
 	}
 	subscription = malloc(sizeof(struct subscription));
 	if (subscription == NULL) {
-		mbus_errorf("can not allocate memory");
+		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
 	memset(subscription, 0, sizeof(struct subscription));
 	subscription->source = strdup(MBUS_METHOD_EVENT_SOURCE_ALL);
 	if (subscription->source == NULL) {
-		mbus_errorf("can not allocate memory");
+		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
 	subscription->event = strdup(topic);
 	if (subscription->event == NULL) {
-		mbus_errorf("can not allocate memory");
+		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
 	return subscription;
@@ -133,14 +133,14 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
 				rc = mbus_client_subscribe(client, subscription->source, subscription->event);
 				if (rc != 0) {
-					mbus_errorf("can not subscribe to event");
+					fprintf(stderr, "can not subscribe to event\n");
 					goto bail;
 				}
 			}
 		} else {
 			rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
 			if (rc != 0) {
-				mbus_errorf("can not subscribe to events");
+				fprintf(stderr, "can not subscribe to events\n");
 				goto bail;
 			}
 		}
@@ -156,7 +156,7 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	(void) context;
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	if (string == NULL) {
-		mbus_errorf("can not allocate memory");
+		fprintf(stderr, "can not allocate memory\n");
 	} else {
 		fprintf(stdout, "%s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 		free(string);
@@ -216,7 +216,7 @@ int main (int argc, char *argv[])
 			case OPTION_SUBSCRIBE:
 				subscription = subscription_create(optarg);
 				if (subscription == NULL) {
-					mbus_errorf("can not create subscription");
+					fprintf(stderr, "can not create subscription\n");
 					goto bail;
 				}
 				TAILQ_INSERT_TAIL(&subscriptions, subscription, subscriptions);
@@ -231,7 +231,7 @@ int main (int argc, char *argv[])
 
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
-		mbus_errorf("can not parse options");
+		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
 	options.callbacks.connect = mbus_client_callback_connect;
@@ -241,19 +241,19 @@ int main (int argc, char *argv[])
 	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
-		mbus_errorf("can not create client");
+		fprintf(stderr, "can not create client\n");
 		goto bail;
 	}
 	rc = mbus_client_connect(client);
 	if (rc != 0) {
-		mbus_errorf("can not connect client");
+		fprintf(stderr, "can not connect client\n");
 		goto bail;
 	}
 
 	while (1) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
-			mbus_errorf("client run failed");
+			fprintf(stderr, "client run failed\n");
 			goto bail;
 		}
 	}
