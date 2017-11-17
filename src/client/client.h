@@ -28,6 +28,7 @@
 
 #define MBUS_CLIENT_DEFAULT_RUN_TIMEOUT		250
 
+#define MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL	0
 #define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	180000
 #define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	180000
 
@@ -52,29 +53,38 @@ enum mbus_client_state {
 
 enum mbus_client_connect_status {
 	mbus_client_connect_status_success,
+	mbus_client_connect_status_generic_error,
+	mbus_client_connect_status_invalid_protocol,
+	mbus_client_connect_status_internal_error,
+	mbus_client_connect_status_connection_refused,
 	mbus_client_connect_status_server_unavailable
 };
 
 enum mbus_client_create_status {
 	mbus_client_create_status_success,
+	mbus_client_create_status_generic_error,
 	mbus_client_create_status_invalid_protocol_version,
 	mbus_client_create_status_invalid_client_identfier
 };
 
 enum mbus_client_disconnect_status {
-	mbus_client_disconnect_status_success
+	mbus_client_disconnect_status_success,
+	mbus_client_disconnect_status_generic_error
 };
 
 enum mbus_client_publish_status {
-	mbus_client_publish_status_success
+	mbus_client_publish_status_success,
+	mbus_client_publish_status_generic_error
 };
 
 enum mbus_client_subscribe_status {
-	mbus_client_subscribe_status_success
+	mbus_client_subscribe_status_success,
+	mbus_client_subscribe_status_generic_error
 };
 
 enum mbus_client_unsubscribe_status {
-	mbus_client_unsubscribe_status_success
+	mbus_client_unsubscribe_status_success,
+	mbus_client_unsubscribe_status_generic_error
 };
 
 struct mbus_client_options {
@@ -87,6 +97,7 @@ struct mbus_client_options {
 		char *name;
 		int command_timeout;
 		int publish_timeout;
+		int connect_interval;
 	} client;
 	struct {
 		int interval;

@@ -63,8 +63,9 @@
 #define OPTION_SERVER_ADDRESS		0x202
 #define OPTION_SERVER_PORT		0x203
 #define OPTION_CLIENT_NAME		0x301
-#define OPTION_CLIENT_COMMAND_TIMEOUT	0x302
-#define OPTION_CLIENT_PUBLISH_TIMEOUT	0x303
+#define OPTION_CLIENT_CONNECT_INTERVAL	0x302
+#define OPTION_CLIENT_COMMAND_TIMEOUT	0x303
+#define OPTION_CLIENT_PUBLISH_TIMEOUT	0x304
 #define OPTION_PING_INTERVAL		0x401
 #define OPTION_PING_TIMEOUT		0x402
 #define OPTION_PING_THRESHOLD		0x403
@@ -75,6 +76,7 @@ static struct option longopts[] = {
 	{ "mbus-server-address"	,		required_argument,	NULL,	OPTION_SERVER_ADDRESS },
 	{ "mbus-server-port",			required_argument,	NULL,	OPTION_SERVER_PORT },
 	{ "mbus-client-name",			required_argument,	NULL,	OPTION_CLIENT_NAME },
+	{ "mbus-client-connect-interval",	required_argument,	NULL,	OPTION_CLIENT_CONNECT_INTERVAL },
 	{ "mbus-client-command-timeout",		required_argument,	NULL,	OPTION_CLIENT_COMMAND_TIMEOUT },
 	{ "mbus-client-publish-timeout",		required_argument,	NULL,	OPTION_CLIENT_PUBLISH_TIMEOUT },
 	{ "mbus-ping-interval",			required_argument,	NULL,	OPTION_PING_INTERVAL },
@@ -117,8 +119,7 @@ struct mbus_client {
 	struct mbus_buffer *outgoing;
 	char *name;
 	char *client_name;
-	int client_command_timeout;
-	int client_publish_timeout;
+	int connect_tsms;
 	int ping_interval;
 	int ping_timeout;
 	int ping_threshold;
@@ -451,6 +452,7 @@ bail:	if (payload != NULL) {
 static int mbus_client_run_connect (struct mbus_client *client)
 {
 	int rc;
+	int ret;
 
 	enum mbus_socket_type socket_type;
 	enum mbus_socket_domain socket_domain;
@@ -459,6 +461,8 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	struct request *nrequest;
 	struct command *command;
 	struct command *ncommand;
+
+	ret = mbus_client_connect_status_success;
 
 	if (client->socket != NULL) {
 		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
@@ -531,6 +535,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		socket_type = mbus_socket_type_sock_stream;
 	} else {
 		mbus_errorf("invalid server protocol: %s", client->options->server.protocol);
+		ret = mbus_client_connect_status_invalid_protocol;
 		goto bail;
 	}
 
@@ -538,11 +543,13 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	client->socket = mbus_socket_create(socket_domain, socket_type, mbus_socket_protocol_any);
 	if (client->socket == NULL) {
 		mbus_errorf("can not create event socket");
+		ret = mbus_client_connect_status_internal_error;
 		goto bail;
 	}
 	rc = mbus_socket_set_reuseaddr(client->socket, 1);
 	if (rc != 0) {
 		mbus_errorf("can not reuse event");
+		ret = mbus_client_connect_status_internal_error;
 		goto bail;
 	}
 	if (socket_domain == mbus_socket_domain_af_inet &&
@@ -556,17 +563,23 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	}
 	rc = mbus_socket_connect(client->socket, client->options->server.address, client->options->server.port);
 	if (rc != 0) {
-		mbus_errorf("can not connect to server: '%s:%s:%d'", client->options->server.protocol, client->options->server.address, client->options->server.port);
+		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server.protocol, client->options->server.address, client->options->server.port, rc, strerror(-rc));
+		if (rc == -ECONNREFUSED) {
+			ret = mbus_client_connect_status_connection_refused;
+		} else {
+			ret = mbus_client_connect_status_server_unavailable;
+		}
 		goto bail;
 	}
 	rc = mbus_socket_set_blocking(client->socket, 0);
 	if (rc != 0) {
 		mbus_errorf("can not set socket to nonblocking");
+		ret = mbus_client_connect_status_internal_error;
 		goto bail;
 	}
 
-	return 0;
-bail:	return -1;
+	return ret;
+bail:	return ret;
 }
 
 static int mbus_client_message_handle_result (struct mbus_client *client, const struct mbus_json *json)
@@ -696,6 +709,7 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 				goto bail;
 			}
 		}
+		duplicate->client.connect_interval = options->client.connect_interval;
 		duplicate->client.command_timeout = options->client.command_timeout;
 		duplicate->client.publish_timeout = options->client.publish_timeout;
 
@@ -722,17 +736,18 @@ bail:	if (duplicate != NULL) {
 void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
-	fprintf(stdout, "  --mbus-debug-level           : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-server-protocol       : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
-	fprintf(stdout, "  --mbus-server-address        : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
-	fprintf(stdout, "  --mbus-server-port           : server port (default: %d)\n", MBUS_SERVER_PORT);
-	fprintf(stdout, "  --mbus-client-name           : client name (overrides api parameter)\n");
-	fprintf(stdout, "  --mbus-client-command-timeout: client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-publish-timeout: client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
-	fprintf(stdout, "  --mbus-ping-interval         : ping interval (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
-	fprintf(stdout, "  --mbus-ping-timeout          : ping timeout (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
-	fprintf(stdout, "  --mbus-ping-threshold        : ping threshold (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
-	fprintf(stdout, "  --mbus-help                  : this text\n");
+	fprintf(stdout, "  --mbus-debug-level            : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
+	fprintf(stdout, "  --mbus-server-protocol        : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
+	fprintf(stdout, "  --mbus-server-address         : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
+	fprintf(stdout, "  --mbus-server-port            : server port (default: %d)\n", MBUS_SERVER_PORT);
+	fprintf(stdout, "  --mbus-client-name            : client name (overrides api parameter)\n");
+	fprintf(stdout, "  --mbus-client-connect-interval: client connect interval (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL);
+	fprintf(stdout, "  --mbus-client-command-timeout : client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-publish-timeout : client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
+	fprintf(stdout, "  --mbus-ping-interval          : ping interval (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
+	fprintf(stdout, "  --mbus-ping-timeout           : ping timeout (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
+	fprintf(stdout, "  --mbus-ping-threshold         : ping threshold (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
+	fprintf(stdout, "  --mbus-help                   : this text\n");
 }
 
 int mbus_client_options_default (struct mbus_client_options *options)
@@ -786,6 +801,9 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 			case OPTION_CLIENT_NAME:
 				options->client.name = optarg;
 				break;
+			case OPTION_CLIENT_CONNECT_INTERVAL:
+				options->client.connect_interval = atoi(optarg);
+				break;
 			case OPTION_CLIENT_COMMAND_TIMEOUT:
 				options->client.command_timeout = atoi(optarg);
 				break;
@@ -834,6 +852,9 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 
 	if (options.client.name == NULL) {
 		options.client.name = "";
+	}
+	if (options.client.connect_interval == 0) {
+		options.client.connect_interval = MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL;
 	}
 	if (options.client.command_timeout == 0) {
 		options.client.command_timeout = MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT;
@@ -1177,12 +1198,12 @@ int mbus_client_publish_sync_to (struct mbus_client *client, const char *destina
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
-	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->client_command_timeout);
+	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->options->client.command_timeout);
 }
 
 int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
-	return mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, client->client_command_timeout);
+	return mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, client->options->client.command_timeout);
 }
 
 int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
@@ -1248,17 +1269,32 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	current = mbus_clock_get();
 
 	mbus_client_lock(client);
 
 	if (client->state == mbus_client_state_connecting) {
-		mbus_debugf("connecting");
-		rc = mbus_client_run_connect(client);
-		if (rc != 0) {
-			mbus_errorf("can not connect client");
-			goto bail;
+		if (client->options->client.connect_interval <= 0 ||
+		    mbus_clock_after(current, client->connect_tsms + client->options->client.connect_interval)) {
+			mbus_debugf("connecting");
+			client->connect_tsms = mbus_clock_get();
+			rc = mbus_client_run_connect(client);
+			if (rc != 0) {
+				mbus_errorf("can not connect client");
+				if (client->options->callbacks.connect != NULL) {
+					mbus_client_unlock(client);
+					client->options->callbacks.connect(client, client->options->callbacks.context, rc);
+					mbus_client_lock(client);
+				}
+				if (client->options->client.connect_interval > 0) {
+
+				} else {
+					goto bail;
+				}
+			} else {
+				client->state = mbus_client_state_connected;
+			}
 		}
-		client->state = mbus_client_state_connected;
 	} else if (client->state == mbus_client_state_connected) {
 		mbus_debugf("connected");
 		if (client->options->callbacks.connect != NULL) {
@@ -1283,7 +1319,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	if (client->state == mbus_client_state_connected ||
 	    client->state == mbus_client_state_creating ||
 	    client->state == mbus_client_state_created) {
-		current = mbus_clock_get();
 		if (client->ping_interval > 0) {
 			if (mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
 				mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping_send_tsms, client->ping_interval, client->ping_timeout);

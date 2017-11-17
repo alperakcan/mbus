@@ -97,6 +97,32 @@ bail:	if (subscription != NULL) {
 	return NULL;
 }
 
+static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+{
+	(void) client;
+	(void) context;
+	switch (status) {
+		case mbus_client_connect_status_success:
+			fprintf(stdout, "connected\n");
+			break;
+		case mbus_client_connect_status_generic_error:
+			fprintf(stdout, "can not connect\n");
+			break;
+		case mbus_client_connect_status_invalid_protocol:
+			fprintf(stdout, "can not connect: invalid protocol\n");
+			break;
+		case mbus_client_connect_status_internal_error:
+			fprintf(stdout, "can not connect: internal error\n");
+			break;
+		case mbus_client_connect_status_connection_refused:
+			fprintf(stdout, "can not connect: connection refused\n");
+			break;
+		case mbus_client_connect_status_server_unavailable:
+			fprintf(stdout, "can not connect: server unavailable\n");
+			break;
+	}
+}
+
 static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
 {
 	int rc;
@@ -208,6 +234,7 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not parse options");
 		goto bail;
 	}
+	options.callbacks.connect = mbus_client_callback_connect;
 	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;

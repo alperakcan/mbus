@@ -384,9 +384,11 @@ int mbus_socket_get_keepintvl (struct mbus_socket *socket)
 int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsigned short port)
 {
 	int rc;
+	rc = 0;
 	if (address == NULL) {
 		mbus_errorf("address is null");
-		return -1;
+		rc = -EINVAL;
+		goto bail;
 	}
 	if (socket->domain == AF_INET) {
 		struct addrinfo hints;
@@ -398,6 +400,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		rc = getaddrinfo(address, NULL, &hints, &result);
 		if (rc != 0) {
 			mbus_errorf("getaddrinfo failed for: %s", address);
+			rc = -EINVAL;
 			goto bail;
 		}
 		for (res = result; res; res = res->ai_next) {
@@ -412,6 +415,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 			sockaddr_in->sin_port = htons(port);
 			rc = connect(socket->fd, res->ai_addr, res->ai_addrlen);
 			if (rc != 0) {
+				rc = -errno;
 				continue;
 			}
 		}
@@ -421,16 +425,20 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		sockaddr_un.sun_family = socket->domain;
 		snprintf(sockaddr_un.sun_path, sizeof(sockaddr_un.sun_path) - 1, "%s:%d", address, port);
 		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
+		if (rc != 0) {
+			rc = -errno;
+			goto bail;
+		}
 	} else {
 		mbus_errorf("unknown socket domain");
 		goto bail;
 	}
-	if (rc < 0) {
+	if (rc != 0) {
 		mbus_errorf("connect failed: %s", strerror(errno));
 		goto bail;
 	}
 	return 0;
-bail:	return -1;
+bail:	return rc;
 }
 
 int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned short port)
