@@ -71,6 +71,7 @@ struct arg {
 	const char *event;
 	struct mbus_json *payload;
 	int flood;
+	int published;
 	int finished;
 	int result;
 };
@@ -80,9 +81,12 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	struct arg *arg = context;
 	(void) client;
 	(void) message;
+	arg->published += 1;
 	if (status == mbus_client_publish_status_success) {
 		arg->result = 0;
-		arg->finished = 1;
+		if (arg->published == arg->flood) {
+			arg->finished = 1;
+		}
 	} else {
 		arg->result = -1;
 		arg->finished = 1;
@@ -91,10 +95,11 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 
 static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
 {
+	int p;
 	int rc;
 	struct arg *arg = context;
 	if (status == mbus_client_create_status_success) {
-		while (arg->flood-- > 0) {
+		for (p = 0; p < arg->flood; p++) {
 			rc = mbus_client_publish_sync_to(client, arg->destination, arg->event, arg->payload);
 			if (rc != 0) {
 				mbus_errorf("can not call event");
@@ -198,7 +203,8 @@ int main (int argc, char *argv[])
 			mbus_errorf("client run failed");
 			goto bail;
 		}
-		if (arg.finished != 0) {
+		if (arg.finished == 1 &&
+		    mbus_client_pending(client) == 0) {
 			break;
 		}
 	}

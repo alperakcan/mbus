@@ -1460,6 +1460,23 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 bail:	return -1;
 }
 
+int mbus_client_pending (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_buffer_length(client->outgoing) > 0;
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
 int mbus_client_run (struct mbus_client *client, int timeout)
 {
 	int rc;

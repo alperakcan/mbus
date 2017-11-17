@@ -189,6 +189,7 @@ struct client {
 	struct methods waits;
 	int ssequence;
 	int esequence;
+	int refcount;
 };
 TAILQ_HEAD(clients, client);
 
@@ -327,6 +328,9 @@ void mbus_server_usage (void)
 
 	fprintf(stdout, "  --mbus-help                    : this text\n");
 }
+
+static void client_destroy (struct client *client);
+static struct client * client_retain (struct client *client);
 
 static char * _strndup (const char *s, size_t n)
 {
@@ -639,6 +643,9 @@ static void method_destroy (struct method *method)
 	if (method->result.string != NULL) {
 		free(method->result.string);
 	}
+	if (method->source != NULL) {
+		client_destroy(method->source);
+	}
 	free(method);
 }
 
@@ -689,7 +696,7 @@ static struct method * method_create_request (struct client *source, const char 
 	mbus_json_add_string_to_object_cs(method->result.json, "type", MBUS_METHOD_TYPE_RESULT);
 	mbus_json_add_number_to_object_cs(method->result.json, "sequence", method_get_request_sequence(method));
 	mbus_json_add_item_to_object_cs(method->result.json, "payload", mbus_json_create_object());
-	method->source = source;
+	method->source = client_retain(source);
 	return method;
 bail:	method_destroy(method);
 	return NULL;
@@ -1276,6 +1283,9 @@ static void client_destroy (struct client *client)
 	if (client == NULL) {
 		return;
 	}
+	if (--client->refcount > 0) {
+		return;
+	}
 	if (client->socket != NULL) {
 		if (client_get_listener_type(client) == listener_type_tcp) {
 			mbus_socket_destroy(client->socket);
@@ -1331,6 +1341,15 @@ static void client_destroy (struct client *client)
 	free(client);
 }
 
+static struct client * client_retain (struct client *client)
+{
+	if (client == NULL) {
+		return NULL;
+	}
+	client->refcount += 1;
+	return client;
+}
+
 static struct client * client_accept (enum listener_type type)
 {
 	struct client *client;
@@ -1341,6 +1360,7 @@ static struct client * client_accept (enum listener_type type)
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct client));
+	client->refcount = 1;
 	TAILQ_INIT(&client->subscriptions);
 	TAILQ_INIT(&client->commands);
 	TAILQ_INIT(&client->requests);
@@ -3239,6 +3259,11 @@ out:
 		}
 	}
 #endif
+	rc = server_handle_methods(server);
+	if (rc != 0) {
+		mbus_errorf("can not handle methods");
+		goto bail;
+	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_socket(client) == NULL) {
 			continue;
