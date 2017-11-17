@@ -1136,6 +1136,7 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 		mbus_errorf("can not execute command");
 		goto bail;
 	}
+	mbus_json_delete(payload);
 	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
@@ -1377,7 +1378,9 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				goto bail;
 			}
 			TAILQ_REMOVE(&client->requests, request, requests);
-			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) != 0) {
+			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+				request_destroy(request);
+			} else {
 				TAILQ_INSERT_TAIL(&client->pendings, request, requests);
 			}
 		}

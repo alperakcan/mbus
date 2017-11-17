@@ -77,9 +77,6 @@ int mbus_buffer_reset (struct mbus_buffer *buffer)
 	if (buffer == NULL) {
 		return -1;
 	}
-	if (buffer->buffer != NULL) {
-		free(buffer->buffer);
-	}
 	buffer->length = 0;
 	return 0;
 }
