@@ -1552,55 +1552,6 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 bail:	return -1;
 }
 
-static int server_send_status_to (struct mbus_server *server, const char *destination, const char *identifier, struct mbus_json *payload)
-{
-	int rc;
-	struct client *client;
-	struct method *method;
-	if (server == NULL) {
-		mbus_errorf("server is null");
-		goto bail;
-	}
-	if (destination == NULL) {
-		mbus_errorf("destination is null");
-		goto bail;
-	}
-	if (identifier == NULL) {
-		mbus_errorf("identifier is null");
-		goto bail;
-	}
-	if (payload == NULL) {
-		mbus_errorf("payload is null");
-		goto bail;
-	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_name(client) == NULL) {
-			continue;
-		}
-		if (strcmp(client_get_name(client), destination) != 0) {
-			continue;
-		}
-		method = method_create_response(MBUS_METHOD_TYPE_STATUS, MBUS_SERVER_NAME, identifier, client->ssequence, payload);
-		if (method == NULL) {
-			mbus_errorf("can not create method");
-			goto bail;
-		}
-		client->ssequence += 1;
-		if (client->ssequence >= MBUS_METHOD_SEQUENCE_END) {
-			client->ssequence = MBUS_METHOD_SEQUENCE_START;
-		}
-		rc = client_push_event(client, method);
-		if (rc != 0) {
-			mbus_errorf("can not push method");
-			method_destroy(method);
-			goto bail;
-		}
-		break;
-	}
-	return 0;
-bail:	return -1;
-}
-
 static int server_send_event_connected (struct mbus_server *server, const char *source)
 {
 	int rc;
@@ -1620,11 +1571,6 @@ static int server_send_event_connected (struct mbus_server *server, const char *
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(payload, "source", source);
-	rc = server_send_status_to(server, source, MBUS_SERVER_STATUS_CONNECTED, payload);
-	if (rc != 0) {
-		mbus_errorf("can not send event");
-		goto bail;
-	}
 	rc = server_send_event_to(server, MBUS_SERVER_NAME, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_CONNECTED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
@@ -1657,11 +1603,6 @@ static int server_send_event_disconnected (struct mbus_server *server, const cha
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(payload, "source", source);
-	rc = server_send_status_to(server, source, MBUS_SERVER_STATUS_DISCONNECTED, payload);
-	if (rc != 0) {
-		mbus_errorf("can not send event");
-		goto bail;
-	}
 	rc = server_send_event_to(server, MBUS_SERVER_NAME, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_DISCONNECTED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
@@ -1701,56 +1642,10 @@ static int server_send_event_subscribed (struct mbus_server *server, const char 
 		mbus_errorf("can not create payload");
 		goto bail;
 	}
+	mbus_json_add_string_to_object_cs(payload, "source", source);
 	mbus_json_add_string_to_object_cs(payload, "destination", destination);
 	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
-	rc = server_send_status_to(server, source, MBUS_SERVER_STATUS_SUBSCRIBED, payload);
-	if (rc != 0) {
-		mbus_errorf("can not send event");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(payload, "source", source);
 	rc = server_send_event_to(server, MBUS_SERVER_NAME, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_SUBSCRIBED, payload);
-	if (rc != 0) {
-		mbus_errorf("can not send event");
-		goto bail;
-	}
-	mbus_json_delete(payload);
-	return 0;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	return -1;
-}
-
-static int server_send_event_subscriber (struct mbus_server *server, const char *source, const char *destination, const char *identifier)
-{
-	int rc;
-	struct mbus_json *payload;
-	payload = NULL;
-	if (server == NULL) {
-		mbus_errorf("server is null");
-		goto bail;
-	}
-	if (source == NULL) {
-		mbus_errorf("source is null");
-		goto bail;
-	}
-	if (destination == NULL) {
-		mbus_errorf("destination is null");
-		goto bail;
-	}
-	if (identifier == NULL) {
-		mbus_errorf("identifier is null");
-		goto bail;
-	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create payload");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(payload, "source", source);
-	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
-	rc = server_send_status_to(server, destination, MBUS_SERVER_STATUS_SUBSCRIBER, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
 		goto bail;
@@ -2001,11 +1896,6 @@ static int server_handle_command_subscribe (struct mbus_server *server, struct m
 		goto bail;
 	}
 	rc = server_send_event_subscribed(server, client_get_name(method_get_source(method)), source, event);
-	if (rc != 0) {
-		mbus_errorf("can not send connected event");
-		goto bail;
-	}
-	rc = server_send_event_subscriber(server, client_get_name(method_get_source(method)), source, event);
 	if (rc != 0) {
 		mbus_errorf("can not send connected event");
 		goto bail;

@@ -75,11 +75,11 @@ struct arg {
 	int result;
 };
 
-static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
 {
 	int rc;
 	struct arg *arg = context;
-	if (status == mbus_client_connect_status_success) {
+	if (status == mbus_client_create_status_success) {
 		while (arg->flood-- > 0) {
 			rc = mbus_client_publish_sync_to(client, arg->destination, arg->event, arg->payload);
 			if (rc != 0) {
@@ -165,7 +165,7 @@ int main (int argc, char *argv[])
 		mbus_errorf("can not parse options");
 		goto bail;
 	}
-	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
@@ -175,11 +175,6 @@ int main (int argc, char *argv[])
 	rc = mbus_client_connect(client);
 	if (rc != 0) {
 		mbus_errorf("can not connect client");
-		goto bail;
-	}
-	rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED);
-	if (rc != 0) {
-		mbus_errorf("can not subscribe to events");
 		goto bail;
 	}
 

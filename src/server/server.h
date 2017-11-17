@@ -213,50 +213,6 @@
  */
 #define MBUS_SERVER_COMMAND_CLOSE		"command.close"
 
-/* status connected
- *
- * {
- *   "source": "application name"
- * }
- */
-#define MBUS_SERVER_STATUS_CONNECTED		"status.connected"
-
-/* status disconnected
- *
- * {
- *   "source": "application name"
- * }
- */
-#define MBUS_SERVER_STATUS_DISCONNECTED		"status.disconnected"
-
-/* status subscribed
- *
- * {
- *   "destination" : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_SUBSCRIBED		"status.subscribed"
-
-/* status subscriber
- *
- * {
- *   "source"      : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_SUBSCRIBER		"status.subscriber"
-
-/* status unsubscribed
- *
- * {
- *   "source"      : "application name",
- *   "destination" : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_UNSUBSCRIBED		"status.unsubscribed"
-
 /* event ping
  *
  * {

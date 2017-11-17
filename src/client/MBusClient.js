@@ -4,7 +4,6 @@
 //module.exports = MBusClient
 
 const MBUS_METHOD_TYPE_COMMAND					= "org.mbus.method.type.command";
-const MBUS_METHOD_TYPE_STATUS					= "org.mbus.method.type.status";
 const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
 const MBUS_METHOD_TYPE_RESULT					= "org.mbus.method.type.result";
 

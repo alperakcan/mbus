@@ -8,9 +8,7 @@ import collections
 import select
 import struct
 
-MBUS_METHOD_TYPE_CREATE                     = "org.mbus.method.type.create"
 MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
-MBUS_METHOD_TYPE_STATUS                     = "org.mbus.method.type.status"
 MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"
 MBUS_METHOD_TYPE_RESULT                     = "org.mbus.method.type.result"
 

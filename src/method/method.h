@@ -27,7 +27,6 @@
  */
 
 #define MBUS_METHOD_TYPE_COMMAND				"org.mbus.method.type.command"
-#define MBUS_METHOD_TYPE_STATUS					"org.mbus.method.type.status"
 #define MBUS_METHOD_TYPE_EVENT					"org.mbus.method.type.event"
 #define MBUS_METHOD_TYPE_RESULT					"org.mbus.method.type.result"
 

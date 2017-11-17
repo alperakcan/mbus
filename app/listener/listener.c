@@ -117,16 +117,6 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 				mbus_errorf("can not subscribe to events");
 				goto bail;
 			}
-			rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_CONNECTED);
-			if (rc != 0) {
-				mbus_errorf("can not subscribe to events");
-				goto bail;
-			}
-			rc = mbus_client_subscribe(client, MBUS_SERVER_NAME, MBUS_SERVER_STATUS_SUBSCRIBED);
-			if (rc != 0) {
-				mbus_errorf("can not subscribe to events");
-				goto bail;
-			}
 		}
 	}
 	return;

@@ -603,20 +603,6 @@ static int mbus_client_message_handle_result (struct mbus_client *client, const 
 bail:	return -1;
 }
 
-static int mbus_client_message_handle_status (struct mbus_client *client, const struct mbus_json *json)
-{
-	struct mbus_client_message message;
-
-	if (client->options->callbacks.message != NULL) {
-		message.type = mbus_client_message_type_status;
-		message.u.status.payload = json;
-		mbus_client_unlock(client);
-		mbus_client_lock(client);
-	}
-
-	return 0;
-}
-
 static int mbus_client_message_handle_event (struct mbus_client *client, const struct mbus_json *json)
 {
 	const char *source;
@@ -720,7 +706,6 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 		duplicate->callbacks.connect = options->callbacks.connect;
 		duplicate->callbacks.disconnect = options->callbacks.disconnect;
 		duplicate->callbacks.create = options->callbacks.create;
-		duplicate->callbacks.status = options->callbacks.status;
 		duplicate->callbacks.message = options->callbacks.message;
 		duplicate->callbacks.publish = options->callbacks.publish;
 		duplicate->callbacks.subscribe = options->callbacks.subscribe;
@@ -1478,12 +1463,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 						mbus_errorf("can not handle message result");
 						goto incoming_bail;
 					}
-				} else if (strcasecmp(type, MBUS_METHOD_TYPE_STATUS) == 0) {
-					rc = mbus_client_message_handle_status(client, json);
-					if (rc != 0) {
-						mbus_errorf("can not handle message status");
-						goto incoming_bail;
-					}
 				} else if (strcasecmp(type, MBUS_METHOD_TYPE_EVENT) == 0) {
 					rc = mbus_client_message_handle_event(client, json);
 					if (rc != 0) {
@@ -1561,6 +1540,48 @@ const struct mbus_json * mbus_client_message_event_payload (struct mbus_client_m
 		goto bail;
 	}
 	return mbus_json_get_object(message->u.event.payload, "payload");
+bail:	return NULL;
+}
+
+const char * mbus_client_message_status_source (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_status) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_string_value(message->u.status.payload, "source", NULL);
+bail:	return NULL;
+}
+
+const char * mbus_client_message_status_identifier (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_status) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_string_value(message->u.status.payload, "identifier", NULL);
+bail:	return NULL;
+}
+
+const struct mbus_json * mbus_client_message_status_payload (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_status) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_object(message->u.status.payload, "payload");
 bail:	return NULL;
 }
 

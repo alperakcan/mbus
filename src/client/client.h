@@ -97,7 +97,6 @@ struct mbus_client_options {
 		void (*connect) (struct mbus_client *client, void *context, enum mbus_client_connect_status status);
 		void (*disconnect) (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status);
 		void (*create) (struct mbus_client *client, void *context, enum mbus_client_create_status status);
-		void (*status) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 		void (*message) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 		void (*publish) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status);
 		void (*subscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status);
