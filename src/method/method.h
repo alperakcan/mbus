@@ -42,22 +42,6 @@
 
 #define MBUS_METHOD_STATUS_IDENTIFIER_ALL			"org.mbus.method.event.status.all"
 
-/* status json model
- *
- * server -- status --> client
- *
- * status: {
- *   "type"        : MBUS_METHOD_TYPE_STATUS,
- *   "source"      : MBUS_SERVER_NAME,
- *   "destination" : "unique identifier",
- *   "identifier"  : "unique identifier",
- *   "sequence"    : sequence number,
- *   "payload"     : {
- *     "comment": "event specific data object goes here"
- *   }
- * }
- */
-
 /* event json model
  *
  * client  -- request --> server

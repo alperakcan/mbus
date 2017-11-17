@@ -298,23 +298,6 @@ class MBusClient:
                 c._callback(self, c._context, object['source'], object['identifier'], object['payload'])
                 break;
         
-    def _handleStatus (self, object):
-        subscriptions = self._subscriptions.__copy__()
-        for c in subscriptions:
-            s = 0
-            e = 0
-            if (object['source'] == c._source):
-                s = 1
-                    
-            if (c._event == MBUS_METHOD_STATUS_IDENTIFIER_ALL):
-                e = 1
-            else:
-                if (object['identifier'] == c._event):
-                    e = 1
-            if (s == 1 and e == 1):
-                c._callback(self, c._context, object['source'], object['identifier'], object['payload'])
-                break;
-
     def name (self):
         return self._name
     
@@ -451,8 +434,6 @@ class MBusClient:
                 object = json.loads(slice)
                 if (object['type'].lower() == MBUS_METHOD_TYPE_RESULT.lower()):
                     self._handleResult(object)
-                elif (object['type'].lower() == MBUS_METHOD_TYPE_STATUS.lower()):
-                    self._handleStatus(object)
                 elif (object['type'].lower() == MBUS_METHOD_TYPE_EVENT.lower()):
                     self._handleEvent(object)
             

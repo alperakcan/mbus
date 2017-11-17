@@ -284,20 +284,6 @@ function MBusClient (name = "", options = {} ) {
 		})
 	}
 	
-	this._handleStatus = function (object) {
-		this._callbacks.forEach(function (callback) {
-			if (object['source'] !== callback._source) {
-				return;
-			}
-			if (callback._event !== MBUS_METHOD_STATUS_IDENTIFIER_ALL) {
-				if (object['identifier'] !== callback._event) {
-					return;
-				}
-			}
-			callback._callback(object['source'], object['identifier'], object['payload']);
-		})
-	}
-	
 	this._handleIncoming = function () {
 		while (this._incoming.length >= 4) {
 			var slice;
@@ -318,8 +304,6 @@ function MBusClient (name = "", options = {} ) {
 				this._handleResult(object);
 			} else if (object['type'] == MBUS_METHOD_TYPE_EVENT) {
 				this._handleEvent(object);
-			} else if (object['type'] == MBUS_METHOD_TYPE_STATUS) {
-				this._handleStatus(object);
 			} else {
 				console.log('unknown type:', object['type']);
 			}
