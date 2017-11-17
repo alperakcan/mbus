@@ -310,6 +310,48 @@ bail:	if (request != NULL) {
 	return NULL;
 }
 
+static void mbus_client_command_subscribe_response (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	enum mbus_client_subscribe_status status;
+	(void) context;
+	mbus_client_lock(client);
+	if (client->options->callbacks.subscribe != NULL) {
+		if (mbus_client_message_command_response_result(message) == 0) {
+			status = mbus_client_subscribe_status_success;
+		} else {
+			status = mbus_client_subscribe_status_generic_error;
+		}
+		mbus_client_unlock(client);
+		client->options->callbacks.subscribe(client, client->options->callbacks.context,
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "source", NULL),
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "event", NULL),
+				status);
+		mbus_client_lock(client);
+	}
+	mbus_client_unlock(client);
+}
+
+static void mbus_client_command_unsubscribe_response (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	enum mbus_client_unsubscribe_status status;
+	(void) context;
+	mbus_client_lock(client);
+	if (client->options->callbacks.unsubscribe != NULL) {
+		if (mbus_client_message_command_response_result(message) == 0) {
+			status = mbus_client_unsubscribe_status_success;
+		} else {
+			status = mbus_client_unsubscribe_status_generic_error;
+		}
+		mbus_client_unlock(client);
+		client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "source", NULL),
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "event", NULL),
+				status);
+		mbus_client_lock(client);
+	}
+	mbus_client_unlock(client);
+}
+
 static void mbus_client_command_create_response (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
 	const struct mbus_json *response;
@@ -1131,7 +1173,52 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, NULL, NULL);
+	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, client);
+	if (rc != 0) {
+		mbus_errorf("can not execute command");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	return -1;
+}
+
+int mbus_client_unsubscribe (struct mbus_client *client, const char *source, const char *event)
+{
+	int rc;
+	struct mbus_json *payload;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (source == NULL) {
+		mbus_debugf("source is invalid, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
+		source = MBUS_METHOD_EVENT_SOURCE_ALL;
+	}
+	if (event == NULL) {
+		mbus_errorf("event is invalid");
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(payload, "source", source);
+	if (rc != 0) {
+		mbus_errorf("can not add string to json object");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(payload, "event", event);
+	if (rc != 0) {
+		mbus_errorf("can not add string to json object");
+		goto bail;
+	}
+	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, client);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
