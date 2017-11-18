@@ -161,6 +161,11 @@ struct mbus_client_message {
 	} u;
 };
 
+struct command_register_param {
+	int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context);
+	void *context;
+};
+
 static char * _strndup (const char *s, size_t n)
 {
 	char *result;
@@ -318,6 +323,27 @@ bail:	if (request != NULL) {
 		request_destroy(request);
 	}
 	return NULL;
+}
+
+static void mbus_client_command_register_response (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	enum mbus_client_register_status status;
+	struct command_register_param *param = context;
+	mbus_client_lock(client);
+	if (client->options->callbacks.publish != NULL) {
+		mbus_client_unlock(client);
+		if (mbus_client_message_command_response_result(message) == 0) {
+			status = mbus_client_publish_status_success;
+		} else {
+			status = mbus_client_publish_status_internal_error;
+		}
+		client->options->callbacks.registered(client, client->options->callbacks.context,
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "command", NULL),
+				status);
+		mbus_client_lock(client);
+	}
+	mbus_client_unlock(client);
+	free(param);
 }
 
 static void mbus_client_command_event_response (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -791,18 +817,8 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 		duplicate->client.command_timeout = options->client.command_timeout;
 		duplicate->client.publish_timeout = options->client.publish_timeout;
 
-		duplicate->ping.interval = options->ping.interval;
-		duplicate->ping.timeout = options->ping.timeout;
-		duplicate->ping.threshold = options->ping.threshold;
-
-		duplicate->callbacks.connect = options->callbacks.connect;
-		duplicate->callbacks.disconnect = options->callbacks.disconnect;
-		duplicate->callbacks.create = options->callbacks.create;
-		duplicate->callbacks.message = options->callbacks.message;
-		duplicate->callbacks.publish = options->callbacks.publish;
-		duplicate->callbacks.subscribe = options->callbacks.subscribe;
-		duplicate->callbacks.unsubscribe = options->callbacks.unsubscribe;
-		duplicate->callbacks.context = options->callbacks.context;
+		memcpy(&duplicate->ping, &options->ping, sizeof(options->ping));
+		memcpy(&duplicate->callbacks, &options->callbacks, sizeof(options->callbacks));
 	}
 	return duplicate;
 bail:	if (duplicate != NULL) {
@@ -1190,6 +1206,59 @@ int mbus_client_disconnect (struct mbus_client *client)
 	mbus_client_unlock(client);
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_register (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context), void *context)
+{
+	int rc;
+	struct mbus_json *payload;
+	struct command_register_param *param;
+	param = NULL;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (command == NULL) {
+		mbus_errorf("event is invalid");
+		goto bail;
+	}
+	if (callback == NULL) {
+		mbus_errorf("callback is invalid");
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(payload, "command", command);
+	if (rc != 0) {
+		mbus_errorf("can not add string to json object");
+		goto bail;
+	}
+	param = malloc(sizeof(struct command_register_param));
+	if (param == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	memset(param, 0, sizeof(struct command_register_param));
+	param->callback = callback;
+	param->context = context;
+	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, param);
+	if (rc != 0) {
+		mbus_errorf("can not execute command");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	if (param != NULL) {
+		free(param);
 	}
 	return -1;
 }

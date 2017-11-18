@@ -87,6 +87,16 @@ enum mbus_client_unsubscribe_status {
 	mbus_client_unsubscribe_status_internal_error
 };
 
+enum mbus_client_register_status {
+	mbus_client_register_status_success,
+	mbus_client_register_status_internal_error
+};
+
+enum mbus_client_unregister_status {
+	mbus_client_unregister_status_success,
+	mbus_client_unregister_status_internal_error
+};
+
 struct mbus_client_options {
 	struct {
 		char *protocol;
@@ -112,6 +122,8 @@ struct mbus_client_options {
 		void (*publish) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status);
 		void (*subscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status);
 		void (*unsubscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status);
+		void (*registered) (struct mbus_client *client, void *context, const char *command, enum mbus_client_register_status status);
+		void (*unregistered) (struct mbus_client *client, void *context, const char *command, enum mbus_client_unregister_status status);
 		void *context;
 	} callbacks;
 };
