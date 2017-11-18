@@ -811,10 +811,14 @@ bail:	if (duplicate != NULL) {
 	return NULL;
 }
 
-static int mbus_client_wakeup (struct client *client, enum wakeup_reason reason)
+static int mbus_client_wakeup (struct mbus_client *client, enum wakeup_reason reason)
 {
 	int rc;
-	rc = write(client->)
+	rc = write(client->wakeup[1], &reason, sizeof(reason));
+	if (rc != sizeof(reason)) {
+		return -1;
+	}
+	return 0;
 }
 
 void mbus_client_usage (void)
