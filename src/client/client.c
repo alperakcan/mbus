@@ -331,7 +331,7 @@ static void mbus_client_command_event_response (struct mbus_client *client, void
 		if (mbus_client_message_command_response_result(message) == 0) {
 			status = mbus_client_publish_status_success;
 		} else {
-			status = mbus_client_publish_status_generic_error;
+			status = mbus_client_publish_status_internal_error;
 		}
 		msg.type = mbus_client_message_type_event;
 		msg.u.event.payload = mbus_client_message_command_request_payload(message);
@@ -350,7 +350,7 @@ static void mbus_client_command_subscribe_response (struct mbus_client *client, 
 		if (mbus_client_message_command_response_result(message) == 0) {
 			status = mbus_client_subscribe_status_success;
 		} else {
-			status = mbus_client_subscribe_status_generic_error;
+			status = mbus_client_subscribe_status_internal_error;
 		}
 		mbus_client_unlock(client);
 		client->options->callbacks.subscribe(client, client->options->callbacks.context,
@@ -371,7 +371,7 @@ static void mbus_client_command_unsubscribe_response (struct mbus_client *client
 		if (mbus_client_message_command_response_result(message) == 0) {
 			status = mbus_client_unsubscribe_status_success;
 		} else {
-			status = mbus_client_unsubscribe_status_generic_error;
+			status = mbus_client_unsubscribe_status_internal_error;
 		}
 		mbus_client_unlock(client);
 		client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
@@ -716,14 +716,14 @@ static int mbus_client_message_handle_event (struct mbus_client *client, const s
 		client->ping_wait_pong = 0;
 		client->pong_recv_tsms = mbus_clock_get();
 		client->pong_missed_count = 0;
-	}
-
-	if (client->options->callbacks.message != NULL) {
-		message.type = mbus_client_message_type_event;
-		message.u.event.payload = json;
-		mbus_client_unlock(client);
-		client->options->callbacks.message(client, client->options->callbacks.context, &message);
-		mbus_client_lock(client);
+	} else {
+		if (client->options->callbacks.message != NULL) {
+			message.type = mbus_client_message_type_event;
+			message.u.event.payload = json;
+			mbus_client_unlock(client);
+			client->options->callbacks.message(client, client->options->callbacks.context, &message);
+			mbus_client_lock(client);
+		}
 	}
 
 	return 0;

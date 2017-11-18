@@ -105,20 +105,34 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 		case mbus_client_connect_status_success:
 			fprintf(stdout, "connected\n");
 			break;
-		case mbus_client_connect_status_generic_error:
+		case mbus_client_connect_status_internal_error:
 			fprintf(stdout, "can not connect\n");
 			break;
 		case mbus_client_connect_status_invalid_protocol:
 			fprintf(stdout, "can not connect: invalid protocol\n");
-			break;
-		case mbus_client_connect_status_internal_error:
-			fprintf(stdout, "can not connect: internal error\n");
 			break;
 		case mbus_client_connect_status_connection_refused:
 			fprintf(stdout, "can not connect: connection refused\n");
 			break;
 		case mbus_client_connect_status_server_unavailable:
 			fprintf(stdout, "can not connect: server unavailable\n");
+			break;
+	}
+}
+
+static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
+{
+	(void) client;
+	(void) context;
+	switch (status) {
+		case mbus_client_disconnect_status_success:
+			fprintf(stdout, "disconnected\n");
+			break;
+		case mbus_client_disconnect_status_internal_error:
+			fprintf(stdout, "disconnected: internal error\n");
+			break;
+		case mbus_client_disconnect_status_connection_closed:
+			fprintf(stdout, "disconnected: connection closed\n");
 			break;
 	}
 }
@@ -235,6 +249,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.disconnect = mbus_client_callback_disconnect;
 	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;

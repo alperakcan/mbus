@@ -95,7 +95,6 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 	if (status == mbus_client_create_status_success) {
 		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, mbus_client_callback_command, arg);
 		if (rc != 0) {
-			fprintf(stderr, "can not call command\n");
 			arg->result = -1;
 			arg->finished = 1;
 		}

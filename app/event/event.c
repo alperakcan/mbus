@@ -102,7 +102,6 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 		for (p = 0; p < arg->flood; p++) {
 			rc = mbus_client_publish_sync_to(client, arg->destination, arg->event, arg->payload);
 			if (rc != 0) {
-				fprintf(stderr, "can not call event\n");
 				break;
 			}
 		}
