@@ -57,7 +57,13 @@ mBus client library (libmbus-client) is to simplify development of software usin
 
 ## 2. download ##
 
+    git clone --recursive git@github.com:alperakcan/mbus.git
+
+or
+
     git clone git@github.com:alperakcan/mbus.git
+    cd mbus
+    git submodule update --init --recursive
 
 ## 3. build ##
 
