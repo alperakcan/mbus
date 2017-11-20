@@ -102,7 +102,7 @@ static void usage (const char *name)
 	mbus_client_usage();
 }
 
-static int mbus_client_receiver_callback_command_put (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context)
+static int mbus_client_receiver_callback_command_put (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
 	int rc;
 	int fd;
@@ -114,23 +114,20 @@ static int mbus_client_receiver_callback_command_put (struct mbus_client *client
 	size_t decoded_length;
 	struct receiver_param *param = context;
 	(void) client;
-	(void) source;
-	(void) command;
-	(void) result;
 	fd = -1;
 	fname = NULL;
 	decoded = NULL;
-	s = mbus_json_get_string_value(payload, "source", NULL);
+	s = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "source", NULL);
 	if (s == NULL) {
 		fprintf(stderr, "source is invalid\n");
 		goto bail;
 	}
-	d = mbus_json_get_string_value(payload, "destination", NULL);
+	d = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "destination", NULL);
 	if (d == NULL) {
 		fprintf(stderr, "destination is invalid\n");
 		goto bail;
 	}
-	e = mbus_json_get_string_value(payload, "encoded", NULL);
+	e = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "encoded", NULL);
 	if (d == NULL) {
 		fprintf(stderr, "encoded is invalid\n");
 		goto bail;

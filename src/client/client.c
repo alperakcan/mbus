@@ -113,7 +113,7 @@ TAILQ_HEAD(commands, command);
 struct command {
 	TAILQ_ENTRY(command) commands;
 	char *identifier;
-	int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context);
+	int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 	void *context;
 };
 
@@ -143,9 +143,9 @@ struct mbus_client {
 };
 
 enum mbus_client_message_type {
-	mbus_client_message_type_status,
 	mbus_client_message_type_event,
-	mbus_client_message_type_command
+	mbus_client_message_type_command,
+	mbus_client_message_type_routine
 };
 
 struct mbus_client_message {
@@ -153,14 +153,15 @@ struct mbus_client_message {
 	union  {
 		struct {
 			const struct mbus_json *payload;
-		} status;
-		struct {
-			const struct mbus_json *payload;
 		} event;
 		struct {
 			const struct mbus_json *request;
 			const struct mbus_json *response;
 		} command;
+		struct {
+			const struct mbus_json *request;
+			struct mbus_json *response;
+		} routine;
 	} u;
 };
 
@@ -174,6 +175,22 @@ static char * _strndup (const char *s, size_t n)
 	}
 	result[len] = '\0';
 	return (char *) memcpy(result, s, len);
+}
+
+static void * command_get_context (struct command *command)
+{
+	if (command == NULL) {
+		return NULL;
+	}
+	return command->context;
+}
+
+static int (* command_get_callback (struct command *command)) (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	if (command == NULL) {
+		return NULL;
+	}
+	return command->callback;
 }
 
 static const char * command_get_identifier (struct command *command)
@@ -192,7 +209,7 @@ static void command_destroy (struct command *command)
 	free(command);
 }
 
-static struct command * command_create (const char *identifier, int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context), void *context)
+static struct command * command_create (const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
 	struct command *command;
 	command = malloc(sizeof(struct command));
@@ -803,9 +820,11 @@ bail:	return -1;
 
 static int mbus_client_message_handle_command (struct mbus_client *client, const struct mbus_json *json)
 {
+	int rc;
 	const char *source;
 	const char *identifier;
 	struct command *command;
+	struct mbus_client_message message;
 
 	source = mbus_json_get_string_value(json, "source", NULL);
 	if (source == NULL) {
@@ -827,7 +846,14 @@ static int mbus_client_message_handle_command (struct mbus_client *client, const
 		TAILQ_FOREACH(command, &client->commands, commands) {
 			if (strcmp(command_get_identifier(command), identifier) == 0) {
 				mbus_client_unlock(client);
+				message.type = mbus_client_message_type_routine;
+				message.u.routine.request = json;
+				message.u.routine.response = NULL;
+				rc = command_get_callback(command)(client, command_get_context(command), &message);
 				mbus_client_lock(client);
+				if (message.u.routine.response != NULL) {
+					mbus_json_delete(message.u.routine.response);
+				}
 				break;
 			}
 		}
@@ -1214,7 +1240,7 @@ int mbus_client_unlock (struct mbus_client *client)
 	return 0;
 }
 
-enum mbus_client_state mbus_client_state (struct mbus_client *client)
+enum mbus_client_state mbus_client_get_state (struct mbus_client *client)
 {
 	enum mbus_client_state state;
 	if (client == NULL) {
@@ -1231,7 +1257,7 @@ bail:	if (client != NULL) {
 	return mbus_client_state_unknown;
 }
 
-const char * mbus_client_name (struct mbus_client *client)
+const char * mbus_client_get_name (struct mbus_client *client)
 {
 	const char *name;
 	if (client == NULL) {
@@ -1291,7 +1317,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_register (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *context), void *context)
+int mbus_client_register (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
 	int rc;
 	struct command *command;
@@ -1631,7 +1657,7 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 bail:	return -1;
 }
 
-int mbus_client_fd (struct mbus_client *client)
+int mbus_client_get_fd (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -1669,7 +1695,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_pending (struct mbus_client *client)
+int mbus_client_get_pending (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -2082,48 +2108,6 @@ const struct mbus_json * mbus_client_message_event_payload (struct mbus_client_m
 bail:	return NULL;
 }
 
-const char * mbus_client_message_status_source (struct mbus_client_message *message)
-{
-	if (message == NULL) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	if (message->type != mbus_client_message_type_status) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	return mbus_json_get_string_value(message->u.status.payload, "source", NULL);
-bail:	return NULL;
-}
-
-const char * mbus_client_message_status_identifier (struct mbus_client_message *message)
-{
-	if (message == NULL) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	if (message->type != mbus_client_message_type_status) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	return mbus_json_get_string_value(message->u.status.payload, "identifier", NULL);
-bail:	return NULL;
-}
-
-const struct mbus_json * mbus_client_message_status_payload (struct mbus_client_message *message)
-{
-	if (message == NULL) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	if (message->type != mbus_client_message_type_status) {
-		mbus_errorf("message is invalid");
-		goto bail;
-	}
-	return mbus_json_get_object(message->u.status.payload, "payload");
-bail:	return NULL;
-}
-
 const struct mbus_json * mbus_client_message_command_request_payload (struct mbus_client_message *message)
 {
 	if (message == NULL) {
@@ -2163,5 +2147,44 @@ int mbus_client_message_command_response_result (struct mbus_client_message *mes
 		goto bail;
 	}
 	return mbus_json_get_int_value(message->u.command.response, "result", -1);
+bail:	return -1;
+}
+
+const struct mbus_json * mbus_client_message_routine_request_payload (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_routine) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_object(message->u.routine.request, "payload");
+bail:	return NULL;
+}
+
+int mbus_client_message_routine_set_response_payload (struct mbus_client_message *message, const struct mbus_json *payload)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_routine) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->u.routine.response != NULL) {
+		mbus_json_delete(message->u.routine.response);
+		message->u.routine.response = NULL;
+	}
+	if (payload != NULL) {
+		message->u.routine.response = mbus_json_duplicate(payload, 1);
+		if (message->u.routine.response == NULL) {
+			mbus_errorf("can not duplicate payload");
+			goto bail;
+		}
+	}
+	return 0;
 bail:	return -1;
 }
