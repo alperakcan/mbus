@@ -221,6 +221,10 @@ int main (int argc, char *argv[])
 
 	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);
+	if (_argv == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
+		goto bail;
+	}
 	for (_argc = 0; _argc < argc; _argc++) {
 		_argv[_argc] = argv[_argc];
 	}

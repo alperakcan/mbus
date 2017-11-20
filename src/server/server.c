@@ -969,10 +969,12 @@ static int client_set_socket (struct client *client, struct mbus_socket *socket)
 	if (socket == NULL) {
 		if (client->socket != NULL) {
 			if (client->type == listener_type_tcp) {
+				mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
 				mbus_socket_destroy(client->socket);
 				client->socket = NULL;
 			}
 			if (client->type == listener_type_uds) {
+				mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
 				mbus_socket_destroy(client->socket);
 				client->socket = NULL;
 			}

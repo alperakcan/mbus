@@ -106,12 +106,11 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 
 int main (int argc, char *argv[])
 {
-	int c;
 	int rc;
 
+	int c;
 	int _argc;
 	char **_argv;
-
 
 	struct arg arg;
 	struct mbus_client *client;
@@ -124,6 +123,10 @@ int main (int argc, char *argv[])
 	_argv = NULL;
 
 	_argv = malloc(sizeof(char *) * argc);
+	if (_argv == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
+		goto bail;
+	}
 	for (_argc = 0; _argc < argc; _argc++) {
 		_argv[_argc] = argv[_argc];
 	}
