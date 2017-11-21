@@ -152,6 +152,41 @@ static int command_get_state (int argc, char *argv[])
 	return 0;
 }
 
+static int command_subscribe (int argc, char *argv[])
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+
+static int command_unsubscribe (int argc, char *argv[])
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+
+static int command_publish (int argc, char *argv[])
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+
+static int command_register (int argc, char *argv[])
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+
+static int command_unregister (int argc, char *argv[])
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+
 static struct command *commands[] = {
 	&(struct command) {
 		"quit",
@@ -161,17 +196,42 @@ static struct command *commands[] = {
 	&(struct command) {
 		"connect",
 		command_connect,
-		"connect"
+		"connect to mbus server"
 	},
 	&(struct command) {
 		"disconnect",
 		command_disconnect,
-		"disconnect"
+		"disconnect from mbus server"
 	},
 	&(struct command) {
 		"get-state",
 		command_get_state,
-		"get state"
+		"get mbus client state"
+	},
+	&(struct command) {
+		"subscribe",
+		command_subscribe,
+		"subscribe to  source/event"
+	},
+	&(struct command) {
+		"unsubscribe",
+		command_unsubscribe,
+		"unsubscribe from source/event"
+	},
+	&(struct command) {
+		"publish",
+		command_publish,
+		"publish an event w/o payload"
+	},
+	&(struct command) {
+		"register",
+		command_register,
+		"register a command"
+	},
+	&(struct command) {
+		"unregister",
+		command_unregister,
+		"unregister command"
 	},
 	NULL,
 };
@@ -238,9 +298,35 @@ static int readline_process (char *command)
 	}
 
 	if (strcmp(argv[0], "help") == 0) {
+		fprintf(stdout, "mbus test client cli\n");
+		fprintf(stdout, "\n");
+		fprintf(stdout, "commands:\n");
 		for (pc = commands; *pc; pc++) {
-			printf("%-15s - %s\n", (*pc)->name, (*pc)->help);
+			int l;
+			const char *h;
+			const char *e;
+			fprintf(stdout, "  %-15s - ", (*pc)->name);
+			l = 0;
+			h = (*pc)->help;
+			while (h != NULL && *h != '\0') {
+				e = strchr(h, '\n');
+				if (e == NULL) {
+					e = h + strlen(h);
+				} else {
+					e += 1;
+				}
+				if (l == 0) {
+					fprintf(stdout, "%.*s", (int) (e - h), h);
+				} else {
+					fprintf(stdout, "  %-15s   %.*s", "", (int) (e - h), h);
+				}
+				h = e;
+				l += 1;
+			}
+			fprintf(stdout, "\n");
 		}
+		fprintf(stdout, "\n");
+		fprintf(stdout, "%-15s   - command specific help\n", "command --help");
 	} else {
 		for (pc = commands; *pc; pc++) {
 			if (strcmp((*pc)->name, argv[0]) == 0) {
