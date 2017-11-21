@@ -35,6 +35,7 @@
 #include <ctype.h>
 #include <poll.h>
 #include <readline/readline.h>
+#include <readline/history.h>
 
 #define MBUS_DEBUG_NAME	"app-client"
 
@@ -248,6 +249,7 @@ static void process_line (char *line)
 	if (line != NULL) {
 		readline_strip(line);
 		readline_process(line);
+		add_history(line);
 		free(line);
 	}
 }
@@ -340,6 +342,7 @@ int main (int argc, char *argv[])
 
 	rl_clear_history();
 	rl_cleanup_after_signal();
+	clear_history();
 
 	mbus_client_destroy(client);
 	free(_argv);
@@ -352,5 +355,6 @@ bail:	if (client != NULL) {
 	}
 	rl_clear_history();
 	rl_cleanup_after_signal();
+	clear_history();
 	return -1;
 }

@@ -1202,7 +1202,7 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	}
 	memset(client, 0, sizeof(struct mbus_client));
 	pthread_mutex_init(&client->mutex,NULL);
-	client->state = mbus_client_state_initial;
+	client->state = mbus_client_state_disconnected;
 	client->socket = NULL;
 	client->wakeup[0] = -1;
 	client->wakeup[1] = -1;
@@ -1810,9 +1810,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 
 	mbus_client_lock(client);
 
-	if (client->state == mbus_client_state_initial) {
-
-	} else if (client->state == mbus_client_state_connecting) {
+	if (client->state == mbus_client_state_connecting) {
 		if (client->socket == NULL) {
 			if (client->options->connect_interval <= 0 ||
 			    mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {

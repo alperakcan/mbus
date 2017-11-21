@@ -43,7 +43,6 @@ struct mbus_client_message;
 
 enum mbus_client_state {
 	mbus_client_state_unknown,
-	mbus_client_state_initial,
 	mbus_client_state_connecting,
 	mbus_client_state_connected,
 	mbus_client_state_disconnecting,
