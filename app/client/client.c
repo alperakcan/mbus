@@ -142,6 +142,16 @@ static int command_disconnect (int argc, char *argv[])
 	return 0;
 }
 
+static int command_get_state (int argc, char *argv[])
+{
+	(void) argv;
+	if (argc != 0) {
+		return -2;
+	}
+	fprintf(stdout, "state: %s\n", mbus_client_state_string(mbus_client_get_state(g_mbus_client)));
+	return 0;
+}
+
 static struct command *commands[] = {
 	&(struct command) {
 		"quit",
@@ -157,6 +167,11 @@ static struct command *commands[] = {
 		"disconnect",
 		command_disconnect,
 		"disconnect"
+	},
+	&(struct command) {
+		"get-state",
+		command_get_state,
+		"get state"
 	},
 	NULL,
 };

@@ -57,7 +57,8 @@ enum mbus_client_connect_status {
 	mbus_client_connect_status_server_unavailable,
 	mbus_client_connect_status_timeout,
 	mbus_client_connect_status_invalid_protocol_version,
-	mbus_client_connect_status_invalid_client_identfier
+	mbus_client_connect_status_invalid_client_identfier,
+	mbus_client_connect_status_server_error,
 };
 
 enum mbus_client_disconnect_status {
@@ -169,5 +170,6 @@ int mbus_client_message_command_response_result (struct mbus_client_message *mes
 const struct mbus_json * mbus_client_message_routine_request_payload (struct mbus_client_message *message);
 int mbus_client_message_routine_set_response_payload (struct mbus_client_message *message, const struct mbus_json *payload);
 
+const char * mbus_client_state_string (enum mbus_client_state state);
 const char * mbus_client_connect_status_string (enum mbus_client_connect_status status);
 const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_status status);

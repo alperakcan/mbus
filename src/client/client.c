@@ -383,6 +383,51 @@ bail:	if (request != NULL) {
 	return NULL;
 }
 
+static void mbus_client_reset (struct mbus_client *client)
+{
+	struct request *request;
+	struct request *nrequest;
+	struct command *command;
+	struct command *ncommand;
+	if (client->socket != NULL) {
+		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
+		mbus_socket_destroy(client->socket);
+		client->socket = NULL;
+	}
+	if (client->incoming != NULL) {
+		mbus_buffer_reset(client->incoming);
+	}
+	if (client->outgoing != NULL) {
+		mbus_buffer_reset(client->outgoing);
+	}
+	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
+		TAILQ_REMOVE(&client->requests, request, requests);
+		request_destroy(request);
+	}
+	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
+		TAILQ_REMOVE(&client->pendings, request, requests);
+		request_destroy(request);
+	}
+	TAILQ_FOREACH_SAFE(command, &client->commands, commands, ncommand) {
+		TAILQ_REMOVE(&client->commands, command, commands);
+		command_destroy(command);
+	}
+	if (client->name != NULL) {
+		free(client->name);
+		client->name = NULL;
+	}
+	client->ping_interval = 0;
+	client->ping_timeout = 0;
+	client->ping_threshold = 0;
+	client->ping_send_tsms = 0;
+	client->pong_recv_tsms = 0;
+	client->ping_wait_pong = 0;
+	client->pong_missed_count = 0;
+	client->compression = mbus_compress_method_none;
+	client->socket_connected = 0;
+	client->create_requested = 0;
+}
+
 static void mbus_client_notify_connect (struct mbus_client *client, enum mbus_client_connect_status status)
 {
 	if (client->options->callbacks.connect != NULL) {
@@ -493,6 +538,9 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	mbus_client_lock(client);
 	if (mbus_client_message_command_response_result(message) != 0) {
 		mbus_errorf("client command create failed");
+		mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
+		mbus_client_reset(client);
+		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
 	response = mbus_client_message_command_response_payload(message);
@@ -632,51 +680,6 @@ bail:	if (payload != NULL) {
 		mbus_json_delete(payload_compression);
 	}
 	return -1;
-}
-
-static void mbus_client_reset (struct mbus_client *client)
-{
-	struct request *request;
-	struct request *nrequest;
-	struct command *command;
-	struct command *ncommand;
-	if (client->socket != NULL) {
-		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
-		mbus_socket_destroy(client->socket);
-		client->socket = NULL;
-	}
-	if (client->incoming != NULL) {
-		mbus_buffer_reset(client->incoming);
-	}
-	if (client->outgoing != NULL) {
-		mbus_buffer_reset(client->outgoing);
-	}
-	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
-		TAILQ_REMOVE(&client->requests, request, requests);
-		request_destroy(request);
-	}
-	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
-		TAILQ_REMOVE(&client->pendings, request, requests);
-		request_destroy(request);
-	}
-	TAILQ_FOREACH_SAFE(command, &client->commands, commands, ncommand) {
-		TAILQ_REMOVE(&client->commands, command, commands);
-		command_destroy(command);
-	}
-	if (client->name != NULL) {
-		free(client->name);
-		client->name = NULL;
-	}
-	client->ping_interval = 0;
-	client->ping_timeout = 0;
-	client->ping_threshold = 0;
-	client->ping_send_tsms = 0;
-	client->pong_recv_tsms = 0;
-	client->ping_wait_pong = 0;
-	client->pong_missed_count = 0;
-	client->compression = mbus_compress_method_none;
-	client->socket_connected = 0;
-	client->create_requested = 0;
 }
 
 static int mbus_client_run_connect (struct mbus_client *client)
@@ -1832,6 +1835,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	} else if (client->state == mbus_client_state_disconnected) {
 		if (client->options->connect_interval > 0) {
 			client->state = mbus_client_state_connecting;
+			goto out;
 		}
 	} else {
 		mbus_errorf("client state: %d is invalid", client->state);
@@ -2078,6 +2082,7 @@ incoming_bail:		if (json != NULL) {
 
 out:
 	if (client->state == mbus_client_state_connecting &&
+	    client->socket != NULL &&
 	    client->socket_connected == 0) {
 		if (mbus_clock_after(current, client->connect_tsms + client->options->connect_timeout)) {
 			if (client->options->connect_interval > 0) {
@@ -2277,6 +2282,18 @@ int mbus_client_message_routine_set_response_payload (struct mbus_client_message
 bail:	return -1;
 }
 
+const char * mbus_client_state_string (enum mbus_client_state state)
+{
+	switch (state) {
+		case mbus_client_state_unknown:			return "unknown";
+		case mbus_client_state_connecting:		return "connecting";
+		case mbus_client_state_connected:		return "connected";
+		case mbus_client_state_disconnecting:		return "disconnecting";
+		case mbus_client_state_disconnected:		return "disconnected";
+	}
+	return "unknown";
+}
+
 const char * mbus_client_connect_status_string (enum mbus_client_connect_status status)
 {
 	switch (status) {
@@ -2288,6 +2305,7 @@ const char * mbus_client_connect_status_string (enum mbus_client_connect_status 
 		case mbus_client_connect_status_timeout:			return "connection timeout";
 		case mbus_client_connect_status_invalid_protocol_version:	return "invalid protocol version";
 		case mbus_client_connect_status_invalid_client_identfier:	return "invalid client identifier";
+		case mbus_client_connect_status_server_error:			return "server error";
 	}
 	return "internal error";
 }
