@@ -99,49 +99,10 @@ bail:	if (subscription != NULL) {
 
 static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
-	(void) client;
-	(void) context;
-	switch (status) {
-		case mbus_client_connect_status_success:
-			fprintf(stdout, "connected\n");
-			break;
-		case mbus_client_connect_status_internal_error:
-			fprintf(stdout, "can not connect\n");
-			break;
-		case mbus_client_connect_status_invalid_protocol:
-			fprintf(stdout, "can not connect: invalid protocol\n");
-			break;
-		case mbus_client_connect_status_connection_refused:
-			fprintf(stdout, "can not connect: connection refused\n");
-			break;
-		case mbus_client_connect_status_server_unavailable:
-			fprintf(stdout, "can not connect: server unavailable\n");
-			break;
-	}
-}
-
-static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
-{
-	(void) client;
-	(void) context;
-	switch (status) {
-		case mbus_client_disconnect_status_success:
-			fprintf(stdout, "disconnected\n");
-			break;
-		case mbus_client_disconnect_status_internal_error:
-			fprintf(stdout, "disconnected: internal error\n");
-			break;
-		case mbus_client_disconnect_status_connection_closed:
-			fprintf(stdout, "disconnected: connection closed\n");
-			break;
-	}
-}
-
-static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
-{
 	int rc;
 	struct arg *arg = context;
-	if (status == mbus_client_create_status_success) {
+	fprintf(stdout, "connect: %s\n", mbus_client_connect_status_string(status));
+	if (status == mbus_client_connect_status_success) {
 		if (arg->subscriptions->count > 0) {
 			struct subscription *subscription;
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
@@ -161,6 +122,13 @@ static void mbus_client_callback_create (struct mbus_client *client, void *conte
 	}
 	return;
 bail:	return;
+}
+
+static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
 }
 
 static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -254,7 +222,6 @@ int main (int argc, char *argv[])
 	}
 	options.callbacks.connect = mbus_client_callback_connect;
 	options.callbacks.disconnect = mbus_client_callback_disconnect;
-	options.callbacks.create = mbus_client_callback_create;
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;
 	options.callbacks.context = &arg;
@@ -263,11 +230,11 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "can not create client\n");
 		goto bail;
 	}
-	rc = mbus_client_connect(client);
-	if (rc != 0) {
-		fprintf(stderr, "can not connect client\n");
-		goto bail;
-	}
+//	rc = mbus_client_connect(client);
+//	if (rc != 0) {
+//		fprintf(stderr, "can not connect client\n");
+//		goto bail;
+//	}
 
 	while (1) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);

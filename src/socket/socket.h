@@ -53,6 +53,7 @@ void mbus_socket_destroy (struct mbus_socket *socket);
 int mbus_socket_shutdown (struct mbus_socket *socket, enum mbus_socket_shutdown shutdown);
 
 int mbus_socket_get_fd (struct mbus_socket *socket);
+int mbus_socket_get_error (struct mbus_socket *socket);
 
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on);
 int mbus_socket_get_reuseaddr (struct mbus_socket *socket);

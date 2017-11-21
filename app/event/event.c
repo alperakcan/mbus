@@ -93,12 +93,12 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	}
 }
 
-static void mbus_client_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
+static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int p;
 	int rc;
 	struct arg *arg = context;
-	if (status == mbus_client_create_status_success) {
+	if (status == mbus_client_connect_status_success) {
 		for (p = 0; p < arg->flood; p++) {
 			rc = mbus_client_publish_sync_to(client, arg->destination, arg->event, arg->payload);
 			if (rc != 0) {
@@ -186,7 +186,7 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
-	options.callbacks.create = mbus_client_callback_create;
+	options.callbacks.connect = mbus_client_callback_connect;
 	options.callbacks.publish = mbus_client_callback_publish;
 	options.callbacks.context = &arg;
 	client = mbus_client_create(&options);
@@ -207,7 +207,7 @@ int main (int argc, char *argv[])
 			goto bail;
 		}
 		if (arg.finished == 1 &&
-		    mbus_client_pending(client) == 0) {
+		    mbus_client_has_pending(client) == 0) {
 			break;
 		}
 	}

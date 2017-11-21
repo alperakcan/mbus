@@ -28,6 +28,7 @@
 
 #define MBUS_CLIENT_DEFAULT_RUN_TIMEOUT		250
 
+#define MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT	30000
 #define MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL	0
 #define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	180000
 #define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	180000
@@ -45,8 +46,6 @@ enum mbus_client_state {
 	mbus_client_state_initial,
 	mbus_client_state_connecting,
 	mbus_client_state_connected,
-	mbus_client_state_creating,
-	mbus_client_state_created,
 	mbus_client_state_disconnecting,
 	mbus_client_state_disconnected
 };
@@ -56,14 +55,10 @@ enum mbus_client_connect_status {
 	mbus_client_connect_status_internal_error,
 	mbus_client_connect_status_invalid_protocol,
 	mbus_client_connect_status_connection_refused,
-	mbus_client_connect_status_server_unavailable
-};
-
-enum mbus_client_create_status {
-	mbus_client_create_status_success,
-	mbus_client_create_status_internal_error,
-	mbus_client_create_status_invalid_protocol_version,
-	mbus_client_create_status_invalid_client_identfier
+	mbus_client_connect_status_server_unavailable,
+	mbus_client_connect_status_timeout,
+	mbus_client_connect_status_invalid_protocol_version,
+	mbus_client_connect_status_invalid_client_identfier
 };
 
 enum mbus_client_disconnect_status {
@@ -98,26 +93,20 @@ enum mbus_client_unregister_status {
 };
 
 struct mbus_client_options {
-	struct {
-		char *protocol;
-		char *address;
-		int port;
-	} server;
-	struct {
-		char *name;
-		int command_timeout;
-		int publish_timeout;
-		int connect_interval;
-	} client;
-	struct {
-		int interval;
-		int timeout;
-		int threshold;
-	} ping;
+	char *name;
+	char *server_protocol;
+	char *server_address;
+	int server_port;
+	int connect_timeout;
+	int connect_interval;
+	int command_timeout;
+	int publish_timeout;
+	int ping_interval;
+	int ping_timeout;
+	int ping_threshold;
 	struct {
 		void (*connect) (struct mbus_client *client, void *context, enum mbus_client_connect_status status);
 		void (*disconnect) (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status);
-		void (*create) (struct mbus_client *client, void *context, enum mbus_client_create_status status);
 		void (*message) (struct mbus_client *client, void *context, struct mbus_client_message *message);
 		void (*publish) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status);
 		void (*subscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status);
@@ -142,7 +131,8 @@ int mbus_client_unlock (struct mbus_client *client);
 enum mbus_client_state mbus_client_get_state (struct mbus_client *client);
 const char * mbus_client_get_name (struct mbus_client *client);
 int mbus_client_get_fd (struct mbus_client *client);
-int mbus_client_get_pending (struct mbus_client *client);
+int mbus_client_get_fd_events (struct mbus_client *client);
+int mbus_client_has_pending (struct mbus_client *client);
 
 int mbus_client_connect (struct mbus_client *client);
 int mbus_client_disconnect (struct mbus_client *client);
@@ -179,3 +169,6 @@ int mbus_client_message_command_response_result (struct mbus_client_message *mes
 
 const struct mbus_json * mbus_client_message_routine_request_payload (struct mbus_client_message *message);
 int mbus_client_message_routine_set_response_payload (struct mbus_client_message *message, const struct mbus_json *payload);
+
+const char * mbus_client_connect_status_string (enum mbus_client_connect_status status);
+const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_status status);

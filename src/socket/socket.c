@@ -150,6 +150,25 @@ int mbus_socket_get_fd (struct mbus_socket *socket)
 	return socket->fd;
 }
 
+int mbus_socket_get_error (struct mbus_socket *socket)
+{
+	int rc;
+	int error;
+	socklen_t len;
+	len = sizeof(error);
+	if (socket == NULL) {
+		return -EINVAL;
+	}
+	rc = getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, &error, &len);
+	if (rc != 0) {
+		return -EINVAL;
+	}
+	if (error == 0) {
+		return 0;
+	}
+	return -error;
+}
+
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on)
 {
 	int rc;
@@ -415,9 +434,13 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 			sockaddr_in->sin_port = htons(port);
 			rc = connect(socket->fd, res->ai_addr, res->ai_addrlen);
 			if (rc != 0) {
-				rc = -errno;
-				continue;
+				if (errno != EINPROGRESS) {
+					continue;
+				} else {
+					rc = -errno;
+				}
 			}
+			break;
 		}
 		freeaddrinfo(result);
 	} else if (socket->domain == AF_UNIX) {
@@ -433,11 +456,13 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		mbus_errorf("unknown socket domain");
 		goto bail;
 	}
-	if (rc != 0) {
-		mbus_errorf("connect failed: %s", strerror(errno));
+	if (rc != 0 &&
+	    rc != -EINPROGRESS &&
+	    rc != -EALREADY) {
+		mbus_errorf("connect failed: %s", strerror(rc));
 		goto bail;
 	}
-	return 0;
+	return rc;
 bail:	return rc;
 }
 

@@ -1,5 +1,6 @@
 
 subdir-y = \
+	client \
 	command \
 	controller \
 	event \

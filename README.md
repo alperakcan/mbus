@@ -73,6 +73,7 @@ or
     apt install libssl-dev
     apt install zlib1g-dev
     apt install libwebsockets-dev
+    apt install libreadline-dev
 
     cd mbus
     make

@@ -170,11 +170,11 @@ bail:	if (decoded != NULL) {
 	return -1;
 }
 
-static void mbus_client_receiver_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
+static void mbus_client_receiver_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
 	struct receiver_param *param = context;
-	if (status == mbus_client_create_status_success) {
+	if (status == mbus_client_connect_status_success) {
 		rc = mbus_client_register(client, "command.put", mbus_client_receiver_callback_command_put, param);
 		if (rc != 0) {
 			param->result = -1;
@@ -194,7 +194,7 @@ static void mbus_client_sender_callback_command_put_result (struct mbus_client *
 	param->finished = 1;
 }
 
-static void mbus_client_sender_callback_create (struct mbus_client *client, void *context, enum mbus_client_create_status status)
+static void mbus_client_sender_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
 	int fd;
@@ -210,7 +210,7 @@ static void mbus_client_sender_callback_create (struct mbus_client *client, void
 	buffer = NULL;
 	encoded = NULL;
 	request = NULL;
-	if (status != mbus_client_create_status_success) {
+	if (status != mbus_client_connect_status_success) {
 		goto bail;
 	}
 	rc = stat(param->source, &st);
@@ -365,8 +365,8 @@ int main (int argc, char *argv[])
 	if (o_mode == mode_receiver) {
 		memset(&receiver_param, 0, sizeof(struct receiver_param));
 		receiver_param.prefix = o_prefix;
-		mbus_options.client.name = (char *) o_name;
-		mbus_options.callbacks.create = mbus_client_receiver_callback_create;
+		mbus_options.name = (char *) o_name;
+		mbus_options.callbacks.connect = mbus_client_receiver_callback_connect;
 		mbus_options.callbacks.context = &receiver_param;
 	} else if (o_mode == mode_sender) {
 		if (o_source == NULL) {
@@ -382,7 +382,7 @@ int main (int argc, char *argv[])
 		sender_param.source = o_source;
 		sender_param.destination = o_destination;
 		sender_param.timeout = o_timeout;
-		mbus_options.callbacks.create = mbus_client_sender_callback_create;
+		mbus_options.callbacks.connect = mbus_client_sender_callback_connect;
 		mbus_options.callbacks.context = &sender_param;
 	} else {
 		fprintf(stderr, "invalid mode: %d\n", o_mode);
@@ -408,12 +408,12 @@ int main (int argc, char *argv[])
 		}
 		if (o_mode == mode_receiver) {
 			if (receiver_param.finished == 1 &&
-			    mbus_client_pending(mbus_client) == 0) {
+			    mbus_client_has_pending(mbus_client) == 0) {
 				break;
 			}
 		} else if (o_mode == mode_sender) {
 			if (sender_param.finished == 1 &&
-			    mbus_client_pending(mbus_client) == 0) {
+			    mbus_client_has_pending(mbus_client) == 0) {
 				break;
 			}
 		}
