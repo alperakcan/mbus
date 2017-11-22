@@ -183,14 +183,6 @@
  */
 #define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
 
-/* command register
- *
- * {
- *     "command" : "command name"
- * }
- */
-#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
-
 /* command unsubscribe
  *
  * {
@@ -199,6 +191,22 @@
  * }
  */
 #define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
+
+/* command register
+ *
+ * {
+ *     "command" : "command name"
+ * }
+ */
+#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
+
+/* command unregister
+ *
+ * {
+ *     "command" : "command name"
+ * }
+ */
+#define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
 
 /* command close
  *

@@ -65,11 +65,13 @@
 #define OPTION_SERVER_PORT		0x204
 #define OPTION_CONNECT_TIMEOUT		0x205
 #define OPTION_CONNECT_INTERVAL		0x206
-#define OPTION_COMMAND_TIMEOUT		0x207
-#define OPTION_PUBLISH_TIMEOUT		0x208
-#define OPTION_PING_INTERVAL		0x209
-#define OPTION_PING_TIMEOUT		0x210
-#define OPTION_PING_THRESHOLD		0x211
+#define OPTION_SUBSCRIBE_TIMEOUT	0x207
+#define OPTION_REGISTER_TIMEOUT		0x208
+#define OPTION_COMMAND_TIMEOUT		0x210
+#define OPTION_PUBLISH_TIMEOUT		0x211
+#define OPTION_PING_INTERVAL		0x212
+#define OPTION_PING_TIMEOUT		0x213
+#define OPTION_PING_THRESHOLD		0x214
 static struct option longopts[] = {
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
@@ -79,6 +81,8 @@ static struct option longopts[] = {
 	{ "mbus-client-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
 	{ "mbus-client-connect-timeout",	required_argument,	NULL,	OPTION_CONNECT_TIMEOUT },
 	{ "mbus-client-connect-interval",	required_argument,	NULL,	OPTION_CONNECT_INTERVAL },
+	{ "mbus-client-subscribe-timeout",	required_argument,	NULL,	OPTION_SUBSCRIBE_TIMEOUT },
+	{ "mbus-client-register-timeout",	required_argument,	NULL,	OPTION_REGISTER_TIMEOUT },
 	{ "mbus-client-command-timeout",	required_argument,	NULL,	OPTION_COMMAND_TIMEOUT },
 	{ "mbus-client-publish-timeout",	required_argument,	NULL,	OPTION_PUBLISH_TIMEOUT },
 	{ "mbus-client-ping-interval",		required_argument,	NULL,	OPTION_PING_INTERVAL },
@@ -976,7 +980,7 @@ static int mbus_client_message_handle_result (struct mbus_client *client, const 
 	}
 	if (request == NULL) {
 		mbus_errorf("sequence: %d is invalid", sequence);
-		goto bail;
+		goto out;
 	}
 
 	if (request->callback != NULL) {
@@ -989,8 +993,7 @@ static int mbus_client_message_handle_result (struct mbus_client *client, const 
 	}
 
 	request_destroy(request);
-	return 0;
-bail:	return -1;
+out:	return 0;
 }
 
 static int mbus_client_message_handle_event (struct mbus_client *client, const struct mbus_json *json)
@@ -1147,6 +1150,8 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 		}
 		duplicate->connect_timeout = options->connect_timeout;
 		duplicate->connect_interval = options->connect_interval;
+		duplicate->subscribe_timeout = options->subscribe_timeout;
+		duplicate->register_timeout = options->register_timeout;
 		duplicate->command_timeout = options->command_timeout;
 		duplicate->publish_timeout = options->publish_timeout;
 		duplicate->ping_interval = options->ping_interval;
@@ -1174,19 +1179,21 @@ static int mbus_client_wakeup (struct mbus_client *client, enum wakeup_reason re
 void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
-	fprintf(stdout, "  --mbus-debug-level            : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-client-name            : client name (overrides api parameter)\n");
-	fprintf(stdout, "  --mbus-client-server-protocol : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
-	fprintf(stdout, "  --mbus-client-server-address  : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
-	fprintf(stdout, "  --mbus-client-server-port     : server port (default: %d)\n", MBUS_SERVER_PORT);
-	fprintf(stdout, "  --mbus-client-connect-timeout : client connect timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-connect-interval: client connect interval (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL);
-	fprintf(stdout, "  --mbus-client-command-timeout : client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-publish-timeout : client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-ping-interval   : ping interval (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
-	fprintf(stdout, "  --mbus-client-ping-timeout    : ping timeout (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-ping-threshold  : ping threshold (overrides api parameter) (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
-	fprintf(stdout, "  --mbus-help                   : this text\n");
+	fprintf(stdout, "  --mbus-debug-level               : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
+	fprintf(stdout, "  --mbus-client-name               : client name\n");
+	fprintf(stdout, "  --mbus-client-server-protocol    : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
+	fprintf(stdout, "  --mbus-client-server-address     : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
+	fprintf(stdout, "  --mbus-client-server-port        : server port (default: %d)\n", MBUS_SERVER_PORT);
+	fprintf(stdout, "  --mbus-client-connect-timeout    : client connect timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-connect-interval   : client connect interval (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL);
+	fprintf(stdout, "  --mbus-client-subscribe-timeout  : client subscribe timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-register-timeout   : client register timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-command-timeout    : client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-publish-timeout    : client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-ping-interval      : ping interval (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
+	fprintf(stdout, "  --mbus-client-ping-timeout       : ping timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-ping-threshold     : ping threshold (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
+	fprintf(stdout, "  --mbus-help                      : this text\n");
 }
 
 int mbus_client_options_default (struct mbus_client_options *options)
@@ -1246,6 +1253,12 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 			case OPTION_CONNECT_INTERVAL:
 				options->connect_interval = atoi(optarg);
 				break;
+			case OPTION_SUBSCRIBE_TIMEOUT:
+				options->subscribe_timeout = atoi(optarg);
+				break;
+			case OPTION_REGISTER_TIMEOUT:
+				options->register_timeout = atoi(optarg);
+				break;
 			case OPTION_COMMAND_TIMEOUT:
 				options->command_timeout = atoi(optarg);
 				break;
@@ -1301,6 +1314,12 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	}
 	if (options.connect_interval == 0) {
 		options.connect_interval = MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL;
+	}
+	if (options.subscribe_timeout == 0) {
+		options.subscribe_timeout = MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT;
+	}
+	if (options.register_timeout == 0) {
+		options.register_timeout = MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT;
 	}
 	if (options.command_timeout == 0) {
 		options.command_timeout = MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT;
@@ -1674,7 +1693,7 @@ int mbus_client_register (struct mbus_client *client, const char *identifier, in
 		mbus_errorf("can not create routine");
 		goto bail;
 	}
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, client->options->register_timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -1692,54 +1711,20 @@ bail:	if (payload != NULL) {
 
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event)
 {
-	int rc;
-	struct mbus_json *payload;
-	payload = NULL;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (client->state != mbus_client_state_connected) {
-		mbus_errorf("client is not connected");
-		goto bail;
-	}
-	if (source == NULL) {
-		mbus_debugf("source is invalid, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
-		source = MBUS_METHOD_EVENT_SOURCE_ALL;
-	}
-	if (event == NULL) {
-		mbus_errorf("event is invalid");
-		goto bail;
-	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create json object");
-		goto bail;
-	}
-	rc = mbus_json_add_string_to_object_cs(payload, "source", source);
-	if (rc != 0) {
-		mbus_errorf("can not add string to json object");
-		goto bail;
-	}
-	rc = mbus_json_add_string_to_object_cs(payload, "event", event);
-	if (rc != 0) {
-		mbus_errorf("can not add string to json object");
-		goto bail;
-	}
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, NULL);
-	if (rc != 0) {
-		mbus_errorf("can not execute command");
-		goto bail;
-	}
-	mbus_json_delete(payload);
-	return 0;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	return -1;
+	return mbus_client_subscribe_timeout(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
+{
+	return mbus_client_subscribe_callback_timeout(client, source, event, NULL, NULL, timeout);
 }
 
 int mbus_client_subscribe_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_subscribe_callback_timeout(client, source, event, callback, context, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -1763,6 +1748,10 @@ int mbus_client_subscribe_callback (struct mbus_client *client, const char *sour
 		mbus_errorf("event is invalid");
 		goto bail;
 	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
+		timeout = client->options->subscribe_timeout;
+	}
 	TAILQ_FOREACH_SAFE(subscription, &client->subscriptions, subscriptions, nsubscription) {
 		if (strcmp(subscription_get_source(subscription), source) == 0 &&
 		    strcmp(subscription_get_identifier(subscription), event) == 0) {
@@ -1784,12 +1773,14 @@ int mbus_client_subscribe_callback (struct mbus_client *client, const char *sour
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	subscription = subscription_create(source, event, callback, context);
-	if (subscription == NULL) {
-		mbus_errorf("can not create subscription");
-		goto bail;
+	if (callback != NULL) {
+		subscription = subscription_create(source, event, callback, context);
+		if (subscription == NULL) {
+			mbus_errorf("can not create subscription");
+			goto bail;
+		}
 	}
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -1806,6 +1797,11 @@ bail:	if (payload != NULL) {
 }
 
 int mbus_client_unsubscribe (struct mbus_client *client, const char *source, const char *event)
+{
+	return mbus_client_unsubscribe_timeout(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -1827,6 +1823,10 @@ int mbus_client_unsubscribe (struct mbus_client *client, const char *source, con
 	if (event == NULL) {
 		mbus_errorf("event is invalid");
 		goto bail;
+	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
+		timeout = client->options->subscribe_timeout;
 	}
 	TAILQ_FOREACH_SAFE(subscription, &client->subscriptions, subscriptions, nsubscription) {
 		if (strcmp(subscription_get_source(subscription), source) == 0 &&
@@ -1850,7 +1850,7 @@ int mbus_client_unsubscribe (struct mbus_client *client, const char *source, con
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, client);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2473,7 +2473,6 @@ out:
 	}
 
 	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
-		mbus_debugf("request %ld > %ld + %ld, to server: %s, %s", current, request_get_created_at(request), request_get_timeout(request), mbus_compress_method_string(client->compression), request_get_string(request));
 		if (request_get_timeout(request) >= 0 &&
 		    mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
 			mbus_debugf("request timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
@@ -2500,16 +2499,51 @@ out:
 						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
 						mbus_client_lock(client);
 					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					if (client->options->callbacks.subscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.subscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_subscribe_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+					if (client->options->callbacks.unsubscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_unsubscribe_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					if (client->options->callbacks.registered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.registered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_register_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+					if (client->options->callbacks.unregistered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unregistered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_unregister_status_timeout);
+						mbus_client_lock(client);
+					}
 				}
 			}
 			request_destroy(request);
-		} else {
-			rc = mbus_buffer_push_string(client->outgoing, client->compression, request_get_string(request));
-			if (rc != 0) {
-				mbus_errorf("can not push string to outgoing");
-				goto bail;
-			}
-			TAILQ_REMOVE(&client->requests, request, requests);
+		}
+	}
+
+	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
+		if (request_get_timeout(request) >= 0 &&
+		    mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
+			mbus_debugf("request pending timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
+			TAILQ_REMOVE(&client->pendings, request, requests);
 			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
 				if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
 				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
@@ -2518,14 +2552,83 @@ out:
 						mbus_client_unlock(client);
 						msg.type = mbus_client_message_type_event;
 						msg.u.event.payload = request_get_json(request);
-						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_success);
+						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
 						mbus_client_lock(client);
 					}
 				}
-				request_destroy(request);
 			} else {
-				TAILQ_INSERT_TAIL(&client->pendings, request, requests);
+				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
+					if (client->options->callbacks.publish != NULL) {
+						struct mbus_client_message msg;
+						mbus_client_unlock(client);
+						msg.type = mbus_client_message_type_event;
+						msg.u.event.payload = request_get_payload(request);
+						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					if (client->options->callbacks.subscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.subscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_subscribe_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+					if (client->options->callbacks.unsubscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_unsubscribe_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					if (client->options->callbacks.registered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.registered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_register_status_timeout);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+					if (client->options->callbacks.unregistered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unregistered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_unregister_status_timeout);
+						mbus_client_lock(client);
+					}
+				}
 			}
+			request_destroy(request);
+		}
+	}
+
+	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
+		mbus_debugf("request to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
+		rc = mbus_buffer_push_string(client->outgoing, client->compression, request_get_string(request));
+		if (rc != 0) {
+			mbus_errorf("can not push string to outgoing");
+			goto bail;
+		}
+		TAILQ_REMOVE(&client->requests, request, requests);
+		if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+			if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
+			    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+				if (client->options->callbacks.publish != NULL) {
+					struct mbus_client_message msg;
+					mbus_client_unlock(client);
+					msg.type = mbus_client_message_type_event;
+					msg.u.event.payload = request_get_json(request);
+					client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_success);
+					mbus_client_lock(client);
+				}
+			}
+			request_destroy(request);
+		} else {
+			TAILQ_INSERT_TAIL(&client->pendings, request, requests);
 		}
 	}
 
@@ -2727,6 +2830,7 @@ const char * mbus_client_subscribe_status_string (enum mbus_client_subscribe_sta
 	switch (status) {
 		case mbus_client_subscribe_status_success:		return "success";
 		case mbus_client_subscribe_status_internal_error:	return "internal error";
+		case mbus_client_subscribe_status_timeout:		return "timeout";
 	}
 	return "internal error";
 }
@@ -2736,6 +2840,7 @@ const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe
 	switch (status) {
 		case mbus_client_unsubscribe_status_success:		return "success";
 		case mbus_client_unsubscribe_status_internal_error:	return "internal error";
+		case mbus_client_unsubscribe_status_timeout:		return "timeout";
 	}
 	return "internal error";
 }

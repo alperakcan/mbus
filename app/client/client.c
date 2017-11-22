@@ -270,6 +270,7 @@ static int command_subscribe (int argc, char *argv[])
 	const char *source;
 	const char *event;
 	int callback;
+	int timeout;
 
 	int c;
 	struct option long_options[] = {
@@ -277,15 +278,17 @@ static int command_subscribe (int argc, char *argv[])
 		{ "source",	required_argument,	0,	's' },
 		{ "event",	required_argument,	0,	'e' },
 		{ "callback",	required_argument,	0,	'c' },
+		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
 
 	source = NULL;
 	event = NULL;
 	callback = 0;
+	timeout = -1;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "s:e:c:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "s:e:c:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 's':
 				source = optarg;
@@ -296,11 +299,15 @@ static int command_subscribe (int argc, char *argv[])
 			case 'c':
 				callback = atoi(optarg);
 				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
 			case 'h':
 				fprintf(stdout, "subscribe to source/event\n");
 				fprintf(stdout, "  -s / --source  : event source to subscribe (default: %s)\n", source);
 				fprintf(stdout, "  -e / --event   : event identifier to subscribe (default: %s)\n", event);
 				fprintf(stdout, "  -c / --callback: subscribe with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -t / --timeout : subscribe timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h / --help    : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -323,9 +330,9 @@ static int command_subscribe (int argc, char *argv[])
 	}
 
 	if (callback == 0) {
-		rc = mbus_client_subscribe(g_mbus_client, source, event);
+		rc = mbus_client_subscribe_timeout(g_mbus_client, source, event, timeout);
 	} else {
-		rc = mbus_client_subscribe_callback(g_mbus_client, source, event, mbus_client_callback_message_callback, NULL);
+		rc = mbus_client_subscribe_callback_timeout(g_mbus_client, source, event, mbus_client_callback_message_callback, NULL, timeout);
 	}
 	if (rc != 0) {
 		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", source, event);
@@ -339,20 +346,23 @@ static int command_unsubscribe (int argc, char *argv[])
 	int rc;
 	const char *source;
 	const char *event;
+	int timeout;
 
 	int c;
 	struct option long_options[] = {
 		{ "help",	no_argument,		0,	'h' },
 		{ "source",	required_argument,	0,	's' },
 		{ "event",	required_argument,	0,	'e' },
+		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
 
 	source = NULL;
 	event = NULL;
+	timeout = -1;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "s:e:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "s:e:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 's':
 				source = optarg;
@@ -360,11 +370,15 @@ static int command_unsubscribe (int argc, char *argv[])
 			case 'e':
 				event = optarg;
 				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
 			case 'h':
 				fprintf(stdout, "unsubscribe from source/event\n");
-				fprintf(stdout, "  -s / --source: event source to unsubscribe (default: %s)\n", source);
-				fprintf(stdout, "  -e / --event : event identifier to unsubscribe (default: %s)\n", event);
-				fprintf(stdout, "  -h / --help  : this text\n");;
+				fprintf(stdout, "  -s / --source : event source to unsubscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e / --event  : event identifier to unsubscribe (default: %s)\n", event);
+				fprintf(stdout, "  -t / --timeout: unsubscribe timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h / --help   : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
 				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
@@ -385,7 +399,7 @@ static int command_unsubscribe (int argc, char *argv[])
 		return -1;
 	}
 
-	rc = mbus_client_unsubscribe(g_mbus_client, source, event);
+	rc = mbus_client_unsubscribe_timeout(g_mbus_client, source, event, timeout);
 	if (rc != 0) {
 		fprintf(stderr, "can not unsubscribe from source: %s, event: %s\n", source, event);
 		return -1;

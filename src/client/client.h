@@ -30,6 +30,8 @@
 
 #define MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT	30000
 #define MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL	0
+#define MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT	180000
+#define MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT	180000
 #define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	180000
 #define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	180000
 
@@ -75,22 +77,26 @@ enum mbus_client_publish_status {
 
 enum mbus_client_subscribe_status {
 	mbus_client_subscribe_status_success,
-	mbus_client_subscribe_status_internal_error
+	mbus_client_subscribe_status_internal_error,
+	mbus_client_subscribe_status_timeout
 };
 
 enum mbus_client_unsubscribe_status {
 	mbus_client_unsubscribe_status_success,
-	mbus_client_unsubscribe_status_internal_error
+	mbus_client_unsubscribe_status_internal_error,
+	mbus_client_unsubscribe_status_timeout
 };
 
 enum mbus_client_register_status {
 	mbus_client_register_status_success,
-	mbus_client_register_status_internal_error
+	mbus_client_register_status_internal_error,
+	mbus_client_register_status_timeout
 };
 
 enum mbus_client_unregister_status {
 	mbus_client_unregister_status_success,
-	mbus_client_unregister_status_internal_error
+	mbus_client_unregister_status_internal_error,
+	mbus_client_unregister_status_timeout
 };
 
 struct mbus_client_options {
@@ -100,6 +106,8 @@ struct mbus_client_options {
 	int server_port;
 	int connect_timeout;
 	int connect_interval;
+	int subscribe_timeout;
+	int register_timeout;
 	int command_timeout;
 	int publish_timeout;
 	int ping_interval;
@@ -143,8 +151,12 @@ int mbus_client_disconnect (struct mbus_client *client);
 int mbus_client_register (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
 
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event);
+int mbus_client_subscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout);
 int mbus_client_subscribe_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
+int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout);
+
 int mbus_client_unsubscribe (struct mbus_client *client, const char *source, const char *event);
+int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout);
 
 int mbus_client_publish (struct mbus_client *client, const char *event, const struct mbus_json *payload);
 int mbus_client_publish_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout);
