@@ -186,10 +186,11 @@ static void mbus_client_receiver_callback_connect (struct mbus_client *client, v
 	}
 }
 
-static void mbus_client_sender_callback_command_put_result (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static void mbus_client_sender_callback_command_put_result (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
 {
 	struct sender_param *param = context;
 	(void) client;
+	(void) status;
 	param->result = mbus_client_message_command_response_result(message);
 	param->finished = 1;
 }

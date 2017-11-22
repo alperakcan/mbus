@@ -99,6 +99,12 @@ enum mbus_client_unregister_status {
 	mbus_client_unregister_status_timeout
 };
 
+enum mbus_client_command_status {
+	mbus_client_command_status_success,
+	mbus_client_command_status_internal_error,
+	mbus_client_command_status_timeout
+};
+
 struct mbus_client_options {
 	char *name;
 	char *server_protocol;
@@ -176,10 +182,10 @@ int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char
 int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
 int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
 
-int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
-int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
-int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout);
-int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout);
+int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context);
+int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context);
+int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout);
+int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout);
 
 int mbus_client_break (struct mbus_client *client);
 int mbus_client_get_run_timeout (struct mbus_client *client);
@@ -191,6 +197,8 @@ const char * mbus_client_message_event_destination (struct mbus_client_message *
 const char * mbus_client_message_event_identifier (struct mbus_client_message *message);
 const struct mbus_json * mbus_client_message_event_payload (struct mbus_client_message *message);
 
+const char * mbus_client_message_command_request_destination (struct mbus_client_message *message);
+const char * mbus_client_message_command_request_identifier (struct mbus_client_message *message);
 const struct mbus_json * mbus_client_message_command_request_payload (struct mbus_client_message *message);
 const struct mbus_json * mbus_client_message_command_response_payload (struct mbus_client_message *message);
 int mbus_client_message_command_response_result (struct mbus_client_message *message);
@@ -204,3 +212,4 @@ const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_s
 const char * mbus_client_publish_status_string (enum mbus_client_publish_status status);
 const char * mbus_client_subscribe_status_string (enum mbus_client_subscribe_status status);
 const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe_status status);
+const char * mbus_client_command_status_string (enum mbus_client_command_status status);

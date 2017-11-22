@@ -71,11 +71,12 @@ struct arg {
 	int result;
 };
 
-static void mbus_client_callback_command (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static void mbus_client_callback_command (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
 {
 	struct arg *arg = context;
 	char *string;
 	(void) client;
+	(void) status;
 	if (mbus_client_message_command_response_result(message) == 0) {
 		string = mbus_json_print(mbus_client_message_command_response_payload(message));
 		if (string == NULL) {

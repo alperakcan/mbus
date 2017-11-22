@@ -92,6 +92,34 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	rl_redraw_prompt_last_line();
 }
 
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+{
+	char *string;
+	(void) client;
+	(void) context;
+	(void) message;
+	string = mbus_json_print(mbus_client_message_event_payload(message));
+	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
+	free(string);
+	rl_redraw_prompt_last_line();
+}
+
+static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	rl_redraw_prompt_last_line();
+}
+
+static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	rl_redraw_prompt_last_line();
+}
+
 static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
 	char *string;
@@ -103,34 +131,19 @@ static void mbus_client_callback_message_callback (struct mbus_client *client, v
 	rl_redraw_prompt_last_line();
 }
 
-static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+static void mbus_client_callback_command_callback (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
 {
-	char *string;
+	char *request_string;
+	char *response_string;
 	(void) client;
 	(void) context;
-	(void) message;
-	(void) status;
-	string = mbus_json_print(mbus_client_message_event_payload(message));
-	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
-	free(string);
-	rl_redraw_prompt_last_line();
-}
-
-static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
-{
-	(void) client;
-	(void) context;
-	(void) status;
-	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
-	rl_redraw_prompt_last_line();
-}
-
-static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
-{
-	(void) client;
-	(void) context;
-	(void) status;
-	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	fprintf(stdout, "\033[0G** command callback status: %d, %s\n", status, mbus_client_command_status_string(status));
+	request_string = mbus_json_print(mbus_client_message_command_request_payload(message));
+	response_string = mbus_json_print(mbus_client_message_command_response_payload(message));
+	fprintf(stdout, "request: %s.%s: %s\n", mbus_client_message_command_request_destination(message), mbus_client_message_command_request_identifier(message), request_string);
+	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_result(message), response_string);
+	free(request_string);
+	free(response_string);
 	rl_redraw_prompt_last_line();
 }
 
@@ -509,6 +522,97 @@ bail:	if (jpayload != NULL) {
 	return -1;
 }
 
+static int command_command (int argc, char *argv[])
+{
+	int rc;
+	const char *destination;
+	const char *command;
+	const char *payload;
+	int timeout;
+	struct mbus_json *jpayload;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "destination",required_argument,	0,	'd' },
+		{ "command",	required_argument,	0,	'c' },
+		{ "payload",	required_argument,	0,	'p' },
+		{ "timeout",	required_argument,	0,	't' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	destination = NULL;
+	command = NULL;
+	payload = NULL;
+	timeout = -1;
+
+	jpayload = NULL;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "d:c:p:t:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'd':
+				destination = optarg;
+				break;
+			case 'c':
+				command = optarg;
+				break;
+			case 'p':
+				payload = optarg;
+				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
+			case 'h':
+				fprintf(stdout, "command to a destination/event\n");
+				fprintf(stdout, "  -d / --destination: destination to execute command (default: %s)\n", destination);
+				fprintf(stdout, "  -c / --command    : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -p / --payload    : command payload (default: %s)\n", payload);
+				fprintf(stdout, "  -t / --timeout    : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h / --help       : this text\n");;
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				goto bail;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		goto bail;
+	}
+	if (destination == NULL) {
+		fprintf(stderr, "destination is invalid\n");
+		goto bail;
+	}
+	if (command == NULL) {
+		fprintf(stderr, "command is invalid\n");
+		goto bail;
+	}
+	if (payload != NULL) {
+		jpayload = mbus_json_parse(payload);
+		if (jpayload == NULL) {
+			fprintf(stderr, "payload is invalid\n");
+			goto bail;
+		}
+	}
+
+	rc = mbus_client_command_timeout(g_mbus_client, destination, command, jpayload, mbus_client_callback_command_callback, NULL, timeout);
+	if (rc != 0) {
+		fprintf(stderr, "can not execute destination: %s, command: %s, payload: %s\n", destination, command, payload);
+		goto bail;
+	}
+
+	if (jpayload != NULL) {
+		mbus_json_delete(jpayload);
+	}
+	return 0;
+bail:	if (jpayload != NULL) {
+		mbus_json_delete(jpayload);
+	}
+	return -1;
+}
+
 static int command_register (int argc, char *argv[])
 {
 	(void) argc;
@@ -558,6 +662,11 @@ static struct command *commands[] = {
 		"publish",
 		command_publish,
 		"publish an event w/o payload"
+	},
+	&(struct command) {
+		"command",
+		command_command,
+		"execute command on destination/command w/o payload"
 	},
 	&(struct command) {
 		"register",
