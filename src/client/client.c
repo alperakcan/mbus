@@ -612,6 +612,7 @@ static void mbus_client_command_event_response (struct mbus_client *client, void
 	struct mbus_client_message msg;
 	enum mbus_client_publish_status status;
 	(void) context;
+	exit(0);
 	mbus_client_lock(client);
 	if (client->options->callbacks.publish != NULL) {
 		mbus_client_unlock(client);
