@@ -69,7 +69,8 @@ enum mbus_client_disconnect_status {
 
 enum mbus_client_publish_status {
 	mbus_client_publish_status_success,
-	mbus_client_publish_status_internal_error
+	mbus_client_publish_status_internal_error,
+	mbus_client_publish_status_timeout
 };
 
 enum mbus_client_subscribe_status {
