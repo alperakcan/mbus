@@ -633,18 +633,52 @@ static void mbus_client_command_register_response (struct mbus_client *client, v
 		} else {
 			cstatus = mbus_client_register_status_internal_error;
 		}
-		routine_destroy(routine);
+		if (routine != NULL) {
+			routine_destroy(routine);
+		}
 	} else if (mbus_client_message_command_response_result(message) == 0) {
 		cstatus = mbus_client_register_status_success;
-		TAILQ_INSERT_TAIL(&client->routines, routine, routines);
+		if (routine != NULL) {
+			TAILQ_INSERT_TAIL(&client->routines, routine, routines);
+		}
 	} else {
 		cstatus = mbus_client_register_status_internal_error;
-		routine_destroy(routine);
+		if (routine != NULL) {
+			routine_destroy(routine);
+		}
 	}
 	if (client->options->callbacks.registered != NULL) {
 		mbus_client_unlock(client);
 		client->options->callbacks.registered(client, client->options->callbacks.context,
 				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "command", NULL),
+				cstatus);
+		mbus_client_lock(client);
+	}
+	mbus_client_unlock(client);
+}
+
+static void mbus_client_command_unregister_response (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
+{
+	enum mbus_client_unregister_status cstatus;
+	(void) context;
+	mbus_client_lock(client);
+	if (status != mbus_client_command_status_success) {
+		if (status == mbus_client_command_status_internal_error) {
+			cstatus = mbus_client_unregister_status_internal_error;
+		} else if (status == mbus_client_command_status_timeout) {
+			cstatus = mbus_client_unregister_status_timeout;
+		} else {
+			cstatus = mbus_client_unregister_status_internal_error;
+		}
+	} else if (mbus_client_message_command_response_result(message) == 0) {
+		cstatus = mbus_client_unregister_status_success;
+	} else {
+		cstatus = mbus_client_unregister_status_internal_error;
+	}
+	if (client->options->callbacks.unregistered != NULL) {
+		mbus_client_unlock(client);
+		client->options->callbacks.unregistered(client, client->options->callbacks.context,
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "identifier", NULL),
 				cstatus);
 		mbus_client_lock(client);
 	}
@@ -1734,60 +1768,6 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_register (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
-{
-	int rc;
-	struct routine *routine;
-	struct mbus_json *payload;
-	routine = NULL;
-	payload = NULL;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (client->state != mbus_client_state_connected) {
-		mbus_errorf("client is not connected");
-		goto bail;
-	}
-	if (identifier == NULL) {
-		mbus_errorf("command is invalid");
-		goto bail;
-	}
-	if (callback == NULL) {
-		mbus_errorf("callback is invalid");
-		goto bail;
-	}
-	payload = mbus_json_create_object();
-	if (payload == NULL) {
-		mbus_errorf("can not create json object");
-		goto bail;
-	}
-	rc = mbus_json_add_string_to_object_cs(payload, "command", identifier);
-	if (rc != 0) {
-		mbus_errorf("can not add string to json object");
-		goto bail;
-	}
-	routine = routine_create(identifier, callback, context);
-	if (routine == NULL) {
-		mbus_errorf("can not create routine");
-		goto bail;
-	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, client->options->register_timeout);
-	if (rc != 0) {
-		mbus_errorf("can not execute command");
-		goto bail;
-	}
-	mbus_json_delete(payload);
-	return 0;
-bail:	if (payload != NULL) {
-		mbus_json_delete(payload);
-	}
-	if (routine != NULL) {
-		routine_destroy(routine);
-	}
-	return -1;
-}
-
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event)
 {
 	return mbus_client_subscribe_timeout(client, source, event, client->options->subscribe_timeout);
@@ -2196,6 +2176,137 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
 	return 0;
 bail:	return -1;
+}
+
+int mbus_client_register (struct mbus_client *client, const char *identifier)
+{
+	return mbus_client_register_timeout(client, identifier, client->options->register_timeout);
+}
+
+int mbus_client_register_timeout (struct mbus_client *client, const char *identifier, int timeout)
+{
+	return mbus_client_register_callback_timeout(client, identifier, NULL, NULL, timeout);
+}
+
+int mbus_client_register_callback (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_register_callback_timeout(client, identifier, callback, context, client->options->register_timeout);
+}
+
+int mbus_client_register_callback_timeout (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+{
+	int rc;
+	struct routine *routine;
+	struct mbus_json *payload;
+	routine = NULL;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
+		timeout = client->options->subscribe_timeout;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(payload, "command", identifier);
+	if (rc != 0) {
+		mbus_errorf("can not add string to json object");
+		goto bail;
+	}
+	if (callback != NULL) {
+		routine = routine_create(identifier, callback, context);
+		if (routine == NULL) {
+			mbus_errorf("can not create routine");
+			goto bail;
+		}
+	}
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
+	if (rc != 0) {
+		mbus_errorf("can not execute command");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	if (routine != NULL) {
+		routine_destroy(routine);
+	}
+	return -1;
+}
+
+int mbus_client_unregister (struct mbus_client *client, const char *identifier)
+{
+	return mbus_client_unregister_timeout(client, identifier, client->options->register_timeout);
+}
+
+int mbus_client_unregister_timeout (struct mbus_client *client, const char *identifier, int timeout)
+{
+	int rc;
+	struct mbus_json *payload;
+	struct routine *routine;
+	struct routine *nroutine;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
+		timeout = client->options->subscribe_timeout;
+	}
+	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
+		if (strcmp(routine_get_identifier(routine), identifier) == 0) {
+			TAILQ_REMOVE(&client->routines, routine, routines);
+			routine_destroy(routine);
+		}
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(payload, "command", identifier);
+	if (rc != 0) {
+		mbus_errorf("can not add string to json object");
+		goto bail;
+	}
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
+	if (rc != 0) {
+		mbus_errorf("can not execute command");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	if (routine != NULL) {
+		routine_destroy(routine);
+	}
+	return -1;
 }
 
 int mbus_client_break (struct mbus_client *client)

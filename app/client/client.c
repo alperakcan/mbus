@@ -120,6 +120,22 @@ static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *
 	rl_redraw_prompt_last_line();
 }
 
+static void mbus_client_callback_registered (struct mbus_client *client, void *context, const char *command, enum mbus_client_register_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "\033[0G** registered status: %d, %s, command: %s\n", status, mbus_client_subscribe_status_string(status), command);
+	rl_redraw_prompt_last_line();
+}
+
+static void mbus_client_callback_unregistered (struct mbus_client *client, void *context, const char *command, enum mbus_client_unregister_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "\033[0G** unregistered status: %d, %s, command: %s\n", status, mbus_client_subscribe_status_string(status), command);
+	rl_redraw_prompt_last_line();
+}
+
 static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
 	char *string;
@@ -145,6 +161,16 @@ static void mbus_client_callback_command_callback (struct mbus_client *client, v
 	free(request_string);
 	free(response_string);
 	rl_redraw_prompt_last_line();
+}
+
+static int mbus_client_callback_routine_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	(void) client;
+	(void) context;
+	(void) message;
+	fprintf(stdout, "\033[0G** routine callback\n");
+	rl_redraw_prompt_last_line();
+	return 0;
 }
 
 static char * readline_strip (char *buf)
@@ -615,16 +641,127 @@ bail:	if (jpayload != NULL) {
 
 static int command_register (int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
+	int rc;
+	const char *command;
+	int callback;
+	int timeout;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "command",	required_argument,	0,	'c' },
+		{ "callback",	required_argument,	0,	'b' },
+		{ "timeout",	required_argument,	0,	't' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	command = NULL;
+	callback = 0;
+	timeout = -1;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "c:t:b:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'c':
+				command = optarg;
+				break;
+			case 'b':
+				callback = atoi(optarg);
+				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
+			case 'h':
+				fprintf(stdout, "command to a destination/event\n");
+				fprintf(stdout, "  -c / --command : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -b / --callback: register with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -t / --timeout : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h / --help    : this text\n");;
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				goto bail;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		goto bail;
+	}
+	if (command == NULL) {
+		fprintf(stderr, "command is invalid\n");
+		goto bail;
+	}
+
+	if (callback == 0) {
+		rc = mbus_client_register_timeout(g_mbus_client, command, timeout);
+	} else {
+		rc = mbus_client_register_callback_timeout(g_mbus_client, command, mbus_client_callback_routine_callback, NULL, timeout);
+	}
+	if (rc != 0) {
+		fprintf(stderr, "can not register command: %s\n", command);
+		goto bail;
+	}
+
 	return 0;
+bail:	return -1;
 }
 
 static int command_unregister (int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
+	int rc;
+	const char *command;
+	int timeout;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "command",	required_argument,	0,	'c' },
+		{ "timeout",	required_argument,	0,	't' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	command = NULL;
+	timeout = -1;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "c:t:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'c':
+				command = optarg;
+				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
+			case 'h':
+				fprintf(stdout, "command to a destination/event\n");
+				fprintf(stdout, "  -c / --command : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -t / --timeout : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h / --help    : this text\n");;
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				goto bail;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		goto bail;
+	}
+	if (command == NULL) {
+		fprintf(stderr, "command is invalid\n");
+		goto bail;
+	}
+
+	rc = mbus_client_unregister_timeout(g_mbus_client, command, timeout);
+	if (rc != 0) {
+		fprintf(stderr, "can not unregister command: %s\n", command);
+		goto bail;
+	}
+
 	return 0;
+bail:	return -1;
 }
 
 static struct command *commands[] = {
@@ -852,12 +989,14 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
-	options.callbacks.connect    = mbus_client_callback_connect;
-	options.callbacks.disconnect = mbus_client_callback_disconnect;
-	options.callbacks.message    = mbus_client_callback_message;
-	options.callbacks.publish    = mbus_client_callback_publish;
-	options.callbacks.subscribe  = mbus_client_callback_subscribe;
-	options.callbacks.unsubscribe= mbus_client_callback_unsubscribe;
+	options.callbacks.connect     = mbus_client_callback_connect;
+	options.callbacks.disconnect  = mbus_client_callback_disconnect;
+	options.callbacks.message     = mbus_client_callback_message;
+	options.callbacks.publish     = mbus_client_callback_publish;
+	options.callbacks.subscribe   = mbus_client_callback_subscribe;
+	options.callbacks.unsubscribe = mbus_client_callback_unsubscribe;
+	options.callbacks.registered  = mbus_client_callback_registered;
+	options.callbacks.unregistered= mbus_client_callback_unregistered;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
 		fprintf(stderr, "can not create client\n");

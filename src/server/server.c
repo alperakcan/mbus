@@ -1170,6 +1170,31 @@ bail:	command_destroy(command);
 	return -1;
 }
 
+static int client_del_command (struct client *client, const char *identifier)
+{
+	struct command *command;
+	command = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	TAILQ_FOREACH(command, &client->commands, commands) {
+		if (strcmp(command_get_identifier(command), identifier) == 0) {
+			break;
+		}
+	}
+	TAILQ_REMOVE(&client->commands, command, commands);
+	command_destroy(command);
+	mbus_infof("unregistered '%s' '%s'", client_get_name(client), identifier);
+	return 0;
+bail:	command_destroy(command);
+	return -1;
+}
+
 static int client_get_requests_count (struct client *client)
 {
 	if (client == NULL) {
@@ -2065,6 +2090,32 @@ static int server_handle_command_register (struct mbus_server *server, struct me
 bail:	return -1;
 }
 
+static int server_handle_command_unregister (struct mbus_server *server, struct method *method)
+{
+	int rc;
+	const char *command;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	if (method == NULL) {
+		mbus_errorf("method is null");
+		goto bail;
+	}
+	command = mbus_json_get_string_value(method_get_request_payload(method), "command", NULL);
+	if (command == NULL) {
+		mbus_errorf("invalid request");
+		goto bail;
+	}
+	rc = client_del_command(method_get_source(method), command);
+	if (rc != 0) {
+		mbus_errorf("can not add subscription");
+		goto bail;
+	}
+	return 0;
+bail:	return -1;
+}
+
 static int server_handle_command_event (struct mbus_server *server, struct method *method)
 {
 	int rc;
@@ -2433,6 +2484,8 @@ static int server_handle_methods (struct mbus_server *server)
 					rc = server_handle_command_unsubscribe(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 					rc = server_handle_command_register(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+					rc = server_handle_command_unregister(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {
 					rc = server_handle_command_result(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_EVENT) == 0) {

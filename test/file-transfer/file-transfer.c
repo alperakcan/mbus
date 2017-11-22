@@ -175,7 +175,7 @@ static void mbus_client_receiver_callback_connect (struct mbus_client *client, v
 	int rc;
 	struct receiver_param *param = context;
 	if (status == mbus_client_connect_status_success) {
-		rc = mbus_client_register(client, "command.put", mbus_client_receiver_callback_command_put, param);
+		rc = mbus_client_register_callback(client, "command.put", mbus_client_receiver_callback_command_put, param);
 		if (rc != 0) {
 			param->result = -1;
 			param->finished = 1;
