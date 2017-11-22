@@ -3059,6 +3059,34 @@ int mbus_client_message_command_response_result (struct mbus_client_message *mes
 bail:	return -1;
 }
 
+const char * mbus_client_message_routine_request_source (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_routine) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_string_value(message->u.routine.request, "source", NULL);
+bail:	return NULL;
+}
+
+const char * mbus_client_message_routine_request_identifier (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_command) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_string_value(message->u.command.request, "identifier", NULL);
+bail:	return NULL;
+}
+
 const struct mbus_json * mbus_client_message_routine_request_payload (struct mbus_client_message *message)
 {
 	if (message == NULL) {

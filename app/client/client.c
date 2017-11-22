@@ -92,6 +92,18 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	rl_redraw_prompt_last_line();
 }
 
+static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	char *string;
+	(void) client;
+	(void) context;
+	string = mbus_json_print(mbus_client_message_routine_request_payload(message));
+	fprintf(stdout, "\033[0G** routine: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), string);
+	free(string);
+	rl_redraw_prompt_last_line();
+	return 0;
+}
+
 static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
 {
 	char *string;
@@ -992,6 +1004,7 @@ int main (int argc, char *argv[])
 	options.callbacks.connect     = mbus_client_callback_connect;
 	options.callbacks.disconnect  = mbus_client_callback_disconnect;
 	options.callbacks.message     = mbus_client_callback_message;
+	options.callbacks.routine     = mbus_client_callback_routine;
 	options.callbacks.publish     = mbus_client_callback_publish;
 	options.callbacks.subscribe   = mbus_client_callback_subscribe;
 	options.callbacks.unsubscribe = mbus_client_callback_unsubscribe;

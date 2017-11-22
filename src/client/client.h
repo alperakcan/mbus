@@ -210,6 +210,8 @@ const struct mbus_json * mbus_client_message_command_request_payload (struct mbu
 const struct mbus_json * mbus_client_message_command_response_payload (struct mbus_client_message *message);
 int mbus_client_message_command_response_result (struct mbus_client_message *message);
 
+const char * mbus_client_message_routine_request_source (struct mbus_client_message *message);
+const char * mbus_client_message_routine_request_identifier (struct mbus_client_message *message);
 const struct mbus_json * mbus_client_message_routine_request_payload (struct mbus_client_message *message);
 int mbus_client_message_routine_set_response_payload (struct mbus_client_message *message, const struct mbus_json *payload);
 
