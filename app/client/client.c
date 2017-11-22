@@ -70,7 +70,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** connect: %d, %s\n", status, mbus_client_connect_status_string(status));
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
@@ -78,7 +78,7 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** disconnect: %d, %s\n", status, mbus_client_disconnect_status_string(status));
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -89,7 +89,7 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** message: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -100,7 +100,7 @@ static int mbus_client_callback_routine (struct mbus_client *client, void *conte
 	string = mbus_json_print(mbus_client_message_routine_request_payload(message));
 	fprintf(stdout, "\033[0G** routine: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), string);
 	free(string);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 	return 0;
 }
 
@@ -113,7 +113,7 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
@@ -121,7 +121,7 @@ static void mbus_client_callback_subscribe (struct mbus_client *client, void *co
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
@@ -129,7 +129,7 @@ static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_unsubscribe_status_string(status), source, event);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_registered (struct mbus_client *client, void *context, const char *command, enum mbus_client_register_status status)
@@ -137,7 +137,7 @@ static void mbus_client_callback_registered (struct mbus_client *client, void *c
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** registered status: %d, %s, command: %s\n", status, mbus_client_register_status_string(status), command);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_unregistered (struct mbus_client *client, void *context, const char *command, enum mbus_client_unregister_status status)
@@ -145,7 +145,7 @@ static void mbus_client_callback_unregistered (struct mbus_client *client, void 
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** unregistered status: %d, %s, command: %s\n", status, mbus_client_unregister_status_string(status), command);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -156,7 +156,7 @@ static void mbus_client_callback_message_callback (struct mbus_client *client, v
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** message callback: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static void mbus_client_callback_command_callback (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
@@ -172,7 +172,7 @@ static void mbus_client_callback_command_callback (struct mbus_client *client, v
 	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_result(message), response_string);
 	free(request_string);
 	free(response_string);
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 }
 
 static int mbus_client_callback_routine_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -181,7 +181,7 @@ static int mbus_client_callback_routine_callback (struct mbus_client *client, vo
 	(void) context;
 	(void) message;
 	fprintf(stdout, "\033[0G** routine callback\n");
-	rl_redraw_prompt_last_line();
+	rl_on_new_line ();
 	return 0;
 }
 
@@ -1060,7 +1060,6 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	rl_clear_history();
 	rl_cleanup_after_signal();
 	clear_history();
 
@@ -1073,7 +1072,6 @@ bail:	if (client != NULL) {
 	if (_argv != NULL) {
 		free(_argv);
 	}
-	rl_clear_history();
 	rl_cleanup_after_signal();
 	clear_history();
 	return -1;
