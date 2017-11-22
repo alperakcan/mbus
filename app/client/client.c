@@ -782,7 +782,7 @@ int main (int argc, char *argv[])
 			npollfd += 1;
 		}
 
-		rc = poll(pollfd, npollfd, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
+		rc = poll(pollfd, npollfd, mbus_client_get_run_timeout(client));
 		if (rc < 0) {
 			fprintf(stderr, "poll failed with: %d\n", rc);
 			goto bail;

@@ -57,6 +57,13 @@
 #include "mbus/version.h"
 #include "client.h"
 
+#if !defined(MIN)
+#define MIN(a, b)	(((a) < (b)) ? (a) : (b))
+#endif
+#if !defined(MAX)
+#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
+#endif
+
 #define OPTION_HELP			0x100
 #define OPTION_DEBUG_LEVEL		0x101
 #define OPTION_NAME			0x201
@@ -1598,7 +1605,14 @@ int mbus_client_has_pending (struct mbus_client *client)
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_buffer_length(client->outgoing) > 0;
+	if (client->requests.count > 0 ||
+	    client->pendings.count > 0 ||
+	    mbus_buffer_length(client->incoming) > 0 ||
+	    mbus_buffer_length(client->outgoing) > 0) {
+		rc = 1;
+	} else {
+		rc = 0;
+	}
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -1868,24 +1882,29 @@ int mbus_client_publish (struct mbus_client *client, const char *event, const st
 	return mbus_client_publish_timeout(client, event, payload, client->options->publish_timeout);
 }
 
+int mbus_client_publish_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+{
+	return mbus_client_publish_timeout_unlocked(client, event, payload, client->options->publish_timeout);
+}
+
 int mbus_client_publish_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
 {
 	return mbus_client_publish_to_timeout(client, NULL, event, payload, timeout);
 }
 
-int mbus_client_publish_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
 {
-	return mbus_client_publish_unlocked_timeout(client, event, payload, client->options->publish_timeout);
-}
-
-int mbus_client_publish_unlocked_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
-{
-	return mbus_client_publish_to_unlocked_timeout(client, NULL, event, payload, timeout);
+	return mbus_client_publish_to_timeout_unlocked(client, NULL, event, payload, timeout);
 }
 
 int mbus_client_publish_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
 {
 	return mbus_client_publish_to_timeout(client, destination, event, payload, client->options->publish_timeout);
+}
+
+int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
+{
+	return mbus_client_publish_to_timeout_unlocked(client, destination, event, payload, client->options->publish_timeout);
 }
 
 int mbus_client_publish_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
@@ -1896,7 +1915,7 @@ int mbus_client_publish_to_timeout (struct mbus_client *client, const char *dest
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_client_publish_to_unlocked_timeout(client, destination, event, payload, timeout);
+	rc = mbus_client_publish_to_timeout_unlocked(client, destination, event, payload, timeout);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -1905,12 +1924,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
-{
-	return mbus_client_publish_to_unlocked_timeout(client, destination, event, payload, client->options->publish_timeout);
-}
-
-int mbus_client_publish_to_unlocked_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
 {
 	struct request *request;
 	request = NULL;
@@ -1953,24 +1967,29 @@ int mbus_client_publish_sync (struct mbus_client *client, const char *event, con
 	return mbus_client_publish_sync_timeout(client, event, payload, client->options->publish_timeout);
 }
 
+int mbus_client_publish_sync_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+{
+	return mbus_client_publish_sync_timeout_unlocked(client, event, payload, client->options->publish_timeout);
+}
+
 int mbus_client_publish_sync_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
 {
 	return mbus_client_publish_sync_to_timeout(client, NULL, event, payload, timeout);
 }
 
-int mbus_client_publish_sync_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_sync_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
 {
-	return mbus_client_publish_sync_unlocked_timeout(client, event, payload, client->options->publish_timeout);
-}
-
-int mbus_client_publish_sync_unlocked_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
-{
-	return mbus_client_publish_sync_to_unlocked_timeout(client, NULL, event, payload, timeout);
+	return mbus_client_publish_sync_to_timeout_unlocked(client, NULL, event, payload, timeout);
 }
 
 int mbus_client_publish_sync_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
 {
 	return mbus_client_publish_sync_to_timeout(client, destination, event, payload, client->options->publish_timeout);
+}
+
+int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
+{
+	return mbus_client_publish_sync_to_timeout_unlocked(client, destination, event, payload, client->options->publish_timeout);
 }
 
 int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
@@ -1981,7 +2000,7 @@ int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char 
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_client_publish_sync_to_unlocked_timeout(client, destination, event, payload, timeout);
+	rc = mbus_client_publish_sync_to_timeout_unlocked(client, destination, event, payload, timeout);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -1990,12 +2009,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
-{
-	return mbus_client_publish_sync_to_unlocked_timeout(client, destination, event, payload, client->options->publish_timeout);
-}
-
-int mbus_client_publish_sync_to_unlocked_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
 {
 	struct request *request;
 	struct mbus_json *jdata;
@@ -2140,6 +2154,82 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
+int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
+{
+	int timeout;
+	unsigned long current;
+	struct request *request;
+	timeout = -1;
+	current = mbus_clock_get();
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (client->state == mbus_client_state_connecting) {
+		if (client->socket == NULL) {
+			timeout = client->options->connect_interval;
+		} else if (client->socket_connected == 0) {
+			timeout = client->options->connect_timeout;
+		}
+	} else if (client->state == mbus_client_state_connected) {
+		if (client->ping_interval > 0) {
+			if (mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
+				timeout = 0;
+			} else {
+				timeout = (long) ((client->ping_send_tsms + client->ping_interval) - (current));
+			}
+		}
+		TAILQ_FOREACH(request, &client->requests, requests) {
+			if (request_get_timeout(request) >= 0) {
+				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
+					timeout = 0;
+				} else {
+					timeout = MIN(timeout, (long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+				}
+			}
+		}
+		TAILQ_FOREACH(request, &client->pendings, requests) {
+			if (request_get_timeout(request) >= 0) {
+				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
+					timeout = 0;
+				} else {
+					timeout = MIN(timeout, (long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+				}
+			}
+		}
+	} else if (client->state == mbus_client_state_disconnecting) {
+		timeout = 0;
+	} else if (client->state == mbus_client_state_disconnected) {
+		if (client->options->connect_interval > 0) {
+			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
+				timeout = 0;
+			} else {
+				timeout = (long) ((client->connect_tsms + client->options->connect_interval) - (current));
+			}
+		}
+	}
+	return timeout;
+bail:	return -1;
+}
+
+int mbus_client_get_run_timeout (struct mbus_client *client)
+{
+	int timeout;
+	timeout = -1;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	timeout = mbus_client_get_run_timeout_unlocked(client);
+	mbus_client_unlock(client);
+	return timeout;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
 int mbus_client_run (struct mbus_client *client, int timeout)
 {
 	int rc;
@@ -2150,6 +2240,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 
 	int read_rc;
 	int write_rc;
+	int ptimeout;
 	int npollfds;
 	struct pollfd pollfds[2];
 
@@ -2218,8 +2309,14 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			timeout = (timeout < client->options->connect_timeout) ? (timeout) : (client->options->connect_timeout);
 		}
 	}
+	ptimeout = mbus_client_get_run_timeout_unlocked(client);
+	if (ptimeout < 0 || timeout < 0) {
+		ptimeout = MAX(ptimeout, timeout);
+	} else {
+		ptimeout = MIN(ptimeout, timeout);
+	}
 	mbus_client_unlock(client);
-	rc = poll(pollfds, npollfds, timeout);
+	rc = poll(pollfds, npollfds, ptimeout);
 	mbus_client_lock(client);
 	if (rc == 0) {
 		goto out;
