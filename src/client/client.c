@@ -260,12 +260,28 @@ static const char * request_get_type (struct request *request)
 	return mbus_json_get_string_value(request->json, "type", NULL);
 }
 
-static const struct mbus_json * request_get_payload (struct request *request)
+static const char * request_get_destination (struct request *request)
 {
 	if (request == NULL) {
 		return NULL;
 	}
-	return mbus_json_get_object(request->json, "payload");
+	return mbus_json_get_string_value(request->json, "destination", NULL);
+}
+
+static const char * request_get_identifier (struct request *request)
+{
+	if (request == NULL) {
+		return NULL;
+	}
+	return mbus_json_get_string_value(request->json, "identifier", NULL);
+}
+
+static const struct mbus_json * request_get_json (struct request *request)
+{
+	if (request == NULL) {
+		return NULL;
+	}
+	return request->json;
 }
 
 static const char * request_get_string (struct request *request)
@@ -828,7 +844,7 @@ static int mbus_client_message_handle_result (struct mbus_client *client, const 
 
 	if (request->callback != NULL) {
 		message.type = mbus_client_message_type_command;
-		message.u.command.request = request->json;
+		message.u.command.request = request_get_json(request);
 		message.u.command.response = json;
 		mbus_client_unlock(client);
 		request->callback(client, request->context, &message);
@@ -1382,6 +1398,10 @@ int mbus_client_register (struct mbus_client *client, const char *identifier, in
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
 	if (identifier == NULL) {
 		mbus_errorf("command is invalid");
 		goto bail;
@@ -1430,6 +1450,10 @@ int mbus_client_subscribe (struct mbus_client *client, const char *source, const
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
 	if (source == NULL) {
 		mbus_debugf("source is invalid, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
 		source = MBUS_METHOD_EVENT_SOURCE_ALL;
@@ -1473,6 +1497,10 @@ int mbus_client_unsubscribe (struct mbus_client *client, const char *source, con
 	payload = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
 		goto bail;
 	}
 	if (source == NULL) {
@@ -1546,9 +1574,13 @@ int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *des
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	if (destination == NULL) {
-		mbus_errorf("destination is invalid");
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
 		goto bail;
+	}
+	if (destination == NULL) {
+		mbus_debugf("destination is invalid, using: %s", MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS);
+		destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
 	}
 	if (event == NULL) {
 		mbus_errorf("command is invalid");
@@ -1607,9 +1639,13 @@ int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	if (destination == NULL) {
-		mbus_errorf("destination is invalid");
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
 		goto bail;
+	}
+	if (destination == NULL) {
+		mbus_debugf("destination is invalid, using: %s", MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS);
+		destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
 	}
 	if (event == NULL) {
 		mbus_errorf("event is invalid");
@@ -1711,7 +1747,47 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 bail:	return -1;
 }
 
-int mbus_client_get_fd (struct mbus_client *client)
+int mbus_client_get_wakeup_fd (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	if (client->socket == NULL) {
+		goto bail;
+	}
+	rc = client->wakeup[0];
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_get_wakeup_fd_events (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	if (client->socket == NULL) {
+		goto bail;
+	}
+	rc = POLLIN;
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return 0;
+}
+
+int mbus_client_get_connection_fd (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -1731,7 +1807,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_get_fd_events (struct mbus_client *client)
+int mbus_client_get_connection_fd_events (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -2135,15 +2211,18 @@ out:
 		}
 		TAILQ_REMOVE(&client->requests, request, requests);
 		if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-			struct mbus_client_message msg;
-			enum mbus_client_publish_status status;
-			if (client->options->callbacks.publish != NULL) {
-				mbus_client_unlock(client);
-				status = mbus_client_publish_status_success;
-				msg.type = mbus_client_message_type_event;
-				msg.u.event.payload = request_get_payload(request);
-				client->options->callbacks.publish(client, client->options->callbacks.context, &msg, status);
-				mbus_client_lock(client);
+			if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
+			    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+				struct mbus_client_message msg;
+				enum mbus_client_publish_status status;
+				if (client->options->callbacks.publish != NULL) {
+					mbus_client_unlock(client);
+					status = mbus_client_publish_status_success;
+					msg.type = mbus_client_message_type_event;
+					msg.u.event.payload = request_get_json(request);
+					client->options->callbacks.publish(client, client->options->callbacks.context, &msg, status);
+					mbus_client_lock(client);
+				}
 			}
 			request_destroy(request);
 		} else {
@@ -2170,6 +2249,20 @@ const char * mbus_client_message_event_source (struct mbus_client_message *messa
 		goto bail;
 	}
 	return mbus_json_get_string_value(message->u.event.payload, "source", NULL);
+bail:	return NULL;
+}
+
+const char * mbus_client_message_event_destination (struct mbus_client_message *message)
+{
+	if (message == NULL) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	if (message->type != mbus_client_message_type_event) {
+		mbus_errorf("message is invalid");
+		goto bail;
+	}
+	return mbus_json_get_string_value(message->u.event.payload, "destination", NULL);
 bail:	return NULL;
 }
 
@@ -2316,6 +2409,33 @@ const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_s
 		case mbus_client_disconnect_status_success:		return "success";
 		case mbus_client_disconnect_status_internal_error:	return "internal error";
 		case mbus_client_disconnect_status_connection_closed:	return "connection closed";
+	}
+	return "internal error";
+}
+
+const char * mbus_client_publish_status_string (enum mbus_client_publish_status status)
+{
+	switch (status) {
+		case mbus_client_publish_status_success:		return "success";
+		case mbus_client_publish_status_internal_error:	return "internal error";
+	}
+	return "internal error";
+}
+
+const char * mbus_client_subscribe_status_string (enum mbus_client_subscribe_status status)
+{
+	switch (status) {
+		case mbus_client_subscribe_status_success:		return "success";
+		case mbus_client_subscribe_status_internal_error:	return "internal error";
+	}
+	return "internal error";
+}
+
+const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe_status status)
+{
+	switch (status) {
+		case mbus_client_unsubscribe_status_success:		return "success";
+		case mbus_client_unsubscribe_status_internal_error:	return "internal error";
 	}
 	return "internal error";
 }

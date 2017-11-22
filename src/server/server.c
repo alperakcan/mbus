@@ -1076,6 +1076,37 @@ static const char * client_get_name (struct client *client)
 	return client->name;
 }
 
+static int client_del_subscription (struct client *client, const char *source, const char *event)
+{
+	struct subscription *subscription;
+	subscription = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	if (source == NULL) {
+		mbus_errorf("source is null");
+		goto bail;
+	}
+	if (event == NULL) {
+		mbus_errorf("event is null");
+		goto bail;
+	}
+	TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
+		if ((strcmp(subscription_get_source(subscription), source) == 0) &&
+		    (strcmp(subscription_get_event(subscription), event) == 0)) {
+			break;
+		}
+	}
+	if (subscription != NULL) {
+		TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
+		subscription_destroy(subscription);
+		mbus_infof("unsubscribed '%s' from '%s', '%s'", client_get_name(client), source, event);
+		return 0;
+	}
+bail:	return -1;
+}
+
 static int client_add_subscription (struct client *client, const char *source, const char *event)
 {
 	struct subscription *subscription;
@@ -1497,6 +1528,12 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		}
 	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_ALL) == 0) {
 		TAILQ_FOREACH(client, &server->clients, clients) {
+			if (client_get_name(client) == NULL) {
+				continue;
+			}
+			if (strcmp(client_get_name(client), source) == 0) {
+				continue;
+			}
 			method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
@@ -1668,6 +1705,48 @@ static int server_send_event_subscribed (struct mbus_server *server, const char 
 	mbus_json_add_string_to_object_cs(payload, "destination", destination);
 	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
 	rc = server_send_event_to(server, MBUS_SERVER_NAME, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_SUBSCRIBED, payload);
+	if (rc != 0) {
+		mbus_errorf("can not send event");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	return -1;
+}
+
+static int server_send_event_unsubscribed (struct mbus_server *server, const char *source, const char *destination, const char *identifier)
+{
+	int rc;
+	struct mbus_json *payload;
+	payload = NULL;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	if (source == NULL) {
+		mbus_errorf("source is null");
+		goto bail;
+	}
+	if (destination == NULL) {
+		mbus_errorf("destination is null");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create payload");
+		goto bail;
+	}
+	mbus_json_add_string_to_object_cs(payload, "source", source);
+	mbus_json_add_string_to_object_cs(payload, "destination", destination);
+	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
+	rc = server_send_event_to(server, MBUS_SERVER_NAME, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_UNSUBSCRIBED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
 		goto bail;
@@ -1919,7 +1998,41 @@ static int server_handle_command_subscribe (struct mbus_server *server, struct m
 	}
 	rc = server_send_event_subscribed(server, client_get_name(method_get_source(method)), source, event);
 	if (rc != 0) {
-		mbus_errorf("can not send connected event");
+		mbus_errorf("can not send subscribed event");
+		goto bail;
+	}
+	return 0;
+bail:	return -1;
+}
+
+static int server_handle_command_unsubscribe (struct mbus_server *server, struct method *method)
+{
+	int rc;
+	const char *source;
+	const char *event;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	if (method == NULL) {
+		mbus_errorf("method is null");
+		goto bail;
+	}
+	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
+	event = mbus_json_get_string_value(method_get_request_payload(method), "event", NULL);
+	if ((source == NULL) ||
+	    (event == NULL)) {
+		mbus_errorf("invalid request");
+		goto bail;
+	}
+	rc = client_del_subscription(method_get_source(method), source, event);
+	if (rc != 0) {
+		mbus_errorf("can not del subscription");
+		goto bail;
+	}
+	rc = server_send_event_unsubscribed(server, client_get_name(method_get_source(method)), source, event);
+	if (rc != 0) {
+		mbus_errorf("can not send unsubscribed event");
 		goto bail;
 	}
 	return 0;
@@ -2316,6 +2429,8 @@ static int server_handle_methods (struct mbus_server *server)
 					rc = server_handle_command_create(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
 					rc = server_handle_command_subscribe(server, method);
+				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+					rc = server_handle_command_unsubscribe(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 					rc = server_handle_command_register(server, method);
 				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {

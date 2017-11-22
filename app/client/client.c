@@ -81,6 +81,44 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 	rl_redraw_prompt_last_line();
 }
 
+static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	char *string;
+	(void) client;
+	(void) context;
+	string = mbus_json_print(mbus_client_message_event_payload(message));
+	fprintf(stdout, "\033[0G** message: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
+	free(string);
+}
+
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+{
+	char *string;
+	(void) client;
+	(void) context;
+	(void) message;
+	(void) status;
+	string = mbus_json_print(mbus_client_message_event_payload(message));
+	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
+	free(string);
+}
+
+static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
+{
+	(void) client;
+	(void) context;
+	(void) status;
+	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+}
+
+static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
+{
+	(void) client;
+	(void) context;
+	(void) status;
+	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+}
+
 static char * readline_strip (char *buf)
 {
 	char *start;
@@ -115,10 +153,30 @@ static int command_quit (int argc, char *argv[])
 static int command_connect (int argc, char *argv[])
 {
 	int rc;
-	(void) argv;
-	if (argc != 0) {
-		return -2;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,	0,	'h' },
+		{ NULL,		0,		NULL,	0 }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'h':
+				fprintf(stdout, "connect\n");
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
 	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		return -1;
+	}
+
 	rc = mbus_client_connect(g_mbus_client);
 	if (rc != 0) {
 		fprintf(stderr, "can not connect client\n");
@@ -130,10 +188,30 @@ static int command_connect (int argc, char *argv[])
 static int command_disconnect (int argc, char *argv[])
 {
 	int rc;
-	(void) argv;
-	if (argc != 0) {
-		return -2;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,	0,	'h' },
+		{ NULL,		0,		NULL,	0 }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'h':
+				fprintf(stdout, "disconnect\n");
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
 	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		return -1;
+	}
+
 	rc = mbus_client_disconnect(g_mbus_client);
 	if (rc != 0) {
 		fprintf(stderr, "can not disconnect client\n");
@@ -144,33 +222,243 @@ static int command_disconnect (int argc, char *argv[])
 
 static int command_get_state (int argc, char *argv[])
 {
-	(void) argv;
-	if (argc != 0) {
-		return -2;
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,	0,	'h' },
+		{ NULL,		0,		NULL,	0 }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'h':
+				fprintf(stdout, "get state\n");
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
 	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		return -1;
+	}
+
 	fprintf(stdout, "state: %s\n", mbus_client_state_string(mbus_client_get_state(g_mbus_client)));
 	return 0;
 }
 
 static int command_subscribe (int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
+	int rc;
+	const char *source;
+	const char *event;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "source",	required_argument,	0,	's' },
+		{ "event",	required_argument,	0,	'e' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	source = NULL;
+	event = NULL;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "s:e:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 's':
+				source = optarg;
+				break;
+			case 'e':
+				event = optarg;
+				break;
+			case 'h':
+				fprintf(stdout, "subscribe to source/event\n");
+				fprintf(stdout, "  -s / --source: event source to subscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e / --event : event identifier to subscribe (default: %s)\n", event);
+				fprintf(stdout, "  -h / --help  : this text\n");;
+				fprintf(stdout, "\n");
+				fprintf(stdout, "special identifiers\n");
+				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
+				fprintf(stdout, "  event all : %s\n", MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		return -1;
+	}
+	if (event == NULL) {
+		fprintf(stderr, "event is invalid\n");
+		return -1;
+	}
+
+	rc = mbus_client_subscribe(g_mbus_client, source, event);
+	if (rc != 0) {
+		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", source, event);
+		return -1;
+	}
 	return 0;
 }
 
 static int command_unsubscribe (int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
+	int rc;
+	const char *source;
+	const char *event;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "source",	required_argument,	0,	's' },
+		{ "event",	required_argument,	0,	'e' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	source = NULL;
+	event = NULL;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "s:e:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 's':
+				source = optarg;
+				break;
+			case 'e':
+				event = optarg;
+				break;
+			case 'h':
+				fprintf(stdout, "unsubscribe from source/event\n");
+				fprintf(stdout, "  -s / --source: event source to unsubscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e / --event : event identifier to unsubscribe (default: %s)\n", event);
+				fprintf(stdout, "  -h / --help  : this text\n");;
+				fprintf(stdout, "\n");
+				fprintf(stdout, "special identifiers\n");
+				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
+				fprintf(stdout, "  event all : %s\n", MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		return -1;
+	}
+	if (event == NULL) {
+		fprintf(stderr, "event is invalid\n");
+		return -1;
+	}
+
+	rc = mbus_client_unsubscribe(g_mbus_client, source, event);
+	if (rc != 0) {
+		fprintf(stderr, "can not unsubscribe from source: %s, event: %s\n", source, event);
+		return -1;
+	}
 	return 0;
 }
 
 static int command_publish (int argc, char *argv[])
 {
-	(void) argc;
-	(void) argv;
+	int rc;
+	const char *destination;
+	const char *event;
+	const char *payload;
+	int sync;
+	struct mbus_json *jpayload;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,		0,	'h' },
+		{ "destination",required_argument,	0,	'd' },
+		{ "event",	required_argument,	0,	'e' },
+		{ "payload",	required_argument,	0,	'p' },
+		{ "sync",	required_argument,	0,	's' },
+		{ NULL,		0,			NULL,	0 }
+	};
+
+	destination = NULL;
+	event = NULL;
+	payload = NULL;
+	sync = 0;
+
+	jpayload = NULL;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "d:e:p:h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'd':
+				destination = optarg;
+				break;
+			case 'e':
+				event = optarg;
+				break;
+			case 'p':
+				payload = optarg;
+				break;
+			case 's':
+				sync = atoi(optarg);
+				break;
+			case 'h':
+				fprintf(stdout, "publish to a destination/event\n");
+				fprintf(stdout, "  -d / --destination: event destination to publish (default: %s)\n", destination);
+				fprintf(stdout, "  -e / --event      : event identifier to publish (default: %s)\n", event);
+				fprintf(stdout, "  -p / --payload    : event payload to publish (default: %s)\n", payload);
+				fprintf(stdout, "  -h / --help       : this text\n");;
+				fprintf(stdout, "\n");
+				fprintf(stdout, "special identifiers\n");
+				fprintf(stdout, "  destination all        : %s\n", MBUS_METHOD_EVENT_DESTINATION_ALL);
+				fprintf(stdout, "  destination subscribers: %s\n", MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS);
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				goto bail;
+		}
+	}
+
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "mbus client is invalid\n");
+		goto bail;
+	}
+	if (event == NULL) {
+		fprintf(stderr, "event is invalid\n");
+		goto bail;
+	}
+	if (payload != NULL) {
+		jpayload = mbus_json_parse(payload);
+		if (jpayload == NULL) {
+			fprintf(stderr, "payload is invalid\n");
+			goto bail;
+		}
+	}
+
+	if (sync == 0) {
+		rc = mbus_client_publish_to(g_mbus_client, destination, event, jpayload);
+	} else {
+		rc = mbus_client_publish_sync_to(g_mbus_client, destination, event, jpayload);
+	}
+	if (rc != 0) {
+		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", destination, event, payload);
+		goto bail;
+	}
+
+	if (jpayload != NULL) {
+		mbus_json_delete(jpayload);
+	}
 	return 0;
+bail:	if (jpayload != NULL) {
+		mbus_json_delete(jpayload);
+	}
+	return -1;
 }
 
 static int command_register (int argc, char *argv[])
@@ -252,6 +540,8 @@ static int readline_process (char *command)
 		return 0;
 	}
 
+	add_history(command);
+
 	ret = 0;
 	argc = 0;
 	argv = NULL;
@@ -297,6 +587,9 @@ static int readline_process (char *command)
 		}
 	}
 
+	argv = (char **) realloc(argv, sizeof(char *) * (argc + 1));
+	argv[argc] = NULL;
+
 	if (strcmp(argv[0], "help") == 0) {
 		fprintf(stdout, "mbus test client cli\n");
 		fprintf(stdout, "\n");
@@ -330,7 +623,7 @@ static int readline_process (char *command)
 	} else {
 		for (pc = commands; *pc; pc++) {
 			if (strcmp((*pc)->name, argv[0]) == 0) {
-				ret = (*pc)->func(argc - 1, &argv[1]);
+				ret = (*pc)->func(argc, &argv[0]);
 				if (ret < 0) {
 					fprintf(stderr, "command: %s failed: %s\n", argv[0], (ret == -2) ? "invalid arguments" : "internal error");
 				}
@@ -350,7 +643,6 @@ static void process_line (char *line)
 	if (line != NULL) {
 		readline_strip(line);
 		readline_process(line);
-		add_history(line);
 		free(line);
 	}
 }
@@ -364,7 +656,7 @@ int main (int argc, char *argv[])
 	char **_argv;
 
 	int npollfd;
-	struct pollfd pollfd[2];
+	struct pollfd pollfd[3];
 
 	struct mbus_client *client;
 	struct mbus_client_options options;
@@ -398,6 +690,10 @@ int main (int argc, char *argv[])
 	}
 	options.callbacks.connect    = mbus_client_callback_connect;
 	options.callbacks.disconnect = mbus_client_callback_disconnect;
+	options.callbacks.message    = mbus_client_callback_message;
+	options.callbacks.publish    = mbus_client_callback_publish;
+	options.callbacks.subscribe  = mbus_client_callback_subscribe;
+	options.callbacks.unsubscribe= mbus_client_callback_unsubscribe;
 	client = mbus_client_create(&options);
 	if (client == NULL) {
 		fprintf(stderr, "can not create client\n");
@@ -417,9 +713,16 @@ int main (int argc, char *argv[])
 		pollfd[npollfd].revents = 0;
 		npollfd += 1;
 
-		if (mbus_client_get_fd(client) >= 0) {
-			pollfd[npollfd].fd = mbus_client_get_fd(client);
-			pollfd[npollfd].events = mbus_client_get_fd_events(client);
+		if (mbus_client_get_wakeup_fd(client) >= 0) {
+			pollfd[npollfd].fd = mbus_client_get_wakeup_fd(client);
+			pollfd[npollfd].events = mbus_client_get_wakeup_fd_events(client);
+			pollfd[npollfd].revents = 0;
+			npollfd += 1;
+		}
+
+		if (mbus_client_get_connection_fd(client) >= 0) {
+			pollfd[npollfd].fd = mbus_client_get_connection_fd(client);
+			pollfd[npollfd].events = mbus_client_get_connection_fd_events(client);
 			pollfd[npollfd].revents = 0;
 			npollfd += 1;
 		}
