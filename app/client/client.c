@@ -92,6 +92,17 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	rl_redraw_prompt_last_line();
 }
 
+static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
+{
+	char *string;
+	(void) client;
+	(void) context;
+	string = mbus_json_print(mbus_client_message_event_payload(message));
+	fprintf(stdout, "\033[0G** message callback: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
+	free(string);
+	rl_redraw_prompt_last_line();
+}
+
 static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
 {
 	char *string;
@@ -258,20 +269,23 @@ static int command_subscribe (int argc, char *argv[])
 	int rc;
 	const char *source;
 	const char *event;
+	int callback;
 
 	int c;
 	struct option long_options[] = {
 		{ "help",	no_argument,		0,	'h' },
 		{ "source",	required_argument,	0,	's' },
 		{ "event",	required_argument,	0,	'e' },
+		{ "callback",	required_argument,	0,	'c' },
 		{ NULL,		0,			NULL,	0 }
 	};
 
 	source = NULL;
 	event = NULL;
+	callback = 0;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "s:e:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "s:e:c:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 's':
 				source = optarg;
@@ -279,11 +293,15 @@ static int command_subscribe (int argc, char *argv[])
 			case 'e':
 				event = optarg;
 				break;
+			case 'c':
+				callback = atoi(optarg);
+				break;
 			case 'h':
 				fprintf(stdout, "subscribe to source/event\n");
-				fprintf(stdout, "  -s / --source: event source to subscribe (default: %s)\n", source);
-				fprintf(stdout, "  -e / --event : event identifier to subscribe (default: %s)\n", event);
-				fprintf(stdout, "  -h / --help  : this text\n");;
+				fprintf(stdout, "  -s / --source  : event source to subscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e / --event   : event identifier to subscribe (default: %s)\n", event);
+				fprintf(stdout, "  -c / --callback: subscribe with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -h / --help    : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
 				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
@@ -304,7 +322,11 @@ static int command_subscribe (int argc, char *argv[])
 		return -1;
 	}
 
-	rc = mbus_client_subscribe(g_mbus_client, source, event);
+	if (callback == 0) {
+		rc = mbus_client_subscribe(g_mbus_client, source, event);
+	} else {
+		rc = mbus_client_subscribe_callback(g_mbus_client, source, event, mbus_client_callback_message_callback, NULL);
+	}
 	if (rc != 0) {
 		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", source, event);
 		return -1;
@@ -417,6 +439,7 @@ static int command_publish (int argc, char *argv[])
 				fprintf(stdout, "  -d / --destination: event destination to publish (default: %s)\n", destination);
 				fprintf(stdout, "  -e / --event      : event identifier to publish (default: %s)\n", event);
 				fprintf(stdout, "  -p / --payload    : event payload to publish (default: %s)\n", payload);
+				fprintf(stdout, "  -s / --sync       : syncronized event (default: %d)\n", sync);
 				fprintf(stdout, "  -h / --help       : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");

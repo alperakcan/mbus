@@ -142,6 +142,7 @@ int mbus_client_disconnect (struct mbus_client *client);
 int mbus_client_register (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
 
 int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event);
+int mbus_client_subscribe_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context);
 int mbus_client_unsubscribe (struct mbus_client *client, const char *source, const char *event);
 
 int mbus_client_publish (struct mbus_client *client, const char *event, const struct mbus_json *payload);
