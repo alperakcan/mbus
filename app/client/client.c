@@ -89,6 +89,7 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** message: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 	free(string);
+	rl_redraw_prompt_last_line();
 }
 
 static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
@@ -101,6 +102,7 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
 	free(string);
+	rl_redraw_prompt_last_line();
 }
 
 static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
@@ -109,6 +111,7 @@ static void mbus_client_callback_subscribe (struct mbus_client *client, void *co
 	(void) context;
 	(void) status;
 	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	rl_redraw_prompt_last_line();
 }
 
 static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
@@ -117,6 +120,7 @@ static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *
 	(void) context;
 	(void) status;
 	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	rl_redraw_prompt_last_line();
 }
 
 static char * readline_strip (char *buf)
@@ -540,7 +544,14 @@ static int readline_process (char *command)
 		return 0;
 	}
 
-	add_history(command);
+	{
+		HIST_ENTRY *hist;
+		hist = current_history();
+		if (hist == NULL ||
+		    strcmp(hist->line, command) != 0) {
+			add_history(command);
+		}
+	}
 
 	ret = 0;
 	argc = 0;
