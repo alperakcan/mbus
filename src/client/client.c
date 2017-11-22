@@ -2303,9 +2303,6 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
-	if (routine != NULL) {
-		routine_destroy(routine);
-	}
 	return -1;
 }
 
@@ -3190,6 +3187,26 @@ const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe
 		case mbus_client_unsubscribe_status_success:			return "success";
 		case mbus_client_unsubscribe_status_internal_error:		return "internal error";
 		case mbus_client_unsubscribe_status_timeout:			return "timeout";
+	}
+	return "internal error";
+}
+
+const char * mbus_client_register_status_string (enum mbus_client_register_status status)
+{
+	switch (status) {
+		case mbus_client_register_status_success:			return "success";
+		case mbus_client_register_status_internal_error:		return "internal error";
+		case mbus_client_register_status_timeout:			return "timeout";
+	}
+	return "internal error";
+}
+
+const char * mbus_client_unregister_status_string (enum mbus_client_unregister_status status)
+{
+	switch (status) {
+		case mbus_client_unregister_status_success:			return "success";
+		case mbus_client_unregister_status_internal_error:		return "internal error";
+		case mbus_client_unregister_status_timeout:			return "timeout";
 	}
 	return "internal error";
 }

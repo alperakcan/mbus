@@ -221,4 +221,6 @@ const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_s
 const char * mbus_client_publish_status_string (enum mbus_client_publish_status status);
 const char * mbus_client_subscribe_status_string (enum mbus_client_subscribe_status status);
 const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe_status status);
+const char * mbus_client_register_status_string (enum mbus_client_register_status status);
+const char * mbus_client_unregister_status_string (enum mbus_client_unregister_status status);
 const char * mbus_client_command_status_string (enum mbus_client_command_status status);

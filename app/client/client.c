@@ -128,7 +128,7 @@ static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *
 {
 	(void) client;
 	(void) context;
-	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
+	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_unsubscribe_status_string(status), source, event);
 	rl_redraw_prompt_last_line();
 }
 
@@ -136,7 +136,7 @@ static void mbus_client_callback_registered (struct mbus_client *client, void *c
 {
 	(void) client;
 	(void) context;
-	fprintf(stdout, "\033[0G** registered status: %d, %s, command: %s\n", status, mbus_client_subscribe_status_string(status), command);
+	fprintf(stdout, "\033[0G** registered status: %d, %s, command: %s\n", status, mbus_client_register_status_string(status), command);
 	rl_redraw_prompt_last_line();
 }
 
@@ -144,7 +144,7 @@ static void mbus_client_callback_unregistered (struct mbus_client *client, void 
 {
 	(void) client;
 	(void) context;
-	fprintf(stdout, "\033[0G** unregistered status: %d, %s, command: %s\n", status, mbus_client_subscribe_status_string(status), command);
+	fprintf(stdout, "\033[0G** unregistered status: %d, %s, command: %s\n", status, mbus_client_unregister_status_string(status), command);
 	rl_redraw_prompt_last_line();
 }
 
