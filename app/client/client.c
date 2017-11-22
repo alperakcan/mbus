@@ -420,7 +420,7 @@ static int command_publish (int argc, char *argv[])
 	jpayload = NULL;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "d:e:p:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:e:p:s:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
 				destination = optarg;
