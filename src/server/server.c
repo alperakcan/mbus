@@ -2070,7 +2070,7 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 	int rc;
 	const char *destination;
 	const char *identifier;
-	struct mbus_json *event;
+	struct mbus_json *payload;
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		goto bail;
@@ -2081,14 +2081,14 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 	}
 	destination = mbus_json_get_string_value(method_get_request_payload(method), "destination", NULL);
 	identifier = mbus_json_get_string_value(method_get_request_payload(method), "identifier", NULL);
-	event = mbus_json_get_object(method_get_request_payload(method), "event");
+	payload = mbus_json_get_object(method_get_request_payload(method), "payload");
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
-	    (event == NULL)) {
+	    (payload == NULL)) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = server_send_event_to(server, client_get_name(method_get_source(method)), destination, identifier, event);
+	rc = server_send_event_to(server, client_get_name(method_get_source(method)), destination, identifier, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
 	}

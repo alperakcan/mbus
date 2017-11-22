@@ -400,6 +400,7 @@ static int command_publish (int argc, char *argv[])
 	const char *event;
 	const char *payload;
 	int sync;
+	int timeout;
 	struct mbus_json *jpayload;
 
 	int c;
@@ -409,6 +410,7 @@ static int command_publish (int argc, char *argv[])
 		{ "event",	required_argument,	0,	'e' },
 		{ "payload",	required_argument,	0,	'p' },
 		{ "sync",	required_argument,	0,	's' },
+		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
 
@@ -416,11 +418,12 @@ static int command_publish (int argc, char *argv[])
 	event = NULL;
 	payload = NULL;
 	sync = 0;
+	timeout = -1;
 
 	jpayload = NULL;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "d:e:p:s:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:e:p:s:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
 				destination = optarg;
@@ -434,12 +437,16 @@ static int command_publish (int argc, char *argv[])
 			case 's':
 				sync = atoi(optarg);
 				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
 			case 'h':
 				fprintf(stdout, "publish to a destination/event\n");
 				fprintf(stdout, "  -d / --destination: event destination to publish (default: %s)\n", destination);
 				fprintf(stdout, "  -e / --event      : event identifier to publish (default: %s)\n", event);
 				fprintf(stdout, "  -p / --payload    : event payload to publish (default: %s)\n", payload);
 				fprintf(stdout, "  -s / --sync       : syncronized event (default: %d)\n", sync);
+				fprintf(stdout, "  -t / --timeout    : publish timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h / --help       : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -469,9 +476,9 @@ static int command_publish (int argc, char *argv[])
 	}
 
 	if (sync == 0) {
-		rc = mbus_client_publish_to(g_mbus_client, destination, event, jpayload);
+		rc = mbus_client_publish_to_timeout(g_mbus_client, destination, event, jpayload, timeout);
 	} else {
-		rc = mbus_client_publish_sync_to(g_mbus_client, destination, event, jpayload);
+		rc = mbus_client_publish_sync_to_timeout(g_mbus_client, destination, event, jpayload, timeout);
 	}
 	if (rc != 0) {
 		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", destination, event, payload);
