@@ -953,6 +953,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	enum mbus_client_connect_status status;
 
 	mbus_client_reset(client);
+	status = mbus_client_connect_status_success;
 
 	if (strcmp(client->options->server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
 		if (client->options->server_port <= 0) {
@@ -1038,34 +1039,28 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	} else if (rc == -EINPROGRESS) {
 	} else if (rc == -ECONNREFUSED) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
-		if (client->options->connect_interval > 0) {
-			status = mbus_client_connect_status_connection_refused;
-			mbus_client_notify_connect(client, status);
-			mbus_client_reset(client);
-			client->state = mbus_client_state_connecting;
-		} else {
-			status = mbus_client_connect_status_connection_refused;
-			goto bail;
-		}
+		status = mbus_client_connect_status_connection_refused;
 	} else if (rc == -ENOENT) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
-		if (client->options->connect_interval > 0) {
-			status = mbus_client_connect_status_server_unavailable;
-			mbus_client_notify_connect(client, status);
-			mbus_client_reset(client);
-			client->state = mbus_client_state_connecting;
-		} else {
-			status = mbus_client_connect_status_server_unavailable;
-			goto bail;
-		}
+		status = mbus_client_connect_status_server_unavailable;
 	} else if (rc != 0) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
 		status = mbus_client_connect_status_internal_error;
 		goto bail;
 	}
 
+	if (status != mbus_client_connect_status_success) {
+		mbus_client_notify_connect(client, status);
+		mbus_client_reset(client);
+		if (client->options->connect_interval > 0) {
+			client->state = mbus_client_state_connecting;
+		} else {
+			client->state = mbus_client_state_disconnected;
+		}
+	}
 	return 0;
 bail:	mbus_client_notify_connect(client, status);
+	mbus_client_reset(client);
 	return -1;
 }
 
