@@ -479,6 +479,10 @@ static struct request * request_create (const char *type, const char *destinatio
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
+	if (timeout < 0) {
+		mbus_errorf("timeout is invalid");
+		goto bail;
+	}
 	request = malloc(sizeof(struct request));
 	if (request == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -506,6 +510,11 @@ static struct request * request_create (const char *type, const char *destinatio
 		goto bail;
 	}
 	rc = mbus_json_add_number_to_object_cs(request->json, "sequence", sequence);
+	if (rc != 0) {
+		mbus_errorf("can not add number to json object");
+		goto bail;
+	}
+	rc = mbus_json_add_number_to_object_cs(request->json, "timeout", timeout);
 	if (rc != 0) {
 		mbus_errorf("can not add number to json object");
 		goto bail;
@@ -2219,6 +2228,10 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->command_timeout);
+		timeout = client->options->command_timeout;
+	}
 	request = request_create(MBUS_METHOD_TYPE_COMMAND, destination, command, client->sequence, payload, callback, context, timeout);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
@@ -2268,8 +2281,8 @@ int mbus_client_register_callback_timeout (struct mbus_client *client, const cha
 		goto bail;
 	}
 	if (timeout < 0) {
-		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
-		timeout = client->options->subscribe_timeout;
+		mbus_debugf("timeout is invalid, using: %d", client->options->register_timeout);
+		timeout = client->options->register_timeout;
 	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
@@ -2329,8 +2342,8 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 		goto bail;
 	}
 	if (timeout < 0) {
-		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
-		timeout = client->options->subscribe_timeout;
+		mbus_debugf("timeout is invalid, using: %d", client->options->register_timeout);
+		timeout = client->options->register_timeout;
 	}
 	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
 		if (strcmp(routine_get_identifier(routine), identifier) == 0) {
@@ -2529,13 +2542,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			}
 		}
 		npollfds += 1;
-	}
-	if (client->state == mbus_client_state_connecting) {
-		if (client->socket == NULL) {
-			timeout = (timeout < client->options->connect_interval) ? (timeout) : (client->options->connect_interval);
-		} else if (client->socket_connected == 0) {
-			timeout = (timeout < client->options->connect_timeout) ? (timeout) : (client->options->connect_timeout);
-		}
 	}
 	ptimeout = mbus_client_get_run_timeout_unlocked(client);
 	if (ptimeout < 0 || timeout < 0) {
