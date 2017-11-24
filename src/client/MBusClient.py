@@ -431,5 +431,8 @@ class MBusClient(object):
     def disconnect (self):
         raise
     
-    def subscribe (self, source, event):
+    def subscribe (self, source, event, callback = None, context = None, timeout = None):
+        raise
+
+    def unsubscribe (self, source, event, timeout = None):
         raise
