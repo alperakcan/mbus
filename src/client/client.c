@@ -66,7 +66,7 @@
 
 #define OPTION_HELP			0x100
 #define OPTION_DEBUG_LEVEL		0x101
-#define OPTION_NAME			0x201
+#define OPTION_IDENTIFIER			0x201
 #define OPTION_SERVER_PROTOCOL		0x202
 #define OPTION_SERVER_ADDRESS		0x203
 #define OPTION_SERVER_PORT		0x204
@@ -82,7 +82,7 @@
 static struct option longopts[] = {
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
-	{ "mbus-client-name",			required_argument,	NULL,	OPTION_NAME },
+	{ "mbus-client-identifier",		required_argument,	NULL,	OPTION_IDENTIFIER },
 	{ "mbus-client-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
 	{ "mbus-client-server-address"	,	required_argument,	NULL,	OPTION_SERVER_ADDRESS },
 	{ "mbus-client-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
@@ -150,8 +150,8 @@ struct mbus_client {
 	struct subscriptions subscriptions;
 	struct mbus_buffer *incoming;
 	struct mbus_buffer *outgoing;
-	char *name;
-	char *client_name;
+	char *identifier;
+	char *client_identifier;
 	int connect_tsms;
 	int ping_interval;
 	int ping_timeout;
@@ -475,7 +475,7 @@ static struct request * request_create (const char *type, const char *destinatio
 		goto bail;
 	}
 	if (sequence < MBUS_METHOD_SEQUENCE_START ||
-	    sequence > MBUS_METHOD_SEQUENCE_END) {
+	    sequence >= MBUS_METHOD_SEQUENCE_END) {
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
@@ -586,9 +586,9 @@ static void mbus_client_reset (struct mbus_client *client)
 		TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
 		subscription_destroy(subscription);
 	}
-	if (client->name != NULL) {
-		free(client->name);
-		client->name = NULL;
+	if (client->identifier != NULL) {
+		free(client->identifier);
+		client->identifier = NULL;
 	}
 	client->ping_interval = 0;
 	client->ping_timeout = 0;
@@ -812,12 +812,12 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		goto bail;
 	}
 	{
-		const char *name;
-		name = mbus_json_get_string_value(response, "name", NULL);
-		if (name != NULL) {
-			free(client->name);
-			client->name = strdup(name);
-			if (client->name == NULL) {
+		const char *identifier;
+		identifier = mbus_json_get_string_value(response, "identifier", NULL);
+		if (identifier != NULL) {
+			free(client->identifier);
+			client->identifier = strdup(identifier);
+			if (client->identifier == NULL) {
 				mbus_errorf("can not allocate memory");
 				goto bail;
 			}
@@ -834,7 +834,7 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		client->ping_threshold = mbus_json_get_int_value(response, "ping/threshold", -1);
 	}
 	mbus_infof("created");
-	mbus_infof("  name       : %s", client->name);
+	mbus_infof("  identifier : %s", client->identifier);
 	mbus_infof("  compression: %s", mbus_compress_method_string(client->compression));
 	mbus_infof("  ping");
 	mbus_infof("    interval : %d", client->ping_interval);
@@ -865,8 +865,8 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 		goto bail;
 	}
 
-	if (client->options->name != NULL) {
-		rc = mbus_json_add_string_to_object_cs(payload, "name", client->options->name);
+	if (client->options->identifier != NULL) {
+		rc = mbus_json_add_string_to_object_cs(payload, "identifier", client->options->identifier);
 		if (rc != 0) {
 			mbus_errorf("can not add string to json object");
 			goto bail;
@@ -924,7 +924,7 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 	}
 	payload_compression = NULL;
 
-	rc = mbus_client_command_unlocked(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, payload, mbus_client_command_create_response, client);
+	rc = mbus_client_command_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, mbus_client_command_create_response, client);
 	if (rc != 0) {
 		mbus_errorf("can not queue client command");
 		goto bail;
@@ -1115,7 +1115,7 @@ static int mbus_client_message_handle_event (struct mbus_client *client, const s
 		goto bail;
 	}
 
-	if (strcasecmp(MBUS_SERVER_NAME, source) == 0 &&
+	if (strcasecmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
 	    strcasecmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
 		client->pong_recv_tsms = mbus_clock_get();
@@ -1150,7 +1150,17 @@ static int mbus_client_message_handle_command (struct mbus_client *client, const
 	const char *source;
 	const char *identifier;
 	struct routine *routine;
+
 	struct mbus_client_message message;
+	struct mbus_json *result_payload;
+
+	int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message);
+	void *callback_context;
+
+	callback = NULL;
+	callback_context = NULL;
+	result_payload = NULL;
+	memset(&message, 0, sizeof(struct mbus_client_message));
 
 	source = mbus_json_get_string_value(json, "source", NULL);
 	if (source == NULL) {
@@ -1163,7 +1173,7 @@ static int mbus_client_message_handle_command (struct mbus_client *client, const
 		goto bail;
 	}
 
-	if (strcasecmp(MBUS_SERVER_NAME, source) == 0 &&
+	if (strcasecmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
 	    strcasecmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
 		client->pong_recv_tsms = mbus_clock_get();
@@ -1171,25 +1181,75 @@ static int mbus_client_message_handle_command (struct mbus_client *client, const
 	} else {
 		TAILQ_FOREACH(routine, &client->routines, routines) {
 			if (strcmp(routine_get_identifier(routine), identifier) == 0) {
-				mbus_client_unlock(client);
-				message.type = mbus_client_message_type_routine;
-				message.u.routine.request = json;
-				message.u.routine.response = NULL;
-				rc = routine_get_callback(routine)(client, routine_get_context(routine), &message);
-				if (rc != 0) {
-
-				}
-				mbus_client_lock(client);
-				if (message.u.routine.response != NULL) {
-					mbus_json_delete(message.u.routine.response);
-				}
+				callback = routine_get_callback(routine);
+				callback_context = routine_get_context(routine);
 				break;
+			}
+		}
+		if (routine == NULL &&
+		    client->options->callbacks.routine != NULL) {
+			callback = client->options->callbacks.routine;
+			callback_context = client->options->callbacks.context;
+		}
+		if (callback != NULL) {
+			message.type = mbus_client_message_type_routine;
+			message.u.routine.request = json;
+			message.u.routine.response = NULL;
+			mbus_client_unlock(client);
+			rc = callback(client, callback_context, &message);
+			mbus_client_lock(client);
+			result_payload = mbus_json_create_object();
+			if (result_payload == NULL) {
+				mbus_errorf("can not create result payload");
+				goto bail;
+			}
+			rc = mbus_json_add_string_to_object_cs(result_payload, "destination", mbus_json_get_string_value(json, "source", NULL));
+			if (rc != 0) {
+				mbus_errorf("can not add destination to payload");
+				goto bail;
+			}
+			rc = mbus_json_add_string_to_object_cs(result_payload, "identifier", mbus_json_get_string_value(json, "identifier", NULL));
+			if (rc != 0) {
+				mbus_errorf("can not add identifier to payload");
+				goto bail;
+			}
+			rc = mbus_json_add_number_to_object_cs(result_payload, "sequence", mbus_json_get_int_value(json, "sequence", -1));
+			if (rc != 0) {
+				mbus_errorf("can not add sequence to payload");
+				goto bail;
+			}
+			rc = mbus_json_add_number_to_object_cs(result_payload, "return", rc);
+			if (rc != 0) {
+				mbus_errorf("can not add return to payload");
+				goto bail;
+			}
+			rc = mbus_json_add_item_to_object_cs(result_payload, "result", mbus_json_duplicate(message.u.routine.response, 1));
+			if (rc != 0) {
+				mbus_errorf("can not add result to payload");
+				goto bail;
+			}
+			rc = mbus_client_command_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_RESULT, result_payload, NULL, NULL);
+			if (rc != 0) {
+				mbus_errorf("can not call command");
+				goto bail;
 			}
 		}
 	}
 
+	if (result_payload != NULL) {
+		mbus_json_delete(result_payload);
+	}
+	if (message.u.routine.response != NULL) {
+		mbus_json_delete(message.u.routine.response);
+	}
 	return 0;
-bail:	return -1;
+bail:	if (message.u.routine.response != NULL) {
+		mbus_json_delete(message.u.routine.response);
+	}
+	if (result_payload != NULL) {
+		mbus_json_delete(result_payload);
+	}
+	return -1;
 }
 
 static void mbus_client_options_destroy (struct mbus_client_options *options)
@@ -1203,8 +1263,8 @@ static void mbus_client_options_destroy (struct mbus_client_options *options)
 	if (options->server_address != NULL) {
 		free(options->server_address);
 	}
-	if (options->name != NULL) {
-		free(options->name);
+	if (options->identifier != NULL) {
+		free(options->identifier);
 	}
 	free(options);
 }
@@ -1242,9 +1302,9 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 		}
 		duplicate->server_port = options->server_port;
 
-		if (options->name != NULL) {
-			duplicate->name = strdup(options->name);
-			if (duplicate->name == NULL) {
+		if (options->identifier != NULL) {
+			duplicate->identifier = strdup(options->identifier);
+			if (duplicate->identifier == NULL) {
 				mbus_errorf("can not allocate memory");
 				goto bail;
 			}
@@ -1281,7 +1341,7 @@ void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level               : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-client-name               : client name\n");
+	fprintf(stdout, "  --mbus-client-identifier         : client identifier\n");
 	fprintf(stdout, "  --mbus-client-server-protocol    : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
 	fprintf(stdout, "  --mbus-client-server-address     : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-client-server-port        : server port (default: %d)\n", MBUS_SERVER_PORT);
@@ -1336,8 +1396,8 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 			case OPTION_DEBUG_LEVEL:
 				mbus_debug_level = mbus_debug_level_from_string(optarg);
 				break;
-			case OPTION_NAME:
-				options->name = optarg;
+			case OPTION_IDENTIFIER:
+				options->identifier = optarg;
 				break;
 			case OPTION_SERVER_PROTOCOL:
 				options->server_protocol = optarg;
@@ -1407,8 +1467,8 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	SSL_load_error_strings();
 #endif
 
-	if (options.name == NULL) {
-		options.name = "";
+	if (options.identifier == NULL) {
+		options.identifier = "";
 	}
 	if (options.connect_timeout == 0) {
 		options.connect_timeout = MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT;
@@ -1479,7 +1539,7 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 		goto bail;
 	}
 
-	mbus_infof("creating client: '%s'", options.name);
+	mbus_infof("creating client: '%s'", options.identifier);
 	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_revision());
 
 	client = malloc(sizeof(struct mbus_client));
@@ -1591,17 +1651,17 @@ bail:	if (client != NULL) {
 	return mbus_client_state_unknown;
 }
 
-const char * mbus_client_get_name (struct mbus_client *client)
+const char * mbus_client_get_identifier (struct mbus_client *client)
 {
-	const char *name;
+	const char *identifier;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
 	mbus_client_lock(client);
-	name = client->name;
+	identifier = client->identifier;
 	mbus_client_unlock(client);
-	return name;
+	return identifier;
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
 	}
@@ -1834,7 +1894,7 @@ int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const ch
 			goto bail;
 		}
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -1904,7 +1964,7 @@ int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *sou
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -1994,7 +2054,7 @@ int mbus_client_publish_to_timeout_unlocked (struct mbus_client *client, const c
 		goto bail;
 	}
 	client->sequence += 1;
-	if (client->sequence > MBUS_METHOD_SEQUENCE_END) {
+	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
 		client->sequence = MBUS_METHOD_SEQUENCE_START;
 	}
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
@@ -2095,13 +2155,13 @@ int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, co
 	mbus_json_add_string_to_object_cs(jpayload, "identifier", event);
 	mbus_json_add_item_to_object_cs(jpayload, "payload", jdata);
 	jdata = NULL;
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, client->sequence, jpayload, mbus_client_command_event_response, client, timeout);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, client->sequence, jpayload, mbus_client_command_event_response, client, timeout);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		goto bail;
 	}
 	client->sequence += 1;
-	if (client->sequence > MBUS_METHOD_SEQUENCE_END) {
+	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
 		client->sequence = MBUS_METHOD_SEQUENCE_START;
 	}
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
@@ -2165,7 +2225,7 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 		goto bail;
 	}
 	client->sequence += 1;
-	if (client->sequence > MBUS_METHOD_SEQUENCE_END) {
+	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
 		client->sequence = MBUS_METHOD_SEQUENCE_START;
 	}
 	TAILQ_INSERT_TAIL(&client->requests, request, requests);
@@ -2228,7 +2288,7 @@ int mbus_client_register_callback_timeout (struct mbus_client *client, const cha
 			goto bail;
 		}
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2288,7 +2348,7 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
+	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2717,7 +2777,7 @@ out:
 			client->ping_send_tsms = current;
 			client->pong_recv_tsms = 0;
 			client->ping_wait_pong = 1;
-			rc = mbus_client_publish_to_unlocked(client, MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, NULL);
+			rc = mbus_client_publish_to_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PING, NULL);
 			if (rc != 0) {
 				mbus_errorf("can not publish ping");
 				goto bail;
@@ -2743,7 +2803,7 @@ out:
 			mbus_debugf("request timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
 			TAILQ_REMOVE(&client->requests, request, requests);
 			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-				if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
+				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
 				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 					if (client->options->callbacks.publish != NULL) {
 						struct mbus_client_message msg;
@@ -2820,7 +2880,7 @@ out:
 			mbus_debugf("request pending timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
 			TAILQ_REMOVE(&client->pendings, request, requests);
 			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-				if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
+				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
 				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 					if (client->options->callbacks.publish != NULL) {
 						struct mbus_client_message msg;
@@ -2900,7 +2960,7 @@ out:
 		}
 		TAILQ_REMOVE(&client->requests, request, requests);
 		if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-			if (strcasecmp(MBUS_SERVER_NAME, request_get_destination(request)) != 0 &&
+			if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
 			    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 				if (client->options->callbacks.publish != NULL) {
 					struct mbus_client_message msg;
@@ -3071,7 +3131,7 @@ const char * mbus_client_message_routine_request_identifier (struct mbus_client_
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	if (message->type != mbus_client_message_type_command) {
+	if (message->type != mbus_client_message_type_routine) {
 		mbus_errorf("message is invalid");
 		goto bail;
 	}

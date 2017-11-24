@@ -24,7 +24,7 @@ MBUS_METHOD_EVENT_IDENTIFIER_ALL            = "org.mbus.method.event.identifier.
 
 MBUS_METHOD_STATUS_IDENTIFIER_ALL           = "org.mbus.method.event.status.all"
 
-MBUS_SERVER_NAME                            = "org.mbus.server"
+MBUS_SERVER_IDENTIFIER                            = "org.mbus.server"
 
 MBUS_SERVER_COMMAND_CREATE                  = "command.create"
 MBUS_SERVER_COMMAND_EVENT                   = "command.event"
@@ -235,7 +235,7 @@ class MBusClient:
         options['ping']['threshold'] = MBUS_CLIENT_OPTIONS_DEFAULT_PING_THRESHOLD
         options['compression'] = []
         options['compression'].append("none")
-        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, self._sequence, options)
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, self._sequence, options)
         self._sequence += 1
         if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
             self._sequence = MBUS_METHOD_SEQUENCE_START
@@ -258,7 +258,7 @@ class MBusClient:
             return -1
         self._pendings.remove(pending)
         if (pending.type == MBUS_METHOD_TYPE_COMMAND and \
-            pending.destination == MBUS_SERVER_NAME and \
+            pending.destination == MBUS_SERVER_IDENTIFIER and \
             pending.identifier == MBUS_SERVER_COMMAND_CREATE):
             self._name = object['payload']['name']
             self._pingInterval = object['payload']['ping']['interval']
@@ -266,11 +266,11 @@ class MBusClient:
             self._pingThreshold = object['payload']['ping']['threshold']
             self._compression = object['payload']['compression']
             if (self._pingInterval > 0):
-                self.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, self._pongRecv, self)
+                self.subscribe(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PONG, self._pongRecv, self)
             if (self.onConnected != None):
                 self.onConnected(self)
         elif (pending.type == MBUS_METHOD_TYPE_COMMAND and \
-            pending.destination == MBUS_SERVER_NAME and \
+            pending.destination == MBUS_SERVER_IDENTIFIER and \
             pending.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
             if (self.onSubscribed != None):
                 self.onSubscribed(self, pending.payload['source'], pending.payload['event'])
@@ -311,7 +311,7 @@ class MBusClient:
         payload = {}
         payload['source'] = source
         payload['event'] = event
-        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, self._sequence, payload)
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, self._sequence, payload)
         self._sequence += 1
         if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
             self._sequence = MBUS_METHOD_SEQUENCE_START
@@ -335,7 +335,7 @@ class MBusClient:
         data['destination'] = destination
         data['identifier'] = event
         data['event'] = payload
-        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_EVENT, self._sequence, data)
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, self._sequence, data)
         self._sequence += 1
         if (self._sequence >= MBUS_METHOD_SEQUENCE_END):
             self._sequence = MBUS_METHOD_SEQUENCE_START
@@ -367,7 +367,7 @@ class MBusClient:
                     self._pingSendTsms = current
                     self._pongRecvTsms = 0
                     self._pingWaitpong = 1
-                    self.eventTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING)
+                    self.eventTo(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PING)
                 if (self._pingWaitpong != 0 and \
                     self._pingSendTsms != 0 and \
                     self._pongRecvTsms == 0 and \

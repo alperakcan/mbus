@@ -106,7 +106,7 @@ enum mbus_client_command_status {
 };
 
 struct mbus_client_options {
-	char *name;
+	char *identifier;
 	char *server_protocol;
 	char *server_address;
 	int server_port;

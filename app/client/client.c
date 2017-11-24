@@ -70,7 +70,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** connect: %d, %s\n", status, mbus_client_connect_status_string(status));
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
@@ -78,7 +78,7 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** disconnect: %d, %s\n", status, mbus_client_disconnect_status_string(status));
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -89,7 +89,7 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** message: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -100,7 +100,7 @@ static int mbus_client_callback_routine (struct mbus_client *client, void *conte
 	string = mbus_json_print(mbus_client_message_routine_request_payload(message));
 	fprintf(stdout, "\033[0G** routine: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), string);
 	free(string);
-	rl_on_new_line ();
+	rl_on_new_line();
 	return 0;
 }
 
@@ -113,7 +113,7 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** publish status: %d, %s message: %s.%s: %s\n", status, mbus_client_publish_status_string(status), mbus_client_message_event_destination(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
@@ -121,7 +121,7 @@ static void mbus_client_callback_subscribe (struct mbus_client *client, void *co
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status)
@@ -129,7 +129,7 @@ static void mbus_client_callback_unsubscribe (struct mbus_client *client, void *
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** unsubscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_unsubscribe_status_string(status), source, event);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_registered (struct mbus_client *client, void *context, const char *command, enum mbus_client_register_status status)
@@ -137,7 +137,7 @@ static void mbus_client_callback_registered (struct mbus_client *client, void *c
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** registered status: %d, %s, command: %s\n", status, mbus_client_register_status_string(status), command);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_unregistered (struct mbus_client *client, void *context, const char *command, enum mbus_client_unregister_status status)
@@ -145,7 +145,7 @@ static void mbus_client_callback_unregistered (struct mbus_client *client, void 
 	(void) client;
 	(void) context;
 	fprintf(stdout, "\033[0G** unregistered status: %d, %s, command: %s\n", status, mbus_client_unregister_status_string(status), command);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -156,7 +156,7 @@ static void mbus_client_callback_message_callback (struct mbus_client *client, v
 	string = mbus_json_print(mbus_client_message_event_payload(message));
 	fprintf(stdout, "\033[0G** message callback: %s.%s: %s\n", mbus_client_message_event_source(message), mbus_client_message_event_identifier(message), string);
 	free(string);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static void mbus_client_callback_command_callback (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
@@ -172,17 +172,69 @@ static void mbus_client_callback_command_callback (struct mbus_client *client, v
 	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_result(message), response_string);
 	free(request_string);
 	free(response_string);
-	rl_on_new_line ();
+	rl_on_new_line();
 }
 
 static int mbus_client_callback_routine_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
+	int rc;
+	char *request_string;
+	char *response_string;
+	struct mbus_json *response_payload;
 	(void) client;
 	(void) context;
-	(void) message;
+	request_string = NULL;
+	response_string = NULL;
+	response_payload = NULL;
 	fprintf(stdout, "\033[0G** routine callback\n");
-	rl_on_new_line ();
+	request_string = mbus_json_print(mbus_client_message_routine_request_payload(message));
+	if (request_string == NULL) {
+		fprintf(stderr, "can not print request payload");
+		goto bail;
+	}
+	fprintf(stdout, "request: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), request_string);
+	response_payload = mbus_json_create_object();
+	if (response_payload == NULL) {
+		fprintf(stderr, "can not create payload object'n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(response_payload, "source", mbus_client_message_routine_request_source(message));
+	if (rc != 0) {
+		fprintf(stderr, "can not add string to payload\n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(response_payload, "identifier", mbus_client_message_routine_request_identifier(message));
+	if (rc != 0) {
+		fprintf(stderr, "can not add string to payload\n");
+		goto bail;
+	}
+	response_string = mbus_json_print(response_payload);
+	if (response_string == NULL) {
+		fprintf(stderr, "can not print response payload");
+		goto bail;
+	}
+	fprintf(stdout, "response: %s\n", response_string);
+	rc = mbus_client_message_routine_set_response_payload(message, response_payload);
+	if (rc != 0) {
+		fprintf(stderr, "can not set response payload");
+		goto bail;
+	}
+	free(request_string);
+	free(response_string);
+	mbus_json_delete(response_payload);
+	rl_on_new_line();
 	return 0;
+bail:	if (request_string != NULL) {
+		free(request_string);
+	}
+	if (response_string != NULL) {
+		free(response_string);
+	}
+	if (response_payload != NULL) {
+		mbus_json_delete(response_payload);
+	}
+	rl_on_new_line();
+	return -1;
 }
 
 static char * readline_strip (char *buf)
@@ -943,6 +995,9 @@ static int readline_process (char *command)
 				break;
 			}
 		}
+		if (*pc == NULL) {
+			fprintf(stderr, "command: %s not found\n", argv[0]);
+		}
 	}
 
 out:
@@ -975,6 +1030,7 @@ int main (int argc, char *argv[])
 	struct mbus_client_options options;
 
 	client = NULL;
+	rl_initialize();
 
 	_argc = 0;
 	_argv = NULL;

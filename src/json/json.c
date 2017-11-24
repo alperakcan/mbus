@@ -258,6 +258,12 @@ struct mbus_json * mbus_json_get_array_item (const struct mbus_json *json, int a
 
 int mbus_json_add_item_to_object (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
 	if (item == NULL) {
 		return -1;
 	}
@@ -267,6 +273,12 @@ int mbus_json_add_item_to_object (struct mbus_json *json, const char *name, stru
 
 int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
 	if (item == NULL) {
 		return -1;
 	}
@@ -276,6 +288,12 @@ int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, s
 
 int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
 	mbus_cJSON_DeleteItemFromObject((mbus_cJSON *) json, name);
 	return 0;
 }

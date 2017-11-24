@@ -22,7 +22,7 @@
 				mbc = new MBusClient();
 			
 				mbc.onConnected = function () {
-					mbc.subscribe(MBUS_SERVER_NAME, MBUS_METHOD_STATUS_IDENTIFIER_ALL, function (source, event, payload) {
+					mbc.subscribe(MBUS_SERVER_IDENTIFIER, MBUS_METHOD_STATUS_IDENTIFIER_ALL, function (source, event, payload) {
 						console.log(source + '.' + event, JSON.stringify(payload, null, '\t'));
 						writeToScreen(source + '.' + event + ':' + JSON.stringify(payload));
 					})

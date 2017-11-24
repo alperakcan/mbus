@@ -98,7 +98,7 @@ def onStatusConnected (self, context, source, event, payload):
     client.command(g_destination, g_command, g_payload, onCommandResult, None)
     
 def onConnected (self):
-    client.subscribe(MBusClient.MBUS_SERVER_NAME, MBusClient.MBUS_SERVER_STATUS_CONNECTED, onStatusConnected, None)
+    client.subscribe(MBusClient.MBUS_SERVER_IDENTIFIER, MBusClient.MBUS_SERVER_STATUS_CONNECTED, onStatusConnected, None)
 
 options = MBusClient.MBusClientOptions()
 client = MBusClient.MBusClient(options)

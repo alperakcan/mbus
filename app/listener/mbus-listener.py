@@ -73,7 +73,7 @@ def onStatusServerAll (self, context, source, event, payload):
     
 def onConnected (self):
     if (len(subscriptions) == 0):
-        client.subscribe(MBusClient.MBUS_SERVER_NAME, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
+        client.subscribe(MBusClient.MBUS_SERVER_IDENTIFIER, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
         client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
     else:
         for s in subscriptions:

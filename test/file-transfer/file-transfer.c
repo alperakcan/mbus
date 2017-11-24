@@ -15,7 +15,7 @@
 #include "base64.h"
 
 #define DEFAULT_MODE		mode_receiver
-#define DEFAULT_NAME		"org.mbus.client.file-transfer"
+#define DEFAULT_IDENTIFIER		"org.mbus.client.file-transfer"
 #define DEFAULT_PREFIX		"./"
 #define DEFAULT_TIMEOUT		30000
 
@@ -32,7 +32,7 @@ struct receiver_param {
 };
 
 struct sender_param {
-	const char *name;
+	const char *identifier;
 	const char *source;
 	const char *destination;
 	int timeout;
@@ -70,7 +70,7 @@ static const char * mode_string (enum mode mode)
 
 static struct option longopts[] = {
 	{"mode"			, required_argument	, 0, 'm' },
-	{"name"			, required_argument	, 0, 'n' },
+	{"identifier"		, required_argument	, 0, 'i' },
 	{"prefix"		, required_argument	, 0, 'p' },
 	{"source"		, required_argument	, 0, 's' },
 	{"destination"		, required_argument	, 0, 'd' },
@@ -83,22 +83,22 @@ static void usage (const char *name)
 {
 	fprintf(stdout, "%s options:\n", name);
 	fprintf(stdout, "\n");
-	fprintf(stdout, "%s --mode receiver --name name [--prefix prefix]\n", name);
-	fprintf(stdout, "%s --mode sender --name name --source source --destination destination [--timeout timeout]\n", name);
+	fprintf(stdout, "%s --mode receiver --identifier identifier [--prefix prefix]\n", name);
+	fprintf(stdout, "%s --mode sender --identifier identifier --source source --destination destination [--timeout timeout]\n", name);
 	fprintf(stdout, "\n");
 	fprintf(stdout, "  -m / --mode: running mode (default: %s)\n", mode_string(DEFAULT_MODE));
 	fprintf(stdout, "  modes:\n");
 	fprintf(stdout, "    receiver\n");
-	fprintf(stdout, "      -n / --name     : application name (default: %s)\n", DEFAULT_NAME);
-	fprintf(stdout, "      -p / --prefix   : file prefix (default: %s)\n", DEFAULT_PREFIX);
+	fprintf(stdout, "      -i / --identifier : application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
+	fprintf(stdout, "      -p / --prefix     : file prefix (default: %s)\n", DEFAULT_PREFIX);
 	fprintf(stdout, "    sender\n");
-	fprintf(stdout, "      -n / --name     : receiver application name (default: %s)\n", DEFAULT_NAME);
+	fprintf(stdout, "      -i / --identifier : receiver application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
 	fprintf(stdout, "      -s / --source     : file source\n");
 	fprintf(stdout, "      -d / --destination: file destination\n");
 	fprintf(stdout, "      -t / --timeout    : request timeout milliseconds (default: %d)\n", DEFAULT_TIMEOUT);
 	fprintf(stdout, "example:\n");
-	fprintf(stdout, "  %s --mode receiver --name org.mbus.client.file-transfer --prefix /tmp\n", name);
-	fprintf(stdout, "  %s --mode sender --name org.mbus.client.file-transfer --source source --destination destination --timeout 30000\n", name);
+	fprintf(stdout, "  %s --mode receiver --identifier org.mbus.client.file-transfer --prefix /tmp\n", name);
+	fprintf(stdout, "  %s --mode sender --identifier org.mbus.client.file-transfer --source source --destination destination --timeout 30000\n", name);
 	mbus_client_usage();
 }
 
@@ -261,7 +261,7 @@ static void mbus_client_sender_callback_connect (struct mbus_client *client, voi
 		fprintf(stderr, "can not create request\n");
 		goto bail;
 	}
-	rc = mbus_client_command(client, param->name, "command.put", request, mbus_client_sender_callback_command_put_result, param);
+	rc = mbus_client_command(client, param->identifier, "command.put", request, mbus_client_sender_callback_command_put_result, param);
 	if (rc != 0) {
 		fprintf(stderr, "can not execute command\n");
 		goto bail;
@@ -294,7 +294,7 @@ int main (int argc, char *argv[])
 
 	enum mode o_mode;
 	const char *o_prefix;
-	const char *o_name;
+	const char *o_identifier;
 	const char *o_source;
 	const char *o_destination;
 	int o_timeout;
@@ -307,7 +307,7 @@ int main (int argc, char *argv[])
 
 	o_mode = DEFAULT_MODE;
 	o_prefix = DEFAULT_PREFIX;
-	o_name = DEFAULT_NAME;
+	o_identifier = DEFAULT_IDENTIFIER;
 	o_source = NULL;
 	o_destination = NULL;
 	o_timeout = DEFAULT_TIMEOUT;
@@ -340,8 +340,8 @@ int main (int argc, char *argv[])
 			case 'p':
 				o_prefix = optarg;
 				break;
-			case 'n':
-				o_name = optarg;
+			case 'i':
+				o_identifier = optarg;
 				break;
 			case 's':
 				o_source = optarg;
@@ -366,7 +366,7 @@ int main (int argc, char *argv[])
 	if (o_mode == mode_receiver) {
 		memset(&receiver_param, 0, sizeof(struct receiver_param));
 		receiver_param.prefix = o_prefix;
-		mbus_options.name = (char *) o_name;
+		mbus_options.identifier = (char *) o_identifier;
 		mbus_options.callbacks.connect = mbus_client_receiver_callback_connect;
 		mbus_options.callbacks.context = &receiver_param;
 	} else if (o_mode == mode_sender) {
@@ -379,7 +379,7 @@ int main (int argc, char *argv[])
 			goto bail;
 		}
 		memset(&sender_param, 0, sizeof(struct sender_param));
-		sender_param.name = o_name;
+		sender_param.identifier = o_identifier;
 		sender_param.source = o_source;
 		sender_param.destination = o_destination;
 		sender_param.timeout = o_timeout;

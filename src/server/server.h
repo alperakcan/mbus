@@ -68,7 +68,7 @@
 
 #define MBUS_SERVER_DEFAULT_TIMEOUT		10000
 
-#define MBUS_SERVER_NAME			"org.mbus.server"
+#define MBUS_SERVER_IDENTIFIER			"org.mbus.server"
 
 /* command create
  *

@@ -72,7 +72,7 @@
  * client  -- request --> server
  *
  * server:
- *   if destination is MBUS_SERVER_NAME
+ *   if destination is MBUS_SERVER_IDENTIFIER
  *     process command
  *   else
  *     for each client
@@ -80,7 +80,7 @@
  *          client has registered command with identifier
  *         push call to client queue
  *
- * if destination is not MBUS_SERVER_NAME
+ * if destination is not MBUS_SERVER_IDENTIFIER
  *   server  -- call    --> callee
  *   server <-- result  --  callee
  *
@@ -108,7 +108,7 @@
  *
  * result: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "destination" : MBUS_SERVER_NAME,
+ *   "destination" : MBUS_SERVER_IDENTIFIER,
  *   "identifier"  : MBUS_SERVER_COMMAND_RESULT,
  *   "sequence"    : sequence number,
  *   "payload"     : {

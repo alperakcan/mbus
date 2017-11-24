@@ -19,7 +19,7 @@ const MBUS_METHOD_EVENT_IDENTIFIER_ALL			= "org.mbus.method.event.identifier.all
 
 const MBUS_METHOD_STATUS_IDENTIFIER_ALL			= "org.mbus.method.event.status.all";
 
-const MBUS_SERVER_NAME							= "org.mbus.server";
+const MBUS_SERVER_IDENTIFIER							= "org.mbus.server";
 
 const MBUS_SERVER_COMMAND_CREATE					= "command.create";
 const MBUS_SERVER_COMMAND_EVENT					= "command.event";
@@ -190,7 +190,7 @@ function MBusClient (name = "", options = {} ) {
 
 	this._pingSend = function (mbc) {
 		console.log("ping");
-		mbc.eventTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, null);
+		mbc.eventTo(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PING, null);
 		mbc._pingCheckTimer = setTimeout(mbc._pingCheck, mbc._ping['timeout'], mbc)
 	}
 
@@ -226,7 +226,7 @@ function MBusClient (name = "", options = {} ) {
 		request = this._pendings[index];
 		this._pendings.splice(index, 1);
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-		    request._destination == MBUS_SERVER_NAME &&
+		    request._destination == MBUS_SERVER_IDENTIFIER &&
 		    request._identifier == MBUS_SERVER_COMMAND_CREATE) {
 		    this._name = object['payload']['name'];
 		    this._ping = object['payload']['ping'];
@@ -243,13 +243,13 @@ function MBusClient (name = "", options = {} ) {
 			if (this._ping !== undefined &&
 				this._ping !== null &&
 				this._ping['interval'] > 0) {
-				this.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
+				this.subscribe(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
 				this._pingSend(this);
 				this._pingTimer = setInterval(this._pingSend, this._ping['interval'], this);
 			}
 			this.onConnected();
 		} else if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-		    request._destination == MBUS_SERVER_NAME &&
+		    request._destination == MBUS_SERVER_IDENTIFIER &&
 		    request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
 			this.onSubscribed(request._payload['source'], request._payload['event']);
 		} else {
@@ -338,7 +338,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		this._pingTimer = null;
 		this._pingCheckTimer = null;
 		this._compression = null;
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 			this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -410,7 +410,7 @@ MBusClient.prototype.subscribe = function (source, event, callback, context) {
 		source: source,
 		event: event,
 	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
