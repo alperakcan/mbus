@@ -253,76 +253,183 @@ class MBusClientRequest(object):
 
 class MBusClient(object):
     
+    def __notifyConnect (self, status):
+        if (self.__options.onConnect != None):
+            self.__options.onConnect(self, self.__options.onContext, status)
+
+    def __notifyDisonnect (self, status):
+        if (self.__options.onDisconnect != None):
+            self.__options.onDisconnect(self, self.__options.onContext, status)
+
+    def __reset (self):
+        
+        self.__state           = MBusClientState.Disconnected
+        if (self.__socket != None):
+            self.__socket.close()
+            self.__socket = None
+        self.__requests.clear()
+        self.__pendings.clear()
+        self.__routines.clear()
+        self.__subscriptions.clear()
+        self.__incoming        = ""
+        self.__outgoing        = ""
+        self.__identifier      = None
+        self.__connectTsms     = 0
+        self.__pingInterval    = 0
+        self.__pingTimeout     = 0
+        self.__pingThreshold   = 0
+        self.__pingSendTsms    = 0
+        self.__pongRecvTsms    = 0
+        self.__pingWaitPong    = 0
+        self.__pongMissedCount = 0
+        self.__compression     = None
+        self.__socketConnected = 0
+        self.__sequence        = MBUS_METHOD_SEQUENCE_START
+    
+    def __commandRegisterResponse (self, this, context, message, status):
+        raise
+    
+    def __commandUnregisterResponse (self, this, context, message, status):
+        raise
+    
+    def __commandSubscribeResponse (self, this, context, message, status):
+        raise
+    
+    def __commandUnsubscribeResponse (self, this, context, message, status):
+        raise
+    
+    def __commandEventResponse (self, this, context, message, status):
+        raise
+    
+    def __commandCreateResponse (self, this, context, message, status):
+        raise
+    
+    def __commandCreateRequest (self):
+        raise
+    
+    def __runConnect (self):
+        raise
+    
+    def __handleResult (self, json):
+        raise
+    
+    def __handleEvent (self, json):
+        raise
+    
+    def __handleCommand (self, json):
+        raise
+    
+    def __wakeUp (self, reason):
+        raise
+    
     def __init__ (self, options = None):
         
-        self._options         = None
-        self._state           = None
-        self._socket          = None
-        self._requests        = collections.deque()
-        self._pendings        = collections.deque()
-        self._routines        = collections.deque()
-        self._subscriptions   = collections.deque()
-        self._incoming        = None
-        self._outgoing        = None
-        self._identifier      = None
-        self._connectTsms     = None
-        self._pingInterval    = None
-        self._pingTimeout     = None
-        self._pingThreshold   = None
-        self._pingSendTsms    = None
-        self._pongRecvTsms    = None
-        self._pingWaitPong    = None
-        self._pongMissedCount = None
-        self._compression     = None
-        self._socketConnected = None
+        self.__options         = None
+        self.__state           = MBusClientState.Disconnected
+        self.__socket          = None
+        self.__requests        = collections.deque()
+        self.__pendings        = collections.deque()
+        self.__routines        = collections.deque()
+        self.__subscriptions   = collections.deque()
+        self.__incoming        = None
+        self.__outgoing        = None
+        self.__identifier      = None
+        self.__connectTsms     = None
+        self.__pingInterval    = None
+        self.__pingTimeout     = None
+        self.__pingThreshold   = None
+        self.__pingSendTsms    = None
+        self.__pongRecvTsms    = None
+        self.__pingWaitPong    = None
+        self.__pongMissedCount = None
+        self.__compression     = None
+        self.__socketConnected = None
+        self.__sequence        = None
+        self.__mutex           = None
 
         if (options == None):
-            self._options = MBusClientOptions()
+            self.__options = MBusClientOptions()
         else:
-            self._options = options
+            self.__options = options
         
-        if (self._options.identifier == None):
-            self._options.identifier = MBusClientDefaults.ClientIdentifier
+        if (self.__options.identifier == None):
+            self.__options.identifier = MBusClientDefaults.ClientIdentifier
         
-        if (self._options.connectTimeout == None or
-            self._options.connectTimeout <= 0):
-            self._options.connectTimeout = MBusClientDefaults.ConnectTimeout
-        if (self._options.connectInterval == None or
-            self._options.connectInterval <= 0):
-            self._options.connectInterval = MBusClientDefaults.ConnectInterval
-        if (self._options.subscribeTimeout == None or
-            self._options.subscribeTimeout <= 0):
-            self._options.subscribeTimeout = MBusClientDefaults.SubscribeTimeout
-        if (self._options.registerTimeout == None or
-            self._options.registerTimeout <= 0):
-            self._options.registerTimeout = MBusClientDefaults.RegisterTimeout
-        if (self._options.commandTimeout == None or
-            self._options.commandTimeout <= 0):
-            self._options.commandTimeout = MBusClientDefaults.CommandTimeout
-        if (self._options.publishTimeout == None or
-            self._options.publishTimeout <= 0):
-            self._options.publishTimeout = MBusClientDefaults.Publishtimeout
+        if (self.__options.connectTimeout == None or
+            self.__options.connectTimeout <= 0):
+            self.__options.connectTimeout = MBusClientDefaults.ConnectTimeout
+        if (self.__options.connectInterval == None or
+            self.__options.connectInterval <= 0):
+            self.__options.connectInterval = MBusClientDefaults.ConnectInterval
+        if (self.__options.subscribeTimeout == None or
+            self.__options.subscribeTimeout <= 0):
+            self.__options.subscribeTimeout = MBusClientDefaults.SubscribeTimeout
+        if (self.__options.registerTimeout == None or
+            self.__options.registerTimeout <= 0):
+            self.__options.registerTimeout = MBusClientDefaults.RegisterTimeout
+        if (self.__options.commandTimeout == None or
+            self.__options.commandTimeout <= 0):
+            self.__options.commandTimeout = MBusClientDefaults.CommandTimeout
+        if (self.__options.publishTimeout == None or
+            self.__options.publishTimeout <= 0):
+            self.__options.publishTimeout = MBusClientDefaults.Publishtimeout
 
-        if (self._options.pingInterval == None or
-            self._options.pingInterval == 0):
-            self._options.pingInterval = MBusClientDefaults.PingInterval
+        if (self.__options.pingInterval == None or
+            self.__options.pingInterval == 0):
+            self.__options.pingInterval = MBusClientDefaults.PingInterval
 
-        if (self._options.pingTimeout == None or
-            self._options.pingTimeout == 0):
-            self._options.pingTimeout = MBusClientDefaults.PingTimeout
+        if (self.__options.pingTimeout == None or
+            self.__options.pingTimeout == 0):
+            self.__options.pingTimeout = MBusClientDefaults.PingTimeout
 
-        if (self._options.pingThreshold == None or
-            self._options.pingThreshold == 0):
-            self._options.pingThreshold = MBusClientDefaults.PingThreshold
+        if (self.__options.pingThreshold == None or
+            self.__options.pingThreshold == 0):
+            self.__options.pingThreshold = MBusClientDefaults.PingThreshold
 
-        if (self._options.serverProtocol == None):
-            self._options.serverProtocol = MBusClientDefaults.ServerProtocol
+        if (self.__options.serverProtocol == None):
+            self.__options.serverProtocol = MBusClientDefaults.ServerProtocol
         
-        if (self._options.serverProtocol == MBusClientDefaults.ServerTCPProtocol):
-            if (self._options.serverAddress == None):
-                self._options.serverAddress = MBusClientDefaults.ServerTCPAddress
-            if (self._options.serverPort == None or
-                self._options.serverPort <= 0):
-                self._options.serverPort = MBusClientDefaults.ServerTCPPort
+        if (self.__options.serverProtocol == MBusClientDefaults.ServerTCPProtocol):
+            if (self.__options.serverAddress == None):
+                self.__options.serverAddress = MBusClientDefaults.ServerTCPAddress
+            if (self.__options.serverPort == None or
+                self.__options.serverPort <= 0):
+                self.__options.serverPort = MBusClientDefaults.ServerTCPPort
         else:
-            raise ValueError("invalid server protocol: {}".format(self._options.serverProtocol))
+            raise ValueError("invalid server protocol: {}".format(self.__options.serverProtocol))
+    
+    def lock (self):
+        raise
+    
+    def unlock (self):
+        raise
+    
+    def getState (self):
+        raise
+    
+    def getIdentifier (self):
+        raise
+    
+    def getWakeUpFd (self):
+        raise
+    
+    def getWakeUpFdEvents (self):
+        raise
+    
+    def getConnectionFd (self):
+        raise
+    
+    def getConnectionFdEvents (self):
+        raise
+    
+    def hasPending (self):
+        raise
+    
+    def connect (self):
+        raise
+    
+    def disconnect (self):
+        raise
+    
+    def subscribe (self, source, event):
+        raise
