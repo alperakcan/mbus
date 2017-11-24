@@ -149,14 +149,14 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 #define OPTION_SUBSCRIBE		0x101
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "subscribe",			required_argument,	NULL,	OPTION_SUBSCRIBE },
+	{ "event",			required_argument,	NULL,	OPTION_SUBSCRIBE },
 	{ NULL,				0,			NULL,	0 },
 };
 
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
-	fprintf(stdout, "  --subscribe: subscribe to identifier\n");
+	fprintf(stdout, "  --event    : event identifier to subscribe\n");
 	fprintf(stdout, "  --help     : this text\n");
 	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_client_usage();
