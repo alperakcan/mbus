@@ -143,7 +143,6 @@ struct mbus_client {
 	struct mbus_buffer *incoming;
 	struct mbus_buffer *outgoing;
 	char *identifier;
-	char *client_identifier;
 	int connect_tsms;
 	int ping_interval;
 	int ping_timeout;
@@ -154,7 +153,6 @@ struct mbus_client {
 	int pong_missed_count;
 	enum mbus_compress_method compression;
 	int socket_connected;
-	int create_requested;
 	int sequence;
 	int wakeup[2];
 	pthread_mutex_t mutex;
@@ -694,7 +692,6 @@ static void mbus_client_reset (struct mbus_client *client)
 	client->pong_missed_count = 0;
 	client->compression = mbus_compress_method_none;
 	client->socket_connected = 0;
-	client->create_requested = 0;
 }
 
 static void mbus_client_notify_connect (struct mbus_client *client, enum mbus_client_connect_status status)
@@ -1026,7 +1023,6 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 	}
 
 	mbus_json_delete(payload);
-	client->create_requested = 1;
 	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);

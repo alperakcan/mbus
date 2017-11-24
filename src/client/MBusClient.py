@@ -255,6 +255,27 @@ class MBusClient(object):
     
     def __init__ (self, options = None):
         
+        self._options         = None
+        self._state           = None
+        self._socket          = None
+        self._requests        = collections.deque()
+        self._pendings        = collections.deque()
+        self._routines        = collections.deque()
+        self._subscriptions   = collections.deque()
+        self._incoming        = None
+        self._outgoing        = None
+        self._identifier      = None
+        self._connectTsms     = None
+        self._pingInterval    = None
+        self._pingTimeout     = None
+        self._pingThreshold   = None
+        self._pingSendTsms    = None
+        self._pongRecvTsms    = None
+        self._pingWaitPong    = None
+        self._pongMissedCount = None
+        self._compression     = None
+        self._socketConnected = None
+
         if (options == None):
             self._options = MBusClientOptions()
         else:
@@ -304,5 +325,4 @@ class MBusClient(object):
                 self._options.serverPort <= 0):
                 self._options.serverPort = MBusClientDefaults.ServerTCPPort
         else:
-            print("invalid server protocol: {}".format(self._options.serverProtocol))
-            raise
+            raise ValueError("invalid server protocol: {}".format(self._options.serverProtocol))
