@@ -1232,10 +1232,12 @@ static int mbus_client_message_handle_command (struct mbus_client *client, const
 				mbus_errorf("can not add return to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_item_to_object_cs(result_payload, "result", mbus_json_duplicate(message.u.routine.response, 1));
-			if (rc != 0) {
-				mbus_errorf("can not add result to payload");
-				goto bail;
+			if (message.u.routine.response != NULL) {
+				rc = mbus_json_add_item_to_object_cs(result_payload, "result", mbus_json_duplicate(message.u.routine.response, 1));
+				if (rc != 0) {
+					mbus_errorf("can not add result to payload");
+					goto bail;
+				}
 			}
 			rc = mbus_client_command_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_RESULT, result_payload, NULL, NULL);
 			if (rc != 0) {
