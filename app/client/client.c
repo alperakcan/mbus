@@ -94,14 +94,64 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 
 static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message *message)
 {
-	char *string;
+	int rc;
+	char *request_string;
+	char *response_string;
+	struct mbus_json *response_payload;
 	(void) client;
 	(void) context;
-	string = mbus_json_print(mbus_client_message_routine_request_payload(message));
-	fprintf(stdout, "\033[0G** routine: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), string);
-	free(string);
+	request_string = NULL;
+	response_string = NULL;
+	response_payload = NULL;
+	fprintf(stdout, "\033[0G** routine\n");
+	request_string = mbus_json_print(mbus_client_message_routine_request_payload(message));
+	if (request_string == NULL) {
+		fprintf(stderr, "can not print request payload");
+		goto bail;
+	}
+	fprintf(stdout, "request: %s.%s: %s\n", mbus_client_message_routine_request_source(message), mbus_client_message_routine_request_identifier(message), request_string);
+	response_payload = mbus_json_create_object();
+	if (response_payload == NULL) {
+		fprintf(stderr, "can not create payload object'n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(response_payload, "source", mbus_client_message_routine_request_source(message));
+	if (rc != 0) {
+		fprintf(stderr, "can not add string to payload\n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(response_payload, "identifier", mbus_client_message_routine_request_identifier(message));
+	if (rc != 0) {
+		fprintf(stderr, "can not add string to payload\n");
+		goto bail;
+	}
+	response_string = mbus_json_print(response_payload);
+	if (response_string == NULL) {
+		fprintf(stderr, "can not print response payload");
+		goto bail;
+	}
+	fprintf(stdout, "response: %s\n", response_string);
+	rc = mbus_client_message_routine_set_response_payload(message, response_payload);
+	if (rc != 0) {
+		fprintf(stderr, "can not set response payload");
+		goto bail;
+	}
+	free(request_string);
+	free(response_string);
+	mbus_json_delete(response_payload);
 	rl_on_new_line();
 	return 0;
+bail:	if (request_string != NULL) {
+		free(request_string);
+	}
+	if (response_string != NULL) {
+		free(response_string);
+	}
+	if (response_payload != NULL) {
+		mbus_json_delete(response_payload);
+	}
+	rl_on_new_line();
+	return -1;
 }
 
 static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
