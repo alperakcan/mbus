@@ -554,8 +554,10 @@ bail:	if (request != NULL) {
 
 static void mbus_client_reset (struct mbus_client *client)
 {
+	int i;
 	struct request *request;
 	struct request *nrequest;
+	struct requests *requests[2];
 	struct routine *routine;
 	struct routine *nroutine;
 	struct subscription *subscription;
@@ -571,20 +573,103 @@ static void mbus_client_reset (struct mbus_client *client)
 	if (client->outgoing != NULL) {
 		mbus_buffer_reset(client->outgoing);
 	}
-	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
-		TAILQ_REMOVE(&client->requests, request, requests);
-		request_destroy(request);
-	}
-	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
-		TAILQ_REMOVE(&client->pendings, request, requests);
-		request_destroy(request);
+	requests[0] = &client->requests;
+	requests[1] = &client->pendings;
+	for (i = 0; i < (int) (sizeof(requests) / sizeof(requests[0])); i++) {
+		TAILQ_FOREACH_SAFE(request, requests[i], requests, nrequest) {
+			TAILQ_REMOVE(requests[i], request, requests);
+			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
+				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+					if (client->options->callbacks.publish != NULL) {
+						struct mbus_client_message msg;
+						msg.type = mbus_client_message_type_event;
+						msg.u.event.payload = request_get_json(request);
+						mbus_client_unlock(client);
+						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_canceled);
+						mbus_client_lock(client);
+					}
+				}
+			} else if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
+				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
+					if (client->options->callbacks.publish != NULL) {
+						struct mbus_client_message msg;
+						msg.type = mbus_client_message_type_event;
+						msg.u.event.payload = request_get_payload(request);
+						mbus_client_unlock(client);
+						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_canceled);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					if (client->options->callbacks.subscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.subscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_subscribe_status_canceled);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+					if (client->options->callbacks.unsubscribe != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
+								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
+								mbus_client_unsubscribe_status_canceled);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					if (client->options->callbacks.registered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.registered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_register_status_canceled);
+						mbus_client_lock(client);
+					}
+				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+					if (client->options->callbacks.unregistered != NULL) {
+						mbus_client_unlock(client);
+						client->options->callbacks.unregistered(client, client->options->callbacks.context,
+								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
+								mbus_client_unregister_status_canceled);
+						mbus_client_lock(client);
+					}
+				} else {
+					if (request_get_callback(request) != NULL) {
+						struct mbus_client_message message;
+						message.type = mbus_client_message_type_command;
+						message.u.command.request = request_get_json(request);
+						message.u.command.response = NULL;
+						mbus_client_unlock(client);
+						request_get_callback(request)(client, request_get_context(request), &message, mbus_client_command_status_canceled);
+						mbus_client_lock(client);
+					}
+				}
+			}
+			request_destroy(request);
+		}
 	}
 	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
 		TAILQ_REMOVE(&client->routines, routine, routines);
+		if (client->options->callbacks.unregistered != NULL) {
+			mbus_client_unlock(client);
+			client->options->callbacks.unregistered(client, client->options->callbacks.context,
+					routine_get_identifier(routine),
+					mbus_client_unregister_status_canceled);
+			mbus_client_lock(client);
+		}
 		routine_destroy(routine);
 	}
 	TAILQ_FOREACH_SAFE(subscription, &client->subscriptions, subscriptions, nsubscription) {
 		TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
+		if (client->options->callbacks.unsubscribe != NULL) {
+			mbus_client_unlock(client);
+			client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
+					subscription_get_source(subscription),
+					subscription_get_identifier(subscription),
+					mbus_client_unsubscribe_status_canceled);
+			mbus_client_lock(client);
+		}
 		subscription_destroy(subscription);
 	}
 	if (client->identifier != NULL) {
@@ -2222,6 +2307,17 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
+	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
+		if (client->state != mbus_client_state_connecting) {
+			mbus_errorf("client is not disconnected: %d", client->state);
+			goto bail;
+		}
+	} else {
+		if (client->state != mbus_client_state_connected) {
+			mbus_errorf("client is not connected");
+			goto bail;
+		}
+	}
 	if (timeout < 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->command_timeout);
 		timeout = client->options->command_timeout;
@@ -2797,96 +2893,27 @@ out:
 		}
 	}
 
-	TAILQ_FOREACH_SAFE(request, &client->requests, requests, nrequest) {
-		if (request_get_timeout(request) >= 0 &&
-		    mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
-			mbus_debugf("request timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
-			TAILQ_REMOVE(&client->requests, request, requests);
-			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
-				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
-					if (client->options->callbacks.publish != NULL) {
-						struct mbus_client_message msg;
-						mbus_client_unlock(client);
-						msg.type = mbus_client_message_type_event;
-						msg.u.event.payload = request_get_json(request);
-						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
-						mbus_client_lock(client);
-					}
-				}
-			} else if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
-				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
-					if (client->options->callbacks.publish != NULL) {
-						struct mbus_client_message msg;
-						mbus_client_unlock(client);
-						msg.type = mbus_client_message_type_event;
-						msg.u.event.payload = request_get_payload(request);
-						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
-						mbus_client_lock(client);
-					}
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
-					if (client->options->callbacks.subscribe != NULL) {
-						mbus_client_unlock(client);
-						client->options->callbacks.subscribe(client, client->options->callbacks.context,
-								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
-								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
-								mbus_client_subscribe_status_timeout);
-						mbus_client_lock(client);
-					}
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
-					if (client->options->callbacks.unsubscribe != NULL) {
-						mbus_client_unlock(client);
-						client->options->callbacks.unsubscribe(client, client->options->callbacks.context,
-								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
-								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
-								mbus_client_unsubscribe_status_timeout);
-						mbus_client_lock(client);
-					}
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
-					if (client->options->callbacks.registered != NULL) {
-						mbus_client_unlock(client);
-						client->options->callbacks.registered(client, client->options->callbacks.context,
-								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
-								mbus_client_register_status_timeout);
-						mbus_client_lock(client);
-					}
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
-					if (client->options->callbacks.unregistered != NULL) {
-						mbus_client_unlock(client);
-						client->options->callbacks.unregistered(client, client->options->callbacks.context,
-								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
-								mbus_client_unregister_status_timeout);
-						mbus_client_lock(client);
-					}
-				} else {
-					if (request_get_callback(request) != NULL) {
-						struct mbus_client_message message;
-						message.type = mbus_client_message_type_command;
-						message.u.command.request = request_get_json(request);
-						message.u.command.response = NULL;
-						mbus_client_unlock(client);
-						request_get_callback(request)(client, request_get_context(request), &message, mbus_client_command_status_timeout);
-						mbus_client_lock(client);
-					}
-				}
-			}
-			request_destroy(request);
-		}
-	}
+	int i;
+	struct requests *requests[2];
 
-	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
-		if (request_get_timeout(request) >= 0 &&
-		    mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
-			mbus_debugf("request pending timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
-			TAILQ_REMOVE(&client->pendings, request, requests);
+	requests[0] = &client->requests;
+	requests[1] = &client->pendings;
+	for (i = 0; i < (int) (sizeof(requests) / sizeof(requests[0])); i++) {
+		TAILQ_FOREACH_SAFE(request, requests[i], requests, nrequest) {
+			if (request_get_timeout(request) < 0 ||
+			    mbus_clock_before(current, request_get_created_at(request) + request_get_timeout(request))) {
+				continue;
+			}
+			mbus_debugf("request timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
+			TAILQ_REMOVE(requests[i], request, requests);
 			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
 				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
 				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 					if (client->options->callbacks.publish != NULL) {
 						struct mbus_client_message msg;
-						mbus_client_unlock(client);
 						msg.type = mbus_client_message_type_event;
 						msg.u.event.payload = request_get_json(request);
+						mbus_client_unlock(client);
 						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
 						mbus_client_lock(client);
 					}
@@ -2895,9 +2922,9 @@ out:
 				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					if (client->options->callbacks.publish != NULL) {
 						struct mbus_client_message msg;
-						mbus_client_unlock(client);
 						msg.type = mbus_client_message_type_event;
 						msg.u.event.payload = request_get_payload(request);
+						mbus_client_unlock(client);
 						client->options->callbacks.publish(client, client->options->callbacks.context, &msg, mbus_client_publish_status_timeout);
 						mbus_client_lock(client);
 					}
@@ -3222,6 +3249,7 @@ const char * mbus_client_publish_status_string (enum mbus_client_publish_status 
 		case mbus_client_publish_status_success:			return "success";
 		case mbus_client_publish_status_internal_error:			return "internal error";
 		case mbus_client_publish_status_timeout:			return "timeout";
+		case mbus_client_publish_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }
@@ -3232,6 +3260,7 @@ const char * mbus_client_subscribe_status_string (enum mbus_client_subscribe_sta
 		case mbus_client_subscribe_status_success:			return "success";
 		case mbus_client_subscribe_status_internal_error:		return "internal error";
 		case mbus_client_subscribe_status_timeout:			return "timeout";
+		case mbus_client_subscribe_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }
@@ -3242,6 +3271,7 @@ const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe
 		case mbus_client_unsubscribe_status_success:			return "success";
 		case mbus_client_unsubscribe_status_internal_error:		return "internal error";
 		case mbus_client_unsubscribe_status_timeout:			return "timeout";
+		case mbus_client_unsubscribe_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }
@@ -3252,6 +3282,7 @@ const char * mbus_client_register_status_string (enum mbus_client_register_statu
 		case mbus_client_register_status_success:			return "success";
 		case mbus_client_register_status_internal_error:		return "internal error";
 		case mbus_client_register_status_timeout:			return "timeout";
+		case mbus_client_register_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }
@@ -3262,6 +3293,7 @@ const char * mbus_client_unregister_status_string (enum mbus_client_unregister_s
 		case mbus_client_unregister_status_success:			return "success";
 		case mbus_client_unregister_status_internal_error:		return "internal error";
 		case mbus_client_unregister_status_timeout:			return "timeout";
+		case mbus_client_unregister_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }
@@ -3272,6 +3304,7 @@ const char * mbus_client_command_status_string (enum mbus_client_command_status 
 		case mbus_client_command_status_success:			return "success";
 		case mbus_client_command_status_internal_error:			return "internal error";
 		case mbus_client_command_status_timeout:			return "timeout";
+		case mbus_client_command_status_canceled:			return "canceled";
 	}
 	return "internal error";
 }

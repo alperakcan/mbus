@@ -72,37 +72,43 @@ enum mbus_client_disconnect_status {
 enum mbus_client_publish_status {
 	mbus_client_publish_status_success,
 	mbus_client_publish_status_internal_error,
-	mbus_client_publish_status_timeout
+	mbus_client_publish_status_timeout,
+	mbus_client_publish_status_canceled
 };
 
 enum mbus_client_subscribe_status {
 	mbus_client_subscribe_status_success,
 	mbus_client_subscribe_status_internal_error,
-	mbus_client_subscribe_status_timeout
+	mbus_client_subscribe_status_timeout,
+	mbus_client_subscribe_status_canceled
 };
 
 enum mbus_client_unsubscribe_status {
 	mbus_client_unsubscribe_status_success,
 	mbus_client_unsubscribe_status_internal_error,
-	mbus_client_unsubscribe_status_timeout
+	mbus_client_unsubscribe_status_timeout,
+	mbus_client_unsubscribe_status_canceled
 };
 
 enum mbus_client_register_status {
 	mbus_client_register_status_success,
 	mbus_client_register_status_internal_error,
-	mbus_client_register_status_timeout
+	mbus_client_register_status_timeout,
+	mbus_client_register_status_canceled
 };
 
 enum mbus_client_unregister_status {
 	mbus_client_unregister_status_success,
 	mbus_client_unregister_status_internal_error,
-	mbus_client_unregister_status_timeout
+	mbus_client_unregister_status_timeout,
+	mbus_client_unregister_status_canceled
 };
 
 enum mbus_client_command_status {
 	mbus_client_command_status_success,
 	mbus_client_command_status_internal_error,
-	mbus_client_command_status_timeout
+	mbus_client_command_status_timeout,
+	mbus_client_command_status_canceled
 };
 
 struct mbus_client_options {
