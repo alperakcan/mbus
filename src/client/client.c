@@ -104,14 +104,6 @@ enum wakeup_reason {
 	wakeup_reason_disconnect
 };
 
-enum method_type {
-	method_type_unknown,
-	method_type_status,
-	method_type_event,
-	method_type_command,
-	method_type_result,
-};
-
 TAILQ_HEAD(requests, request);
 struct request {
 	TAILQ_ENTRY(request) requests;
