@@ -1594,22 +1594,22 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	if (options.identifier == NULL) {
 		options.identifier = "";
 	}
-	if (options.connect_timeout == 0) {
+	if (options.connect_timeout <= 0) {
 		options.connect_timeout = MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT;
 	}
-	if (options.connect_interval == 0) {
+	if (options.connect_interval <= 0) {
 		options.connect_interval = MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL;
 	}
-	if (options.subscribe_timeout == 0) {
+	if (options.subscribe_timeout <= 0) {
 		options.subscribe_timeout = MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT;
 	}
-	if (options.register_timeout == 0) {
+	if (options.register_timeout <= 0) {
 		options.register_timeout = MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT;
 	}
-	if (options.command_timeout == 0) {
+	if (options.command_timeout <= 0) {
 		options.command_timeout = MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT;
 	}
-	if (options.publish_timeout == 0) {
+	if (options.publish_timeout <= 0) {
 		options.publish_timeout = MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT;
 	}
 

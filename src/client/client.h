@@ -30,10 +30,10 @@
 
 #define MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT	30000
 #define MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL	0
-#define MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT	180000
-#define MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT	180000
-#define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	180000
-#define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	180000
+#define MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT	30000
+#define MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT	30000
+#define MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT	30000
+#define MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT	30000
 
 #define MBUS_CLIENT_DEFAULT_PING_INTERVAL	180000
 #define MBUS_CLIENT_DEFAULT_PING_TIMEOUT	5000
@@ -60,7 +60,7 @@ enum mbus_client_connect_status {
 	mbus_client_connect_status_timeout,
 	mbus_client_connect_status_invalid_protocol_version,
 	mbus_client_connect_status_invalid_client_identfier,
-	mbus_client_connect_status_server_error,
+	mbus_client_connect_status_server_error
 };
 
 enum mbus_client_disconnect_status {
