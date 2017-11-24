@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MBUS_DEBUG_NAME	"app-listener"
+#define MBUS_DEBUG_NAME	"app-subscribe"
 
 #include "mbus/debug.h"
 #include "mbus/json.h"
@@ -155,7 +155,7 @@ static struct option longopts[] = {
 
 static void usage (void)
 {
-	fprintf(stdout, "mbus listener arguments:\n");
+	fprintf(stdout, "mbus subscribe arguments:\n");
 	fprintf(stdout, "  --subscribe: subscribe to identifier\n");
 	fprintf(stdout, "  --help     : this text\n");
 	fprintf(stdout, "  --mbus-help: mbus help text\n");

@@ -27,7 +27,7 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 's:h', ['help',
 
 for opt, arg in options:
     if opt in ('-h', '--help'):
-        print("listener usage:\n" \
+        print("subscribe usage:\n" \
               "  --subscribe             : subscribe to an event identifier\n" \
               "  --mbus-debug-level     : debug level (default: error)\n" \
               "  --mbus-server-protocol : server protocol (default: uds)\n" \

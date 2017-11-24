@@ -4,7 +4,7 @@ subdir-y = \
 	command \
 	broker \
 	publish \
-	listener \
+	subscribe \
 	version
 
 include ../Makefile.lib

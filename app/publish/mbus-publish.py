@@ -34,7 +34,7 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:e:p:h', ['help',
 
 for opt, arg in options:
     if opt in ('-h', '--help'):
-        print("listener usage:\n" \
+        print("publish usage:\n" \
               "  --destination          : destination identifier\n" \
               "  --event                : event identifier\n" \
               "  --payload              : payload json\n" \
