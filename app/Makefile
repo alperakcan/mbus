@@ -2,7 +2,7 @@
 subdir-y = \
 	client \
 	command \
-	controller \
+	broker \
 	event \
 	listener \
 	version

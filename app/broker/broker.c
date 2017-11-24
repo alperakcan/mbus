@@ -51,9 +51,9 @@ static struct option longopts[] = {
 
 static void usage (void)
 {
-	fprintf(stdout, "mbus controller arguments:\n");
-	fprintf(stdout, "  --help                   : this text\n");
-	fprintf(stdout, "  --mbus-help              : mbus help text\n");
+	fprintf(stdout, "mbus broker arguments:\n");
+	fprintf(stdout, "  --help     : this text\n");
+	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_server_usage();
 }
 

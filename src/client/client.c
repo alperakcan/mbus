@@ -1428,21 +1428,21 @@ static int mbus_client_wakeup (struct mbus_client *client, enum wakeup_reason re
 void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
-	fprintf(stdout, "  --mbus-debug-level               : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-client-identifier         : client identifier\n");
-	fprintf(stdout, "  --mbus-client-server-protocol    : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
-	fprintf(stdout, "  --mbus-client-server-address     : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
-	fprintf(stdout, "  --mbus-client-server-port        : server port (default: %d)\n", MBUS_SERVER_PORT);
-	fprintf(stdout, "  --mbus-client-connect-timeout    : client connect timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-connect-interval   : client connect interval (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL);
-	fprintf(stdout, "  --mbus-client-subscribe-timeout  : client subscribe timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-register-timeout   : client register timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-command-timeout    : client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-publish-timeout    : client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-ping-interval      : ping interval (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
-	fprintf(stdout, "  --mbus-client-ping-timeout       : ping timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
-	fprintf(stdout, "  --mbus-client-ping-threshold     : ping threshold (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
-	fprintf(stdout, "  --mbus-help                      : this text\n");
+	fprintf(stdout, "  --mbus-debug-level             : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
+	fprintf(stdout, "  --mbus-client-identifier       : client identifier\n");
+	fprintf(stdout, "  --mbus-client-server-protocol  : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
+	fprintf(stdout, "  --mbus-client-server-address   : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
+	fprintf(stdout, "  --mbus-client-server-port      : server port (default: %d)\n", MBUS_SERVER_PORT);
+	fprintf(stdout, "  --mbus-client-connect-timeout  : client connect timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-connect-interval : client connect interval (default: %d)\n", MBUS_CLIENT_DEFAULT_CONNECT_INTERVAL);
+	fprintf(stdout, "  --mbus-client-subscribe-timeout: client subscribe timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_SUBSCRIBE_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-register-timeout : client register timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_REGISTER_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-command-timeout  : client command timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_COMMAND_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-publish-timeout  : client publish timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PUBLISH_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-ping-interval    : ping interval (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_INTERVAL);
+	fprintf(stdout, "  --mbus-client-ping-timeout     : ping timeout (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_TIMEOUT);
+	fprintf(stdout, "  --mbus-client-ping-threshold   : ping threshold (default: %d)\n", MBUS_CLIENT_DEFAULT_PING_THRESHOLD);
+	fprintf(stdout, "  --mbus-help                    : this text\n");
 }
 
 int mbus_client_options_default (struct mbus_client_options *options)

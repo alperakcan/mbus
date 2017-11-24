@@ -288,45 +288,45 @@ static struct option longopts[] = {
 void mbus_server_usage (void)
 {
 	fprintf(stdout, "mbus server arguments:\n");
-	fprintf(stdout, "  --mbus-debug-level             : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
+	fprintf(stdout, "  --mbus-debug-level            : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
 
-	fprintf(stdout, "  --mbus-server-tcp-enable       : server tcp enable (default: %d)\n", MBUS_SERVER_TCP_ENABLE);
-	fprintf(stdout, "  --mbus-server-tcp-address      : server tcp address (default: %s)\n", MBUS_SERVER_TCP_ADDRESS);
-	fprintf(stdout, "  --mbus-server-tcp-port         : server tcp port (default: %d)\n", MBUS_SERVER_TCP_PORT);
+	fprintf(stdout, "  --mbus-server-tcp-enable      : server tcp enable (default: %d)\n", MBUS_SERVER_TCP_ENABLE);
+	fprintf(stdout, "  --mbus-server-tcp-address     : server tcp address (default: %s)\n", MBUS_SERVER_TCP_ADDRESS);
+	fprintf(stdout, "  --mbus-server-tcp-port        : server tcp port (default: %d)\n", MBUS_SERVER_TCP_PORT);
 
-	fprintf(stdout, "  --mbus-server-uds-enable       : server uds enable (default: %d)\n", MBUS_SERVER_UDS_ENABLE);
-	fprintf(stdout, "  --mbus-server-uds-address      : server uds address (default: %s)\n", MBUS_SERVER_UDS_ADDRESS);
-	fprintf(stdout, "  --mbus-server-uds-port         : server uds port (default: %d)\n", MBUS_SERVER_UDS_PORT);
+	fprintf(stdout, "  --mbus-server-uds-enable      : server uds enable (default: %d)\n", MBUS_SERVER_UDS_ENABLE);
+	fprintf(stdout, "  --mbus-server-uds-address     : server uds address (default: %s)\n", MBUS_SERVER_UDS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-uds-port        : server uds port (default: %d)\n", MBUS_SERVER_UDS_PORT);
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	fprintf(stdout, "  --mbus-server-ws-enable        : server ws enable (default: %d)\n", MBUS_SERVER_WS_ENABLE);
-	fprintf(stdout, "  --mbus-server-ws-address       : server ws address (default: %s)\n", MBUS_SERVER_WS_ADDRESS);
-	fprintf(stdout, "  --mbus-server-ws-port          : server ws port (default: %d)\n", MBUS_SERVER_WS_PORT);
+	fprintf(stdout, "  --mbus-server-ws-enable       : server ws enable (default: %d)\n", MBUS_SERVER_WS_ENABLE);
+	fprintf(stdout, "  --mbus-server-ws-address      : server ws address (default: %s)\n", MBUS_SERVER_WS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-ws-port         : server ws port (default: %d)\n", MBUS_SERVER_WS_PORT);
 #endif
 
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	fprintf(stdout, "  --mbus-server-tcps-enable      : server tcps enable (default: %d)\n", MBUS_SERVER_TCPS_ENABLE);
-	fprintf(stdout, "  --mbus-server-tcps-address     : server tcps address (default: %s)\n", MBUS_SERVER_TCPS_ADDRESS);
-	fprintf(stdout, "  --mbus-server-tcps-port        : server tcps port (default: %d)\n", MBUS_SERVER_TCPS_PORT);
-	fprintf(stdout, "  --mbus-server-tcps-certificate : server tcps certificate (default: %s)\n", MBUS_SERVER_TCPS_CERTIFICATE);
-	fprintf(stdout, "  --mbus-server-tcps-privatekey  : server tcps privatekey (default: %s)\n", MBUS_SERVER_TCPS_PRIVATEKEY);
+	fprintf(stdout, "  --mbus-server-tcps-enable     : server tcps enable (default: %d)\n", MBUS_SERVER_TCPS_ENABLE);
+	fprintf(stdout, "  --mbus-server-tcps-address    : server tcps address (default: %s)\n", MBUS_SERVER_TCPS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-tcps-port       : server tcps port (default: %d)\n", MBUS_SERVER_TCPS_PORT);
+	fprintf(stdout, "  --mbus-server-tcps-certificate: server tcps certificate (default: %s)\n", MBUS_SERVER_TCPS_CERTIFICATE);
+	fprintf(stdout, "  --mbus-server-tcps-privatekey : server tcps privatekey (default: %s)\n", MBUS_SERVER_TCPS_PRIVATEKEY);
 
-	fprintf(stdout, "  --mbus-server-udss-enable      : server udss enable (default: %d)\n", MBUS_SERVER_UDSS_ENABLE);
-	fprintf(stdout, "  --mbus-server-udss-address     : server udss address (default: %s)\n", MBUS_SERVER_UDSS_ADDRESS);
-	fprintf(stdout, "  --mbus-server-udss-port        : server udss port (default: %d)\n", MBUS_SERVER_UDSS_PORT);
-	fprintf(stdout, "  --mbus-server-udss-certificate : server udss certificate (default: %s)\n", MBUS_SERVER_UDSS_CERTIFICATE);
-	fprintf(stdout, "  --mbus-server-udss-privatekey  : server udss privatekey (default: %s)\n", MBUS_SERVER_UDSS_PRIVATEKEY);
+	fprintf(stdout, "  --mbus-server-udss-enable     : server udss enable (default: %d)\n", MBUS_SERVER_UDSS_ENABLE);
+	fprintf(stdout, "  --mbus-server-udss-address    : server udss address (default: %s)\n", MBUS_SERVER_UDSS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-udss-port       : server udss port (default: %d)\n", MBUS_SERVER_UDSS_PORT);
+	fprintf(stdout, "  --mbus-server-udss-certificate: server udss certificate (default: %s)\n", MBUS_SERVER_UDSS_CERTIFICATE);
+	fprintf(stdout, "  --mbus-server-udss-privatekey : server udss privatekey (default: %s)\n", MBUS_SERVER_UDSS_PRIVATEKEY);
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	fprintf(stdout, "  --mbus-server-wss-enable       : server ws enable (default: %d)\n", MBUS_SERVER_WSS_ENABLE);
-	fprintf(stdout, "  --mbus-server-wss-address      : server ws address (default: %s)\n", MBUS_SERVER_WSS_ADDRESS);
-	fprintf(stdout, "  --mbus-server-wss-port         : server ws port (default: %d)\n", MBUS_SERVER_WSS_PORT);
-	fprintf(stdout, "  --mbus-server-wss-certificate  : server ws certificate (default: %s)\n", MBUS_SERVER_WSS_CERTIFICATE);
-	fprintf(stdout, "  --mbus-server-wss-privatekey   : server ws privatekey (default: %s)\n", MBUS_SERVER_WSS_PRIVATEKEY);
+	fprintf(stdout, "  --mbus-server-wss-enable      : server ws enable (default: %d)\n", MBUS_SERVER_WSS_ENABLE);
+	fprintf(stdout, "  --mbus-server-wss-address     : server ws address (default: %s)\n", MBUS_SERVER_WSS_ADDRESS);
+	fprintf(stdout, "  --mbus-server-wss-port        : server ws port (default: %d)\n", MBUS_SERVER_WSS_PORT);
+	fprintf(stdout, "  --mbus-server-wss-certificate : server ws certificate (default: %s)\n", MBUS_SERVER_WSS_CERTIFICATE);
+	fprintf(stdout, "  --mbus-server-wss-privatekey  : server ws privatekey (default: %s)\n", MBUS_SERVER_WSS_PRIVATEKEY);
 #endif
 #endif
 
-	fprintf(stdout, "  --mbus-help                    : this text\n");
+	fprintf(stdout, "  --mbus-help                   : this text\n");
 }
 
 static void client_destroy (struct client *client);

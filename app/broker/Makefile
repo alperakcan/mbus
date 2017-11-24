@@ -2,18 +2,18 @@
 include ../../Makefile.conf
 
 target-y = \
-	mbus-controller
+	mbus-broker
 
-mbus-controller_includes-y = \
+mbus-broker_includes-y = \
 	../../dist/include
 
-mbus-controller_libraries-y = \
+mbus-broker_libraries-y = \
 	../../dist/lib
 
-mbus-controller_files-y = \
-	controller.c
+mbus-broker_files-y = \
+	broker.c
 
-mbus-controller_ldflags-y = \
+mbus-broker_ldflags-y = \
 	-lmbus-server \
 	-lmbus-socket \
 	-lmbus-json \
@@ -24,16 +24,16 @@ mbus-controller_ldflags-y = \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-controller_ldflags-${WS_ENABLE} += \
+mbus-broker_ldflags-${WS_ENABLE} += \
 	${ws_ldflags-y}
 
-mbus-controller_ldflags-${SSL_ENABLE} += \
+mbus-broker_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-controller_ldflags-${ZLIB_ENABLE} += \
+mbus-broker_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-controller_ldflags-y += \
+mbus-broker_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
@@ -41,6 +41,6 @@ mbus-controller_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-controller
+	mbus-broker
 
 include ../../Makefile.lib

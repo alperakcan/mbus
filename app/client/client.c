@@ -60,8 +60,8 @@ static struct mbus_client *g_mbus_client;
 static void usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
-	fprintf(stdout, "  --help                   : this text\n");
-	fprintf(stdout, "  --mbus-help              : mbus help text\n");
+	fprintf(stdout, "  --help     : this text\n");
+	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_client_usage();
 }
 
