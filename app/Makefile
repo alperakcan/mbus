@@ -3,7 +3,7 @@ subdir-y = \
 	client \
 	command \
 	broker \
-	event \
+	publish \
 	listener \
 	version
 

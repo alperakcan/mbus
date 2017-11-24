@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MBUS_DEBUG_NAME	"app-event"
+#define MBUS_DEBUG_NAME	"app-publish"
 
 #include "mbus/debug.h"
 #include "mbus/json.h"
@@ -56,7 +56,7 @@ static struct option longopts[] = {
 
 static void usage (void)
 {
-	fprintf(stdout, "mbus event arguments:\n");
+	fprintf(stdout, "mbus publish arguments:\n");
 	fprintf(stdout, "  --destination            : destination identifier\n");
 	fprintf(stdout, "  --event                  : event identifier\n");
 	fprintf(stdout, "  --payload                : payload json\n");

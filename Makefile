@@ -17,8 +17,8 @@ install: app src test
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
 	install -m 0755 dist/bin/mbus-command.py ${DESTDIR}/usr/local/bin/mbus-command.py
 	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
-	install -m 0755 dist/bin/mbus-event ${DESTDIR}/usr/local/bin/mbus-event
-	install -m 0755 dist/bin/mbus-event.py ${DESTDIR}/usr/local/bin/mbus-event.py
+	install -m 0755 dist/bin/mbus-publish ${DESTDIR}/usr/local/bin/mbus-publish
+	install -m 0755 dist/bin/mbus-publish.py ${DESTDIR}/usr/local/bin/mbus-publish.py
 	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
 	install -m 0755 dist/bin/mbus-listener.py ${DESTDIR}/usr/local/bin/mbus-listener.py
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
@@ -85,8 +85,8 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command.py
 	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
-	rm -f ${DESTDIR}/usr/local/bin/mbus-event
-	rm -f ${DESTDIR}/usr/local/bin/mbus-event.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish.py
 	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
 	rm -f ${DESTDIR}/usr/local/bin/mbus-listener.py
 	rm -f ${DESTDIR}/usr/local/bin/mbus-version
