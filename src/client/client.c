@@ -2405,22 +2405,22 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 bail:	return -1;
 }
 
-int mbus_client_register (struct mbus_client *client, const char *identifier)
+int mbus_client_register (struct mbus_client *client, const char *command)
 {
-	return mbus_client_register_timeout(client, identifier, client->options->register_timeout);
+	return mbus_client_register_timeout(client, command, client->options->register_timeout);
 }
 
-int mbus_client_register_timeout (struct mbus_client *client, const char *identifier, int timeout)
+int mbus_client_register_timeout (struct mbus_client *client, const char *command, int timeout)
 {
-	return mbus_client_register_callback_timeout(client, identifier, NULL, NULL, timeout);
+	return mbus_client_register_callback_timeout(client, command, NULL, NULL, timeout);
 }
 
-int mbus_client_register_callback (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+int mbus_client_register_callback (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
 {
-	return mbus_client_register_callback_timeout(client, identifier, callback, context, client->options->register_timeout);
+	return mbus_client_register_callback_timeout(client, command, callback, context, client->options->register_timeout);
 }
 
-int mbus_client_register_callback_timeout (struct mbus_client *client, const char *identifier, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+int mbus_client_register_callback_timeout (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
 {
 	int rc;
 	struct routine *routine;
@@ -2435,7 +2435,7 @@ int mbus_client_register_callback_timeout (struct mbus_client *client, const cha
 		mbus_errorf("client is not connected");
 		goto bail;
 	}
-	if (identifier == NULL) {
+	if (command == NULL) {
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
@@ -2448,13 +2448,13 @@ int mbus_client_register_callback_timeout (struct mbus_client *client, const cha
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "command", identifier);
+	rc = mbus_json_add_string_to_object_cs(payload, "command", command);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
 	if (callback != NULL) {
-		routine = routine_create(identifier, callback, context);
+		routine = routine_create(command, callback, context);
 		if (routine == NULL) {
 			mbus_errorf("can not create routine");
 			goto bail;
@@ -2476,12 +2476,12 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-int mbus_client_unregister (struct mbus_client *client, const char *identifier)
+int mbus_client_unregister (struct mbus_client *client, const char *command)
 {
-	return mbus_client_unregister_timeout(client, identifier, client->options->register_timeout);
+	return mbus_client_unregister_timeout(client, command, client->options->register_timeout);
 }
 
-int mbus_client_unregister_timeout (struct mbus_client *client, const char *identifier, int timeout)
+int mbus_client_unregister_timeout (struct mbus_client *client, const char *command, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2496,7 +2496,7 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 		mbus_errorf("client is not connected");
 		goto bail;
 	}
-	if (identifier == NULL) {
+	if (command == NULL) {
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
@@ -2505,7 +2505,7 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 		timeout = client->options->register_timeout;
 	}
 	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
-		if (strcmp(routine_get_identifier(routine), identifier) == 0) {
+		if (strcmp(routine_get_identifier(routine), command) == 0) {
 			TAILQ_REMOVE(&client->routines, routine, routines);
 			routine_destroy(routine);
 		}
@@ -2515,7 +2515,7 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *iden
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "command", identifier);
+	rc = mbus_json_add_string_to_object_cs(payload, "command", command);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;

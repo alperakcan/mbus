@@ -80,6 +80,11 @@ class MBusClientDefaults:
     PingTimeout       = 5000
     PingThreshold     = 2
 
+class MBusClientQoS:
+    AtMostOnce  = 0
+    AtLeastOnce = 1
+    ExactlyOnce = 2
+
 class MBusClientState:
     Unknown       = 0
     Connecting    = 1
@@ -435,4 +440,16 @@ class MBusClient(object):
         raise
 
     def unsubscribe (self, source, event, timeout = None):
+        raise
+    
+    def publish (self, destination, event, payload = None, qos = None, timeout = None):
+        raise
+
+    def register (self, command, callback, context, timeout):
+        raise
+    
+    def unregister (self, command):
+        raise
+    
+    def command (self, destination, command, payload, callback, context, timeout = None):
         raise
