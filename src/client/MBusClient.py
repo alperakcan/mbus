@@ -144,6 +144,11 @@ class MBusClientCommandStatus:
     Timeout       = 2
     Canceled      = 3
 
+class MBusClientWakeUpReason:
+    Break      = 0
+    Connect    = 1
+    Disconnect = 2
+
 class MBusClientOptions:
     
     def __init__ (self):
@@ -292,40 +297,40 @@ class MBusClient(object):
         self.__sequence        = MBUS_METHOD_SEQUENCE_START
     
     def __commandRegisterResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandUnregisterResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandSubscribeResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandUnsubscribeResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandEventResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandCreateResponse (self, this, context, message, status):
-        raise
+        raise ValueError("not implemented yet")
     
     def __commandCreateRequest (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def __runConnect (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def __handleResult (self, json):
-        raise
+        raise ValueError("not implemented yet")
     
     def __handleEvent (self, json):
-        raise
+        raise ValueError("not implemented yet")
     
     def __handleCommand (self, json):
-        raise
+        raise ValueError("not implemented yet")
     
     def __wakeUp (self, reason):
-        raise
+        pass
     
     def __init__ (self, options = None):
         
@@ -404,52 +409,84 @@ class MBusClient(object):
             raise ValueError("invalid server protocol: {}".format(self.__options.serverProtocol))
     
     def lock (self):
-        raise
+        pass
     
     def unlock (self):
-        raise
+        pass
     
     def getState (self):
-        raise
+        state = None
+        self.lock()
+        state = self.__state
+        self.unlock()
+        return state
     
     def getIdentifier (self):
-        raise
+        identifier = None
+        self.lock()
+        identifier = self.__identifier
+        self.unlock()
+        return identifier
     
     def getWakeUpFd (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def getWakeUpFdEvents (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def getConnectionFd (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def getConnectionFdEvents (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def hasPending (self):
-        raise
+        raise ValueError("not implemented yet")
     
     def connect (self):
-        raise
+        self.lock()
+        if (self.__state != MBusClientState.Connected):
+            self.__state = MBusClientState.Connecting
+            self.__wakeUp(MBusClientWakeUpReason.Connect)
+        self.unlock()
     
     def disconnect (self):
-        raise
+        self.lock()
+        if (self.__state != MBusClientState.Disconnected):
+            self.__state = MBusClientState.Disconnecting
+            self.__wakeUp(MBusClientWakeUpReason.Disconnect)
+        self.unlock()
     
     def subscribe (self, source, event, callback = None, context = None, timeout = None):
-        raise
+        if (source == None):
+            source = MBUS_METHOD_EVENT_SOURCE_ALL
+        if (event == None):
+            raise ValueError("event is invalid")
+        if (callback != None):
+            for subscription in self.__subscriptions:
+                if (subscription.source == source and
+                    subscription.identifier == event):
+                    raise ValueError("subscription already exists")
+        if (timeout == None or
+            timeout < 0):
+            timeout = self.__options.subscribeTimeout
+        raise ValueError("not implemented yet")
 
     def unsubscribe (self, source, event, timeout = None):
-        raise
+        raise ValueError("not implemented yet")
     
     def publish (self, destination, event, payload = None, qos = None, timeout = None):
-        raise
+        raise ValueError("not implemented yet")
 
     def register (self, command, callback, context, timeout):
-        raise
+        raise ValueError("not implemented yet")
     
     def unregister (self, command):
-        raise
+        raise ValueError("not implemented yet")
     
     def command (self, destination, command, payload, callback, context, timeout = None):
-        raise
+        raise ValueError("not implemented yet")
+
+options = MBusClientOptions()
+client = MBusClient(options)
+client.connect()
