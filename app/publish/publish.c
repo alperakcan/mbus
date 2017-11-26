@@ -46,12 +46,12 @@
 #define OPTION_PAYLOAD		0x103
 #define OPTION_FLOOD		0x104
 static struct option longopts[] = {
-	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
-	{ "event",			required_argument,	NULL,	OPTION_EVENT },
-	{ "payload",			required_argument,	NULL,	OPTION_PAYLOAD },
-	{ "flood",			required_argument,	NULL,	OPTION_FLOOD },
-	{ NULL,				0,			NULL,	0 },
+	{ "help",		no_argument,		NULL,	OPTION_HELP },
+	{ "destination",	required_argument,	NULL,	OPTION_DESTINATION },
+	{ "event",		required_argument,	NULL,	OPTION_EVENT },
+	{ "payload",		required_argument,	NULL,	OPTION_PAYLOAD },
+	{ "flood",		required_argument,	NULL,	OPTION_FLOOD },
+	{ NULL,			0,			NULL,	0 },
 };
 
 static void usage (void)
