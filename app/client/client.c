@@ -484,11 +484,10 @@ static int command_subscribe (int argc, char *argv[])
 		return -1;
 	}
 
-	if (callback == 0) {
-		rc = mbus_client_subscribe_timeout(g_mbus_client, source, event, timeout);
-	} else {
-		rc = mbus_client_subscribe_callback_timeout(g_mbus_client, source, event, mbus_client_callback_message_callback, NULL, timeout);
-	}
+	rc = mbus_client_subscribe_from_callback_timeout(g_mbus_client,
+			source, event,
+			(callback == 0) ? NULL :mbus_client_callback_message_callback, NULL,
+			timeout);
 	if (rc != 0) {
 		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", source, event);
 		return -1;
@@ -554,7 +553,7 @@ static int command_unsubscribe (int argc, char *argv[])
 		return -1;
 	}
 
-	rc = mbus_client_unsubscribe_timeout(g_mbus_client, source, event, timeout);
+	rc = mbus_client_unsubscribe_from_timeout(g_mbus_client, source, event, timeout);
 	if (rc != 0) {
 		fprintf(stderr, "can not unsubscribe from source: %s, event: %s\n", source, event);
 		return -1;

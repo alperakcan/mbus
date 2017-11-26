@@ -1979,22 +1979,94 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_subscribe (struct mbus_client *client, const char *source, const char *event)
+int mbus_client_subscribe (struct mbus_client *client, const char *event)
 {
-	return mbus_client_subscribe_timeout(client, source, event, client->options->subscribe_timeout);
+	return mbus_client_subscribe_timeout(client, event, client->options->subscribe_timeout);
 }
 
-int mbus_client_subscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
+int mbus_client_subscribe_unlocked (struct mbus_client *client, const char *event)
 {
-	return mbus_client_subscribe_callback_timeout(client, source, event, NULL, NULL, timeout);
+	return mbus_client_subscribe_timeout_unlocked(client, event, client->options->subscribe_timeout);
 }
 
-int mbus_client_subscribe_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+int mbus_client_subscribe_timeout (struct mbus_client *client, const char *event, int timeout)
 {
-	return mbus_client_subscribe_callback_timeout(client, source, event, callback, context, client->options->subscribe_timeout);
+	return mbus_client_subscribe_callback_timeout(client, event, NULL, NULL, timeout);
 }
 
-int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+int mbus_client_subscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout)
+{
+	return mbus_client_subscribe_callback_timeout_unlocked(client, event, NULL, NULL, timeout);
+}
+
+int mbus_client_subscribe_callback (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_subscribe_callback_timeout(client, event, callback, context, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_callback_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_subscribe_callback_timeout_unlocked(client, event, callback, context, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+{
+	return mbus_client_subscribe_from_callback_timeout(client, NULL, event, callback, context, timeout);
+}
+
+int mbus_client_subscribe_callback_timeout_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+{
+	return mbus_client_subscribe_from_callback_timeout_unlocked(client, NULL, event, callback, context, timeout);
+}
+
+int mbus_client_subscribe_from (struct mbus_client *client, const char *source, const char *event)
+{
+	return mbus_client_subscribe_from_timeout(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event)
+{
+	return mbus_client_subscribe_from_timeout_unlocked(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
+{
+	return mbus_client_subscribe_from_callback_timeout(client, source, event, NULL, NULL, timeout);
+}
+
+int mbus_client_subscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout)
+{
+	return mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, NULL, NULL, timeout);
+}
+
+int mbus_client_subscribe_from_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_subscribe_from_callback_timeout(client, source, event, callback, context, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_from_callback_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, callback, context, client->options->subscribe_timeout);
+}
+
+int mbus_client_subscribe_from_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, callback, context, timeout);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_subscribe_from_callback_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2050,7 +2122,7 @@ int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const ch
 			goto bail;
 		}
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2066,12 +2138,54 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-int mbus_client_unsubscribe (struct mbus_client *client, const char *source, const char *event)
+int mbus_client_unsubscribe (struct mbus_client *client, const char *event)
 {
-	return mbus_client_unsubscribe_timeout(client, source, event, client->options->subscribe_timeout);
+	return mbus_client_unsubscribe_timeout(client, event, client->options->subscribe_timeout);
 }
 
-int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
+int mbus_client_unsubscribe_unlocked (struct mbus_client *client, const char *event)
+{
+	return mbus_client_unsubscribe_timeout_unlocked(client, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *event, int timeout)
+{
+	return mbus_client_unsubscribe_from_timeout(client, NULL, event, timeout);
+}
+
+int mbus_client_unsubscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout)
+{
+	return mbus_client_unsubscribe_from_timeout_unlocked(client, NULL, event, timeout);
+}
+
+int mbus_client_unsubscribe_from (struct mbus_client *client, const char *source, const char *event)
+{
+	return mbus_client_unsubscribe_from_timeout(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_unsubscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event)
+{
+	return mbus_client_unsubscribe_from_timeout_unlocked(client, source, event, client->options->subscribe_timeout);
+}
+
+int mbus_client_unsubscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_unsubscribe_from_timeout_unlocked(client, source, event, timeout);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_unsubscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2120,7 +2234,7 @@ int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *sou
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2409,9 +2523,19 @@ int mbus_client_register (struct mbus_client *client, const char *command)
 	return mbus_client_register_timeout(client, command, client->options->register_timeout);
 }
 
+int mbus_client_register_unlocked (struct mbus_client *client, const char *command)
+{
+	return mbus_client_register_timeout_unlocked(client, command, client->options->register_timeout);
+}
+
 int mbus_client_register_timeout (struct mbus_client *client, const char *command, int timeout)
 {
 	return mbus_client_register_callback_timeout(client, command, NULL, NULL, timeout);
+}
+
+int mbus_client_register_timeout_unlocked (struct mbus_client *client, const char *command, int timeout)
+{
+	return mbus_client_register_callback_timeout_unlocked(client, command, NULL, NULL, timeout);
 }
 
 int mbus_client_register_callback (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
@@ -2419,7 +2543,29 @@ int mbus_client_register_callback (struct mbus_client *client, const char *comma
 	return mbus_client_register_callback_timeout(client, command, callback, context, client->options->register_timeout);
 }
 
+int mbus_client_register_callback_unlocked (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context)
+{
+	return mbus_client_register_callback_timeout_unlocked(client, command, callback, context, client->options->register_timeout);
+}
+
 int mbus_client_register_callback_timeout (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_register_callback_timeout_unlocked(client, command, callback, context, timeout);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message), void *context, int timeout)
 {
 	int rc;
 	struct routine *routine;
@@ -2459,7 +2605,7 @@ int mbus_client_register_callback_timeout (struct mbus_client *client, const cha
 			goto bail;
 		}
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2480,7 +2626,29 @@ int mbus_client_unregister (struct mbus_client *client, const char *command)
 	return mbus_client_unregister_timeout(client, command, client->options->register_timeout);
 }
 
+int mbus_client_unregister_unlocked (struct mbus_client *client, const char *command)
+{
+	return mbus_client_unregister_timeout_unlocked(client, command, client->options->register_timeout);
+}
+
 int mbus_client_unregister_timeout (struct mbus_client *client, const char *command, int timeout)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_unregister_timeout_unlocked(client, command, timeout);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_unregister_timeout_unlocked (struct mbus_client *client, const char *command, int timeout)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2519,7 +2687,7 @@ int mbus_client_unregister_timeout (struct mbus_client *client, const char *comm
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;

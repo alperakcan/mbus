@@ -106,14 +106,14 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 		if (arg->subscriptions->count > 0) {
 			struct subscription *subscription;
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
-				rc = mbus_client_subscribe(client, subscription->source, subscription->event);
+				rc = mbus_client_subscribe_from(client, subscription->source, subscription->event);
 				if (rc != 0) {
 					fprintf(stderr, "can not subscribe to event\n");
 					goto bail;
 				}
 			}
 		} else {
-			rc = mbus_client_subscribe(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+			rc = mbus_client_subscribe_from(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
 			if (rc != 0) {
 				fprintf(stderr, "can not subscribe to events\n");
 				goto bail;
