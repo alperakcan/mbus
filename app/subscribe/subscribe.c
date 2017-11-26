@@ -230,11 +230,11 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "can not create client\n");
 		goto bail;
 	}
-//	rc = mbus_client_connect(client);
-//	if (rc != 0) {
-//		fprintf(stderr, "can not connect client\n");
-//		goto bail;
-//	}
+	rc = mbus_client_connect(client);
+	if (rc != 0) {
+		fprintf(stderr, "can not connect client\n");
+		goto bail;
+	}
 
 	while (1) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
