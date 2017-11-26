@@ -49,6 +49,8 @@ struct subscription {
 };
 
 struct arg {
+	int connected;
+	int disconnected;
 	struct subscriptions *subscriptions;
 };
 
@@ -103,6 +105,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	struct arg *arg = context;
 	fprintf(stdout, "connect: %s\n", mbus_client_connect_status_string(status));
 	if (status == mbus_client_connect_status_success) {
+		arg->connected = 1;
 		if (arg->subscriptions->count > 0) {
 			struct subscription *subscription;
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
@@ -119,6 +122,8 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 				goto bail;
 			}
 		}
+	} else {
+		arg->connected = -1;
 	}
 	return;
 bail:	return;
@@ -126,8 +131,9 @@ bail:	return;
 
 static void mbus_client_callback_disconnect (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status)
 {
+	struct arg *arg = context;
 	(void) client;
-	(void) context;
+	arg->disconnected = 1;
 	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
 }
 
@@ -236,7 +242,8 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 
-	while (1) {
+	while (arg.connected >= 0 &&
+	       arg.disconnected == 0) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
 			fprintf(stderr, "client run failed\n");

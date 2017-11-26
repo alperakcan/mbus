@@ -74,16 +74,17 @@ class MBusClientDefaults:
     SubscribeTimeout  = 30000
     RegisterTimeout   = 30000
     CommandTimeout    = 30000
-    Publishtimeout    = 30000
+    PublishTimeout    = 30000
     
     PingInterval      = 180000
     PingTimeout       = 5000
     PingThreshold     = 2
 
 class MBusClientQoS:
-    AtMostOnce  = 0
-    AtLeastOnce = 1
-    ExactlyOnce = 2
+    Async              = 0
+    SyncSender         = 1
+    SyncReceiver       = 2
+    SyncSenderReceiver = 3
 
 class MBusClientState:
     Unknown       = 0
@@ -382,7 +383,7 @@ class MBusClient(object):
             self.__options.commandTimeout = MBusClientDefaults.CommandTimeout
         if (self.__options.publishTimeout == None or
             self.__options.publishTimeout <= 0):
-            self.__options.publishTimeout = MBusClientDefaults.Publishtimeout
+            self.__options.publishTimeout = MBusClientDefaults.PublishTimeout
 
         if (self.__options.pingInterval == None or
             self.__options.pingInterval == 0):
@@ -457,7 +458,7 @@ class MBusClient(object):
             self.__wakeUp(MBusClientWakeUpReason.Disconnect)
         self.unlock()
     
-    def subscribe (self, source, event, callback = None, context = None, timeout = None):
+    def subscribe (self, event, source = None, callback = None, context = None, timeout = None):
         if (source == None):
             source = MBUS_METHOD_EVENT_SOURCE_ALL
         if (event == None):
@@ -472,10 +473,10 @@ class MBusClient(object):
             timeout = self.__options.subscribeTimeout
         raise ValueError("not implemented yet")
 
-    def unsubscribe (self, source, event, timeout = None):
+    def unsubscribe (self, event, source = None, timeout = None):
         raise ValueError("not implemented yet")
     
-    def publish (self, destination, event, payload = None, qos = None, timeout = None):
+    def publish (self, event, payload = None, qos = None, destination = None, timeout = None):
         raise ValueError("not implemented yet")
 
     def register (self, command, callback, context, timeout):
@@ -487,6 +488,11 @@ class MBusClient(object):
     def command (self, destination, command, payload, callback, context, timeout = None):
         raise ValueError("not implemented yet")
 
-options = MBusClientOptions()
-client = MBusClient(options)
-client.connect()
+    def getRunTimeout (self):
+        raise ValueError("not implemented yet")
+        
+    def breakRun (self):
+        raise ValueError("not implemented yet")
+        
+    def run (self, timeout = None):
+        raise ValueError("not implemented yet")

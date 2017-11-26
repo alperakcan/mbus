@@ -315,7 +315,7 @@ static int command_quit (int argc, char *argv[])
 	(void) argv;
 	g_running = 0;
 	if (g_mbus_client != NULL) {
-		mbus_client_break(g_mbus_client);
+		mbus_client_break_run(g_mbus_client);
 	}
 	return 1;
 }

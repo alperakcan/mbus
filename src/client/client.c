@@ -2446,78 +2446,6 @@ bail:	if (jpayload != NULL) {
 	return -1;
 }
 
-int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context)
-{
-	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->options->command_timeout);
-}
-
-int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context)
-{
-	return mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, client->options->command_timeout);
-}
-
-int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout)
-{
-	int rc;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	mbus_client_lock(client);
-	rc = mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, timeout);
-	mbus_client_unlock(client);
-	return rc;
-bail:	if (client != NULL) {
-		mbus_client_unlock(client);
-	}
-	return -1;
-}
-
-int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout)
-{
-	struct request *request;
-	request = NULL;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (destination == NULL) {
-		mbus_errorf("destination is invalid");
-		goto bail;
-	}
-	if (command == NULL) {
-		mbus_errorf("command is invalid");
-		goto bail;
-	}
-	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
-		if (client->state != mbus_client_state_connecting) {
-			mbus_errorf("client is not connecting: %d", client->state);
-			goto bail;
-		}
-	} else {
-		if (client->state != mbus_client_state_connected) {
-			mbus_errorf("client is not connected");
-			goto bail;
-		}
-	}
-	if (timeout < 0) {
-		mbus_debugf("timeout is invalid, using: %d", client->options->command_timeout);
-		timeout = client->options->command_timeout;
-	}
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, destination, command, client->sequence, payload, callback, context, timeout);
-	if (request == NULL) {
-		mbus_errorf("can not create request");
-		goto bail;
-	}
-	client->sequence += 1;
-	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
-		client->sequence = MBUS_METHOD_SEQUENCE_START;
-	}
-	TAILQ_INSERT_TAIL(&client->requests, request, requests);
-	return 0;
-bail:	return -1;
-}
-
 int mbus_client_register (struct mbus_client *client, const char *command)
 {
 	return mbus_client_register_timeout(client, command, client->options->register_timeout);
@@ -2700,7 +2628,17 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-int mbus_client_break (struct mbus_client *client)
+int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context)
+{
+	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->options->command_timeout);
+}
+
+int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context)
+{
+	return mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, client->options->command_timeout);
+}
+
+int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout)
 {
 	int rc;
 	if (client == NULL) {
@@ -2708,17 +2646,58 @@ int mbus_client_break (struct mbus_client *client)
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_client_wakeup(client, wakeup_reason_break);
-	if (rc != 0) {
-		mbus_errorf("can not wakeup client");
-		goto bail;
-	}
+	rc = mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, timeout);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
 	}
 	return -1;
+}
+
+int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status), void *context, int timeout)
+{
+	struct request *request;
+	request = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (destination == NULL) {
+		mbus_errorf("destination is invalid");
+		goto bail;
+	}
+	if (command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
+		if (client->state != mbus_client_state_connecting) {
+			mbus_errorf("client is not connecting: %d", client->state);
+			goto bail;
+		}
+	} else {
+		if (client->state != mbus_client_state_connected) {
+			mbus_errorf("client is not connected");
+			goto bail;
+		}
+	}
+	if (timeout < 0) {
+		mbus_debugf("timeout is invalid, using: %d", client->options->command_timeout);
+		timeout = client->options->command_timeout;
+	}
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, destination, command, client->sequence, payload, callback, context, timeout);
+	if (request == NULL) {
+		mbus_errorf("can not create request");
+		goto bail;
+	}
+	client->sequence += 1;
+	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
+		client->sequence = MBUS_METHOD_SEQUENCE_START;
+	}
+	TAILQ_INSERT_TAIL(&client->requests, request, requests);
+	return 0;
+bail:	return -1;
 }
 
 int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
@@ -2791,6 +2770,27 @@ int mbus_client_get_run_timeout (struct mbus_client *client)
 	timeout = mbus_client_get_run_timeout_unlocked(client);
 	mbus_client_unlock(client);
 	return timeout;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_break_run (struct mbus_client *client)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_wakeup(client, wakeup_reason_break);
+	if (rc != 0) {
+		mbus_errorf("can not wakeup client");
+		goto bail;
+	}
+	mbus_client_unlock(client);
+	return rc;
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
 	}
