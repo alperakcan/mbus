@@ -683,7 +683,6 @@ static void mbus_client_reset (struct mbus_client *client)
 		free(client->identifier);
 		client->identifier = NULL;
 	}
-	client->state = mbus_client_state_disconnected;
 	client->connect_tsms = 0;
 	client->ping_interval = 0;
 	client->ping_timeout = 0;
@@ -2378,7 +2377,7 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 	}
 	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
 		if (client->state != mbus_client_state_connecting) {
-			mbus_errorf("client is not disconnected: %d", client->state);
+			mbus_errorf("client is not connecting: %d", client->state);
 			goto bail;
 		}
 	} else {
