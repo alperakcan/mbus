@@ -1122,6 +1122,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 	}
 	rc = mbus_socket_connect(client->socket, client->options->server_address, client->options->server_port);
 	if (rc == 0) {
+		status = mbus_client_connect_status_success;
 		client->socket_connected = 1;
 		mbus_debugf("connected to server: '%s:%s:%d'", client->options->server_protocol, client->options->server_address, client->options->server_port);
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
@@ -1157,6 +1158,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 			goto bail;
 		}
 	} else if (rc == -EINPROGRESS) {
+		status = mbus_client_connect_status_success;
 	} else if (rc == -ECONNREFUSED) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
 		status = mbus_client_connect_status_connection_refused;

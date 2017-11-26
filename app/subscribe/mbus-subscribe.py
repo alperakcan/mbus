@@ -152,7 +152,6 @@ if (mbus_client_ping_threshold != None):
 
 client = MBusClient.MBusClient(options)
 client.onConnect = onConnect
-client.onMessage = onMesssage
 
 client.connect()
 
