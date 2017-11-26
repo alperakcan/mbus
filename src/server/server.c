@@ -2765,11 +2765,11 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			mbus_debugf("      client: %p", data->client);
 			mbus_debugf("      buffer:");
 			mbus_debugf("        in:");
-			mbus_debugf("          length  : %d", mbus_buffer_length(data->client->buffer.in));
-			mbus_debugf("          size    : %d", mbus_buffer_size(data->client->buffer.in));
+			mbus_debugf("          length  : %d", mbus_buffer_get_length(data->client->buffer.in));
+			mbus_debugf("          size    : %d", mbus_buffer_get_size(data->client->buffer.in));
 			mbus_debugf("        out:");
-			mbus_debugf("          length  : %d", mbus_buffer_length(data->client->buffer.out));
-			mbus_debugf("          size    : %d", mbus_buffer_size(data->client->buffer.out));
+			mbus_debugf("          length  : %d", mbus_buffer_get_length(data->client->buffer.out));
+			mbus_debugf("          size    : %d", mbus_buffer_get_size(data->client->buffer.out));
 			mbus_debugf("    in: %p", in);
 			mbus_debugf("    len: %zd", len);
 			if (data->wsi == NULL &&
@@ -2785,12 +2785,12 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				uint8_t *end;
 				uint32_t expected;
 				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", mbus_buffer_length(data->client->buffer.in));
-				mbus_debugf("        size    : %d", mbus_buffer_size(data->client->buffer.in));
+				mbus_debugf("        length  : %d", mbus_buffer_get_length(data->client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_get_size(data->client->buffer.in));
 				while (1) {
 					char *string;
-					ptr = mbus_buffer_base(data->client->buffer.in);
-					end = ptr + mbus_buffer_length(data->client->buffer.in);
+					ptr = mbus_buffer_get_base(data->client->buffer.in);
+					end = ptr + mbus_buffer_get_length(data->client->buffer.in);
 					if (end - ptr < 4) {
 						break;
 					}
@@ -2832,13 +2832,13 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				mbus_debugf("client is closed");
 				goto bail;
 			}
-			while (mbus_buffer_length(data->client->buffer.out) > 0 &&
+			while (mbus_buffer_get_length(data->client->buffer.out) > 0 &&
 			       lws_send_pipe_choked(data->wsi) == 0) {
 				uint8_t *ptr;
 				uint8_t *end;
 				uint32_t expected;
-				ptr = mbus_buffer_base(data->client->buffer.out);
-				end = ptr + mbus_buffer_length(data->client->buffer.out);
+				ptr = mbus_buffer_get_base(data->client->buffer.out);
+				end = ptr + mbus_buffer_get_length(data->client->buffer.out);
 				expected = end - ptr;
 				if (end - ptr < (int32_t) expected) {
 					break;
@@ -2859,7 +2859,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				}
 				break;
 			}
-			if (mbus_buffer_length(data->client->buffer.out) > 0) {
+			if (mbus_buffer_get_length(data->client->buffer.out) > 0) {
 				lws_callback_on_writable(data->wsi);
 			}
 			break;
@@ -3050,7 +3050,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->pollfds.pollfds[n].revents = 0;
 			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
 			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_length(client->buffer.out) > 0
+			if (mbus_buffer_get_length(client->buffer.out) > 0
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			    || client->ssl.want_write != 0
 #endif
@@ -3065,7 +3065,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			server->pollfds.pollfds[n].revents = 0;
 			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
 			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_length(client->buffer.out) > 0
+			if (mbus_buffer_get_length(client->buffer.out) > 0
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			    || client->ssl.want_write != 0
 #endif
@@ -3079,7 +3079,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		if (client_get_listener_type(client) == listener_type_ws) {
 			struct ws_client_data *data;
 			data = (struct ws_client_data *) client_get_socket(client);
-			if (mbus_buffer_length(client->buffer.out) > 0) {
+			if (mbus_buffer_get_length(client->buffer.out) > 0) {
 				mbus_debugf("    out: %s", client_get_identifier(client));
 				lws_callback_on_writable(data->wsi);
 			}
@@ -3218,7 +3218,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 #endif
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
-			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
+			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
 				client_set_socket(client, NULL);
@@ -3228,21 +3228,21 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			if (client->ssl.ssl == NULL) {
 #endif
 				read_rc = read(mbus_socket_get_fd(client->socket),
-						mbus_buffer_base(client->buffer.in) + mbus_buffer_length(client->buffer.in),
-						mbus_buffer_size(client->buffer.in) - mbus_buffer_length(client->buffer.in));
+						mbus_buffer_get_base(client->buffer.in) + mbus_buffer_get_length(client->buffer.in),
+						mbus_buffer_get_size(client->buffer.in) - mbus_buffer_get_length(client->buffer.in));
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
 				read_rc = 0;
 				do {
-					rc = mbus_buffer_reserve(client->buffer.in, (mbus_buffer_length(client->buffer.in) + read_rc) + 1024);
+					rc = mbus_buffer_reserve(client->buffer.in, (mbus_buffer_get_length(client->buffer.in) + read_rc) + 1024);
 					if (rc != 0) {
 						mbus_errorf("can not reserve client buffer");
 						goto bail;
 					}
 					client->ssl.want_read = 0;
 					rc = SSL_read(client->ssl.ssl,
-							mbus_buffer_base(client->buffer.in) + (mbus_buffer_length(client->buffer.in) + read_rc),
-							mbus_buffer_size(client->buffer.in) - (mbus_buffer_length(client->buffer.in) + read_rc));
+							mbus_buffer_get_base(client->buffer.in) + (mbus_buffer_get_length(client->buffer.in) + read_rc),
+							mbus_buffer_get_size(client->buffer.in) - (mbus_buffer_get_length(client->buffer.in) + read_rc));
 					if (rc <= 0) {
 						int error;
 						error = SSL_get_error(client->ssl.ssl, rc);
@@ -3292,19 +3292,19 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				uint8_t *data;
 				uint32_t expected;
 				uint32_t uncompressed;
-				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_length(client->buffer.in) + read_rc);
+				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + read_rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
 					client_set_socket(client, NULL);
 					break;
 				}
 				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", mbus_buffer_length(client->buffer.in));
-				mbus_debugf("        size    : %d", mbus_buffer_size(client->buffer.in));
+				mbus_debugf("        length  : %d", mbus_buffer_get_length(client->buffer.in));
+				mbus_debugf("        size    : %d", mbus_buffer_get_size(client->buffer.in));
 				while (1) {
 					char *string;
-					ptr = mbus_buffer_base(client->buffer.in);
-					end = ptr + mbus_buffer_length(client->buffer.in);
+					ptr = mbus_buffer_get_base(client->buffer.in);
+					end = ptr + mbus_buffer_get_length(client->buffer.in);
 					if (end - ptr < 4) {
 						break;
 					}
@@ -3371,18 +3371,18 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 skip_in:
 		if (server->pollfds.pollfds[c].revents & POLLOUT) {
-			if (mbus_buffer_length(client->buffer.out) <= 0) {
+			if (mbus_buffer_get_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
 #endif
-				rc = write(mbus_socket_get_fd(client_get_socket(client)), mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				rc = write(mbus_socket_get_fd(client_get_socket(client)), mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
 				client->ssl.want_write = 0;
-				rc = SSL_write(client->ssl.ssl, mbus_buffer_base(client->buffer.out), mbus_buffer_length(client->buffer.out));
+				rc = SSL_write(client->ssl.ssl, mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
 				if (rc <= 0) {
 					int error;
 					error = SSL_get_error(client->ssl.ssl, rc);

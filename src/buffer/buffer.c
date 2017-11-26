@@ -81,12 +81,12 @@ int mbus_buffer_reset (struct mbus_buffer *buffer)
 	return 0;
 }
 
-unsigned int mbus_buffer_size (struct mbus_buffer *buffer)
+unsigned int mbus_buffer_get_size (struct mbus_buffer *buffer)
 {
 	return buffer->size;
 }
 
-unsigned int mbus_buffer_length (struct mbus_buffer *buffer)
+unsigned int mbus_buffer_get_length (struct mbus_buffer *buffer)
 {
 	return buffer->length;
 }
@@ -100,7 +100,7 @@ int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length)
 	return 0;
 }
 
-uint8_t * mbus_buffer_base (struct mbus_buffer *buffer)
+uint8_t * mbus_buffer_get_base (struct mbus_buffer *buffer)
 {
 	return buffer->buffer;
 }
