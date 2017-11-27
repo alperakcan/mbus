@@ -1932,33 +1932,36 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 			client->ping.threshold = mbus_json_get_int_value(ping, "threshold", -1);
 			if (client->ping.interval <= 0) {
 				client->ping.interval = 0;
-			}
-			if (client->ping.timeout > (client->ping.interval * 2) / 3) {
-				client->ping.timeout = (client->ping.interval * 2) / 3;
-			}
-			if (client->ping.threshold <= 0) {
+				client->ping.timeout = 0;
 				client->ping.threshold = 0;
-			}
-			if (client->ping.interval > 0) {
+				client->ping.enabled = 0;
+				client->ping.ping_recv_tsms = 0;
+			} else {
+				if (client->ping.timeout > (client->ping.interval * 2) / 3) {
+					client->ping.timeout = (client->ping.interval * 2) / 3;
+				}
+				if (client->ping.threshold <= 0) {
+					client->ping.threshold = 0;
+				}
+				client->ping.ping_recv_tsms = mbus_clock_get() - client->ping.interval;
 				client->ping.enabled = 1;
 			}
-			client->ping.ping_recv_tsms = mbus_clock_get() - client->ping.interval;
 		}
 		{
 			int i;
 			int j;
-			struct mbus_json *compression;
-			compression = mbus_json_get_object(payload, "compression");
+			struct mbus_json *compressions;
+			compressions = mbus_json_get_object(payload, "compressions");
 			for (i = 0; i < (int) (sizeof(compression_methods) / sizeof(compression_methods[0])); i++) {
-				for (j = 0; j < mbus_json_get_array_size(compression); j++) {
-					if (mbus_json_get_value_string(mbus_json_get_array_item(compression, j)) == NULL) {
+				for (j = 0; j < mbus_json_get_array_size(compressions); j++) {
+					if (mbus_json_get_value_string(mbus_json_get_array_item(compressions, j)) == NULL) {
 						continue;
 					}
-					if (strcmp(compression_methods[i].name, mbus_json_get_value_string(mbus_json_get_array_item(compression, j))) == 0) {
+					if (strcmp(compression_methods[i].name, mbus_json_get_value_string(mbus_json_get_array_item(compressions, j))) == 0) {
 						break;
 					}
 				}
-				if (j < mbus_json_get_array_size(compression)) {
+				if (j < mbus_json_get_array_size(compressions)) {
 					break;
 				}
 			}

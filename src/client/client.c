@@ -947,11 +947,11 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 	int rc;
 	struct mbus_json *payload;
 	struct mbus_json *payload_ping;
-	struct mbus_json *payload_compression;
+	struct mbus_json *payload_compressions;
 
 	payload = NULL;
 	payload_ping = NULL;
-	payload_compression = NULL;
+	payload_compressions = NULL;
 
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
@@ -967,58 +967,60 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 		}
 	}
 
-	payload_ping = mbus_json_create_object();
-	if (payload_ping == NULL) {
-		mbus_errorf("can not create json object");
-		goto bail;
+	if (client->options->ping_interval > 0) {
+		payload_ping = mbus_json_create_object();
+		if (payload_ping == NULL) {
+			mbus_errorf("can not create json object");
+			goto bail;
+		}
+		rc = mbus_json_add_number_to_object_cs(payload_ping, "interval", client->options->ping_interval);
+		if (rc != 0) {
+			mbus_errorf("can not add number to json object");
+			goto bail;
+		}
+		rc = mbus_json_add_number_to_object_cs(payload_ping, "timeout", client->options->ping_timeout);
+		if (rc != 0) {
+			mbus_errorf("can not add item to json object");
+			goto bail;
+		}
+		rc = mbus_json_add_number_to_object_cs(payload_ping, "threshold", client->options->ping_threshold);
+		if (rc != 0) {
+			mbus_errorf("can not add item to json object");
+			goto bail;
+		}
+		rc = mbus_json_add_item_to_object_cs(payload, "ping", payload_ping);
+		if (rc != 0) {
+			mbus_errorf("can not add item to json object");
+			goto bail;
+		}
+		payload_ping = NULL;
 	}
-	rc = mbus_json_add_number_to_object_cs(payload_ping, "interval", client->options->ping_interval);
-	if (rc != 0) {
-		mbus_errorf("can not add number to json object");
-		goto bail;
-	}
-	rc = mbus_json_add_number_to_object_cs(payload_ping, "timeout", client->options->ping_timeout);
-	if (rc != 0) {
-		mbus_errorf("can not add item to json object");
-		goto bail;
-	}
-	rc = mbus_json_add_number_to_object_cs(payload_ping, "threshold", client->options->ping_threshold);
-	if (rc != 0) {
-		mbus_errorf("can not add item to json object");
-		goto bail;
-	}
-	rc = mbus_json_add_item_to_object_cs(payload, "ping", payload_ping);
-	if (rc != 0) {
-		mbus_errorf("can not add item to json object");
-		goto bail;
-	}
-	payload_ping = NULL;
 
-	payload_compression = mbus_json_create_array();
-	if (payload_compression == NULL) {
+	payload_compressions = mbus_json_create_array();
+	if (payload_compressions == NULL) {
 		mbus_errorf("can not create json array");
 		goto bail;
 	}
-	rc = mbus_json_add_item_to_array(payload_compression, mbus_json_create_string("none"));
+	rc = mbus_json_add_item_to_array(payload_compressions, mbus_json_create_string("none"));
 	if (rc != 0) {
 		mbus_errorf("can not add item to json array");
 		goto bail;
 	}
 #if defined(ZLIB_ENABLE) && (ZLIB_ENABLE == 1)
-	rc = mbus_json_add_item_to_array(payload_compression, mbus_json_create_string("zlib"));
+	rc = mbus_json_add_item_to_array(payload_compressions, mbus_json_create_string("zlib"));
 	if (rc != 0) {
 		mbus_errorf("can not add item to json array");
 		goto bail;
 	}
 #endif
-	rc = mbus_json_add_item_to_object_cs(payload, "compression", payload_compression);
+	rc = mbus_json_add_item_to_object_cs(payload, "compressions", payload_compressions);
 	if (rc != 0) {
 		mbus_errorf("can not add item to json array");
 		goto bail;
 	}
-	payload_compression = NULL;
+	payload_compressions = NULL;
 
-	rc = mbus_client_command_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, mbus_client_command_create_response, client);
+	rc = mbus_client_command_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, mbus_client_command_create_response, NULL);
 	if (rc != 0) {
 		mbus_errorf("can not queue client command");
 		goto bail;
@@ -1032,8 +1034,8 @@ bail:	if (payload != NULL) {
 	if (payload_ping != NULL) {
 		mbus_json_delete(payload_ping);
 	}
-	if (payload_compression != NULL) {
-		mbus_json_delete(payload_compression);
+	if (payload_compressions != NULL) {
+		mbus_json_delete(payload_compressions);
 	}
 	return -1;
 }
@@ -2675,12 +2677,12 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 	}
 	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
 		if (client->state != mbus_client_state_connecting) {
-			mbus_errorf("client is not connecting: %d", client->state);
+			mbus_errorf("client state is not connecting: %d", client->state);
 			goto bail;
 		}
 	} else {
 		if (client->state != mbus_client_state_connected) {
-			mbus_errorf("client is not connected");
+			mbus_errorf("client state is not connected: %d", client->state);
 			goto bail;
 		}
 	}
@@ -3013,17 +3015,14 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				}
 			} else if (rc == -ECONNREFUSED) {
 				mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
+				mbus_client_notify_connect(client, mbus_client_connect_status_connection_refused);
+				mbus_client_reset(client);
 				if (client->options->connect_interval > 0) {
-					mbus_client_notify_connect(client, mbus_client_connect_status_connection_refused);
-					mbus_client_reset(client);
 					client->state = mbus_client_state_connecting;
-					goto out;
 				} else {
-					mbus_client_notify_connect(client, mbus_client_connect_status_connection_refused);
-					mbus_client_reset(client);
 					client->state = mbus_client_state_disconnected;
-					goto out;
 				}
+				goto out;
 			} else {
 				mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
 				mbus_client_notify_connect(client, mbus_client_connect_status_internal_error);
