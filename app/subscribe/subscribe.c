@@ -123,7 +123,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 			}
 		}
 	} else {
-		//arg->connected = -1;
+		arg->connected = -1;
 	}
 	return;
 bail:	return;
