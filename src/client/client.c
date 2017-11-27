@@ -903,18 +903,30 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	response = mbus_client_message_command_response_payload(message);
 	if (response == NULL) {
 		mbus_errorf("message response is invalid");
+		mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
+		mbus_client_reset(client);
+		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
 	{
 		const char *identifier;
 		identifier = mbus_json_get_string_value(response, "identifier", NULL);
-		if (identifier != NULL) {
+		if (identifier == NULL) {
+			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
+			mbus_client_reset(client);
+			client->state = mbus_client_state_disconnected;
+			goto bail;
+		}
+		if (client->identifier != NULL) {
 			free(client->identifier);
-			client->identifier = strdup(identifier);
-			if (client->identifier == NULL) {
-				mbus_errorf("can not allocate memory");
-				goto bail;
-			}
+		}
+		client->identifier = strdup(identifier);
+		if (client->identifier == NULL) {
+			mbus_errorf("can not allocate memory");
+			mbus_client_notify_connect(client, mbus_client_connect_status_internal_error);
+			mbus_client_reset(client);
+			client->state = mbus_client_state_disconnected;
+			goto bail;
 		}
 	}
 	{
