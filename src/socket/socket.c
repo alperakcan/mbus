@@ -496,7 +496,7 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 		goto bail;
 	}
 	if (rc < 0) {
-		mbus_errorf("bind failed (%s)", strerror(errno));
+		mbus_errorf("can not bind to %s:%d (%s)", address, port, strerror(errno));
 		goto bail;
 	}
 	return 0;
