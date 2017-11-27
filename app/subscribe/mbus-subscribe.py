@@ -21,7 +21,7 @@ mbus_client_ping_threshold    = None
 subscriptions = []
 
 options, remainder = getopt.gnu_getopt(sys.argv[1:], 's:h', ['help', 
-                                                             'subscribe=',
+                                                             'event=',
                                                              'mbus-client-identifier=',
                                                              'mbus-client-server-protocol=',
                                                              'mbus-client-server-address=',
@@ -40,7 +40,7 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 's:h', ['help',
 for opt, arg in options:
     if opt in ('-h', '--help'):
         print("subscribe usage:\n" \
-              "  --subscribe                    : subscribe to an event identifier\n" \
+              "  --event                        : subscribe to an event identifier\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
@@ -73,7 +73,7 @@ for opt, arg in options:
                     )
               )
         exit(0)
-    elif opt in ('-s', '--subscribe'):
+    elif opt in ('-e', '--event'):
         subscriptions.append(arg)
     elif opt == '--mbus-client-identifier':
         mbus_client_identifier = arg
@@ -105,6 +105,7 @@ for opt, arg in options:
 class onParam(object):
     def __init__ (self):
         self.connected = 0
+        self.disconnected = 0
     
 def onConnect (client, context, status):
     print("connect: {}".format(status))
@@ -167,5 +168,6 @@ client = MBusClient.MBusClient(options)
 
 client.connect()
 
-while (True):
+while (options.onContext.connected >= 0 and
+       options.onContext.disconnected == 0):
     client.run()
