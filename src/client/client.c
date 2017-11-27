@@ -331,10 +331,6 @@ static struct subscription * subscription_create (const char *source, const char
 		mbus_errorf("identifier is invalid");
 		goto bail;
 	}
-	if (callback == NULL) {
-		mbus_errorf("callback is invalid");
-		goto bail;
-	}
 	subscription->source = strdup(source);
 	if (subscription->source == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -1238,7 +1234,11 @@ static int mbus_client_handle_event (struct mbus_client *client, const struct mb
 	const char *source;
 	const char *identifier;
 	struct subscription *subscription;
+
 	struct mbus_client_message message;
+
+	void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message *message);
+	void *callback_context;
 
 	source = mbus_json_get_string_value(json, "source", NULL);
 	if (source == NULL) {
@@ -1257,21 +1257,24 @@ static int mbus_client_handle_event (struct mbus_client *client, const struct mb
 		client->pong_recv_tsms = mbus_clock_get();
 		client->pong_missed_count = 0;
 	} else {
-		message.type = mbus_client_message_type_event;
-		message.u.event.payload = json;
+		callback = client->options->callbacks.message;
+		callback_context = client->options->callbacks.context;
+
 		TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
 			if ((strcmp(subscription_get_source(subscription), MBUS_METHOD_EVENT_SOURCE_ALL) == 0 ||
 			     strcmp(subscription_get_source(subscription), source) == 0) &&
 			    (strcmp(subscription_get_identifier(subscription), MBUS_METHOD_EVENT_IDENTIFIER_ALL) == 0 ||
 			     strcmp(subscription_get_identifier(subscription), identifier) == 0)) {
-				subscription_get_callback(subscription)(client, subscription_get_context(subscription), &message);
+				callback = subscription_get_callback(subscription);
+				callback_context = subscription_get_context(subscription);
 				break;
 			}
 		}
-		if (subscription == NULL &&
-		    client->options->callbacks.message != NULL) {
+		if (callback != NULL) {
+			message.type = mbus_client_message_type_event;
+			message.u.event.payload = json;
 			mbus_client_unlock(client);
-			client->options->callbacks.message(client, client->options->callbacks.context, &message);
+			callback(client, callback_context, &message);
 			mbus_client_lock(client);
 		}
 	}
@@ -1315,17 +1318,14 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 		client->pong_recv_tsms = mbus_clock_get();
 		client->pong_missed_count = 0;
 	} else {
+		callback = client->options->callbacks.routine;
+		callback_context = client->options->callbacks.context;
 		TAILQ_FOREACH(routine, &client->routines, routines) {
 			if (strcmp(routine_get_identifier(routine), identifier) == 0) {
 				callback = routine_get_callback(routine);
 				callback_context = routine_get_context(routine);
 				break;
 			}
-		}
-		if (routine == NULL &&
-		    client->options->callbacks.routine != NULL) {
-			callback = client->options->callbacks.routine;
-			callback_context = client->options->callbacks.context;
 		}
 		if (callback != NULL) {
 			message.type = mbus_client_message_type_routine;
@@ -2131,12 +2131,10 @@ int mbus_client_subscribe_from_callback_timeout_unlocked (struct mbus_client *cl
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	if (callback != NULL) {
-		subscription = subscription_create(source, event, callback, context);
-		if (subscription == NULL) {
-			mbus_errorf("can not create subscription");
-			goto bail;
-		}
+	subscription = subscription_create(source, event, callback, context);
+	if (subscription == NULL) {
+		mbus_errorf("can not create subscription");
+		goto bail;
 	}
 	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
 	if (rc != 0) {

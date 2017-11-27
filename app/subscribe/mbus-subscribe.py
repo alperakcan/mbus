@@ -102,6 +102,10 @@ for opt, arg in options:
     elif opt == '--mbus-client-ping-threshold':
         mbus_client_ping_threshold = arg
 
+class onParam(object):
+    def __init__ (self):
+        self.connected = 0
+    
 def onEventAllAll (self, context, source, event, payload):
     print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
     
@@ -111,13 +115,17 @@ def onEventAllEvent (self, context, source, event, payload):
 def onStatusServerAll (self, context, source, event, payload):
     print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
     
-def onConnect (self):
-    if (len(subscriptions) == 0):
-        client.subscribe(MBusClient.MBUS_SERVER_IDENTIFIER, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
-        client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
+def onConnect (client, context, status):
+    if (status == MBusClient.MBusClientConnectStatus.Success):
+        context.connected = 1
+        if (len(subscriptions) == 0):
+            client.subscribe(MBusClient.MBUS_SERVER_IDENTIFIER, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
+            client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
+        else:
+            for s in subscriptions:
+                client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, s, onEventAllEvent, None)
     else:
-        for s in subscriptions:
-            client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, s, onEventAllEvent, None)
+        context.connected = -1;
 
 def onSubscribed (self, source, event):
     return
@@ -149,9 +157,10 @@ if (mbus_client_ping_timeout != None):
     options.pingTimeout = mbus_client_ping_timeout
 if (mbus_client_ping_threshold != None):
     options.pingThreshold = mbus_client_ping_threshold
+options.onConnect = onConnect
+options.onContext = onParam()
 
 client = MBusClient.MBusClient(options)
-client.onConnect = onConnect
 
 client.connect()
 

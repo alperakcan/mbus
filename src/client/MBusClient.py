@@ -260,6 +260,7 @@ class MBusClientRequest(object):
         self.callback    = callback
         self.context     = context
         self.timeout     = timeout
+        self.createdAt   = mbus_clock_get()
     
     def __callback (self, client, context, message, status):
         pass
@@ -586,7 +587,7 @@ class MBusClient(object):
             self.__state = MBusClientState.Disconnecting
             self.__wakeUp(MBusClientWakeUpReason.Disconnect)
     
-    def subscribe (self, event, source = None, callback = None, context = None, timeout = None):
+    def subscribe (self, event, callback = None, context = None, source = None, timeout = None):
         if (source == None):
             source = MBUS_METHOD_EVENT_SOURCE_ALL
         if (event == None):
@@ -599,7 +600,16 @@ class MBusClient(object):
         if (timeout == None or
             timeout < 0):
             timeout = self.__options.subscribeTimeout
-        raise ValueError("not implemented yet")
+        subscription = MBusClientSubscription(source, event, callback, context)
+        if (subscription == None):
+            raise ValueError("can not create subscription")
+        payload = {}
+        payload["source"] = source
+        payload["event"] = event
+        rc = self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, self.__commandSubscribeResponse, subscription, timeout)
+        if (rc != 0):
+            raise ValueError("can not call subscribe command")
+        return 0
 
     def unsubscribe (self, event, source = None, timeout = None):
         raise ValueError("not implemented yet")
@@ -667,19 +677,19 @@ class MBusClient(object):
                 if (mbus_clock_after(current, self.__pingSendTsms + self.__pingInterval)):
                     timeout = 0
                 else:
-                    timeout = min(timeout, (self.__pingSendTsms + self.__pingInterval) - (current))
+                    timeout = min(timeout, (long) ((self.__pingSendTsms + self.__pingInterval) - (current)))
             for request in self.__requests:
                 if (request.timeout >= 0):
-                    if (mbus_clock_after(current, request_get_created_at(request) + request.timeout)):
+                    if (mbus_clock_after(current, request.createdAt + request.timeout)):
                         timeout = 0
                     else:
-                        timeout = min(timeout, (long) ((request_get_created_at(request) + request.timeout) - (current)))
+                        timeout = min(timeout, (long) ((request.createdAt + request.timeout) - (current)))
             for request in self.__pendings:
                 if (request.timeout >= 0):
-                    if (mbus_clock_after(current, request_get_created_at(request) + request.timeout)):
+                    if (mbus_clock_after(current, request.createdAt + request.timeout)):
                         timeout = 0
                     else:
-                        timeout = min(timeout, (long) ((request_get_created_at(request) + request.timeout) - (current)))
+                        timeout = min(timeout, (long) ((request.createdAt + request.timeout) - (current)))
         elif (self.__state == MBusClientState.Disconnecting):
             timeout = 0
         elif (self.__state == MBusClientState.Disconnected):
@@ -687,7 +697,7 @@ class MBusClient(object):
                 if (mbus_clock_after(current, self.__connectTsms + self.__options.connect_interval)):
                     timeout = 0
                 else:
-                    timeout = min(timeout, (self.__connectTsms + self.__options.connectInterval) - (current))
+                    timeout = min(timeout, (long) ((self.__connectTsms + self.__options.connectInterval) - (current)))
         return timeout
         
     def breakRun (self):
