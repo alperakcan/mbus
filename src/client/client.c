@@ -679,7 +679,6 @@ static void mbus_client_reset (struct mbus_client *client)
 		free(client->identifier);
 		client->identifier = NULL;
 	}
-	client->connect_tsms = 0;
 	client->ping_interval = 0;
 	client->ping_timeout = 0;
 	client->ping_threshold = 0;
@@ -1259,14 +1258,15 @@ static int mbus_client_handle_event (struct mbus_client *client, const struct mb
 	} else {
 		callback = client->options->callbacks.message;
 		callback_context = client->options->callbacks.context;
-
 		TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
 			if ((strcmp(subscription_get_source(subscription), MBUS_METHOD_EVENT_SOURCE_ALL) == 0 ||
 			     strcmp(subscription_get_source(subscription), source) == 0) &&
 			    (strcmp(subscription_get_identifier(subscription), MBUS_METHOD_EVENT_IDENTIFIER_ALL) == 0 ||
 			     strcmp(subscription_get_identifier(subscription), identifier) == 0)) {
-				callback = subscription_get_callback(subscription);
-				callback_context = subscription_get_context(subscription);
+				if (subscription_get_callback(subscription) != NULL) {
+					callback = subscription_get_callback(subscription);
+					callback_context = subscription_get_context(subscription);
+				}
 				break;
 			}
 		}
@@ -1322,8 +1322,10 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 		callback_context = client->options->callbacks.context;
 		TAILQ_FOREACH(routine, &client->routines, routines) {
 			if (strcmp(routine_get_identifier(routine), identifier) == 0) {
-				callback = routine_get_callback(routine);
-				callback_context = routine_get_context(routine);
+				if (routine_get_callback(routine) != NULL) {
+					callback = routine_get_callback(routine);
+					callback_context = routine_get_context(routine);
+				}
 				break;
 			}
 		}
@@ -2727,9 +2729,17 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 	}
 	if (client->state == mbus_client_state_connecting) {
 		if (client->socket == NULL) {
-			timeout = MIN(timeout, client->options->connect_interval);
+			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
+				timeout = MIN(timeout, client->options->connect_interval);
+			} else {
+				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_interval) - (current)));
+			}
 		} else if (client->socket_connected == 0) {
-			timeout = MIN(timeout, client->options->connect_timeout);
+			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_timeout)) {
+				timeout = MIN(timeout, client->options->connect_timeout);
+			} else {
+				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_timeout) - (current)));
+			}
 		}
 	} else if (client->state == mbus_client_state_connected) {
 		if (client->ping_interval > 0) {
@@ -2837,7 +2847,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			current = mbus_clock_get();
 			if (client->options->connect_interval <= 0 ||
 			    mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
-				mbus_debugf("connecting");
 				client->connect_tsms = mbus_clock_get();
 				rc = mbus_client_run_connect(client);
 				if (rc != 0) {

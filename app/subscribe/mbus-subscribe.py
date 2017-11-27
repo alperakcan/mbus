@@ -32,9 +32,9 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 's:h', ['help',
                                                              'mbus-client-register-timeout=',
                                                              'mbus-client-command-timeout=',
                                                              'mbus-client-publish-timeout=',
-                                                             'mbus-ping-interval=',
-                                                             'mbus-ping-timeout=',
-                                                             'mbus-ping-threshold=',
+                                                             'mbus-client-ping-interval=',
+                                                             'mbus-client-ping-timeout=',
+                                                             'mbus-client-ping-threshold=',
                                                              ])
 
 for opt, arg in options:
@@ -106,31 +106,30 @@ class onParam(object):
     def __init__ (self):
         self.connected = 0
     
-def onEventAllAll (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
-    
-def onEventAllEvent (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
-    
-def onStatusServerAll (self, context, source, event, payload):
-    print("{}: {}.{}: {}".format(self.name(), source, event, json.dumps(payload, sort_keys=True, indent=4)));
-    
 def onConnect (client, context, status):
+    print("connect: {}".format(status))
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
         if (len(subscriptions) == 0):
-            client.subscribe(MBusClient.MBUS_SERVER_IDENTIFIER, MBusClient.MBUS_METHOD_STATUS_IDENTIFIER_ALL, onStatusServerAll, None)
-            client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, onEventAllAll, None)
+            client.subscribe(MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL)
         else:
             for s in subscriptions:
-                client.subscribe(MBusClient.MBUS_METHOD_EVENT_SOURCE_ALL, s, onEventAllEvent, None)
+                client.subscribe(s)
     else:
-        context.connected = -1;
+        context.connected = -1
 
-def onSubscribed (self, source, event):
-    return
+def onDisconnect (client, context, status):
+    print("disconnect: {}".format(status))
+    context.disconnected = 1
     
+def onSubscribe (client, context, source, event, status):
+    print("subscribe: {}, source: {}, event: {}".format(status, source, event))
+
+def onMessage (client, context, message):
+    print("{}.{}.{}".format(message.getSource(), message.getIdentifier(), json.dumps(message.getPayload())))
+
 options = MBusClient.MBusClientOptions()
+
 if (mbus_client_identifier != None):
     options.identifier = mbus_client_identifier
 if (mbus_client_server_protocol != None):
@@ -138,27 +137,31 @@ if (mbus_client_server_protocol != None):
 if (mbus_client_server_address != None):
     options.serverAddress = mbus_client_server_address
 if (mbus_client_server_port != None):
-    options.serverPort = mbus_client_server_port
+    options.serverPort = int(mbus_client_server_port)
 if (mbus_client_connect_timeout != None):
-    options.connectTimeout = mbus_client_connect_timeout
+    options.connectTimeout = int(mbus_client_connect_timeout)
 if (mbus_client_connect_interval != None):
-    options.connectInterval = mbus_client_connect_interval
+    options.connectInterval = int(mbus_client_connect_interval)
 if (mbus_client_subscribe_timeout != None):
-    options.subscribeTimeout = mbus_client_subscribe_timeout
+    options.subscribeTimeout = int(mbus_client_subscribe_timeout)
 if (mbus_client_register_timeout != None):
-    options.registerTimeout = mbus_client_register_timeout
+    options.registerTimeout = int(mbus_client_register_timeout)
 if (mbus_client_command_timeout != None):
-    options.commandTimeout = mbus_client_command_timeout
+    options.commandTimeout = int(mbus_client_command_timeout)
 if (mbus_client_publish_timeout != None):
-    options.publishTimeout = mbus_client_publish_timeout
+    options.publishTimeout = int(mbus_client_publish_timeout)
 if (mbus_client_ping_interval != None):
-    options.pingInterval = mbus_client_ping_interval
+    options.pingInterval = int(mbus_client_ping_interval)
 if (mbus_client_ping_timeout != None):
-    options.pingTimeout = mbus_client_ping_timeout
+    options.pingTimeout = int(mbus_client_ping_timeout)
 if (mbus_client_ping_threshold != None):
-    options.pingThreshold = mbus_client_ping_threshold
-options.onConnect = onConnect
-options.onContext = onParam()
+    options.pingThreshold = int(mbus_client_ping_threshold)
+
+options.onConnect    = onConnect
+options.onDisconnect = onDisconnect
+options.onSubscribe  = onSubscribe
+options.onMessage    = onMessage
+options.onContext    = onParam()
 
 client = MBusClient.MBusClient(options)
 

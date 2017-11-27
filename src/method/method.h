@@ -40,8 +40,6 @@
 
 #define MBUS_METHOD_EVENT_IDENTIFIER_ALL			"org.mbus.method.event.identifier.all"
 
-#define MBUS_METHOD_STATUS_IDENTIFIER_ALL			"org.mbus.method.event.status.all"
-
 /* event json model
  *
  * client  -- request --> server

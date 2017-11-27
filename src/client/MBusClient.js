@@ -17,8 +17,6 @@ const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS	= "org.mbus.method.event.destina
 
 const MBUS_METHOD_EVENT_IDENTIFIER_ALL			= "org.mbus.method.event.identifier.all";
 
-const MBUS_METHOD_STATUS_IDENTIFIER_ALL			= "org.mbus.method.event.status.all";
-
 const MBUS_SERVER_IDENTIFIER							= "org.mbus.server";
 
 const MBUS_SERVER_COMMAND_CREATE					= "command.create";
@@ -31,12 +29,6 @@ const MBUS_SERVER_COMMAND_SUBSCRIBE				= "command.subscribe";
 const MBUS_SERVER_COMMAND_REGISTER				= "command.register";
 const MBUS_SERVER_COMMAND_UNSUBSCRIBE			= "command.unsubscribe";
 const MBUS_SERVER_COMMAND_CLOSE					= "command.close";
-
-const MBUS_SERVER_STATUS_CONNECTED				= "status.connected";
-const MBUS_SERVER_STATUS_DISCONNECTED			= "status.disconnected";
-const MBUS_SERVER_STATUS_SUBSCRIBED				= "status.subscribed";
-const MBUS_SERVER_STATUS_SUBSCRIBER				= "status.subscriber";
-const MBUS_SERVER_STATUS_UNSUBSCRIBED			= "status.unsubscribed";
 
 const MBUS_SERVER_EVENT_CONNECTED				= "event.connected";
 const MBUS_SERVER_EVENT_DISCONNECTED				= "event.disconnected";

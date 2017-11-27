@@ -123,7 +123,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 			}
 		}
 	} else {
-		arg->connected = -1;
+		//arg->connected = -1;
 	}
 	return;
 bail:	return;
@@ -135,6 +135,13 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 	(void) client;
 	arg->disconnected = 1;
 	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
+}
+
+static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
+{
+	(void) client;
+	(void) context;
+	fprintf(stdout, "subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
 }
 
 static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
@@ -228,6 +235,7 @@ int main (int argc, char *argv[])
 	}
 	options.callbacks.connect = mbus_client_callback_connect;
 	options.callbacks.disconnect = mbus_client_callback_disconnect;
+	options.callbacks.subscribe = mbus_client_callback_subscribe;
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;
 	options.callbacks.context = &arg;
