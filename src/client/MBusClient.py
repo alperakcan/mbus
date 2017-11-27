@@ -1,4 +1,5 @@
 
+import os
 import ctypes
 import time
 import errno
@@ -76,7 +77,7 @@ class MBusClientDefaults:
     ServerAddress     = ServerTCPAddress
     ServerPort        = ServerTCPPort
 
-    RunTimeout        = 250
+    RunTimeout        = 1000
     
     ConnectTimeout    = 30000
     ConnectInterval   = 0
@@ -266,8 +267,6 @@ class MBusClientRequest(object):
         request['identifier']  = self.identifier
         request['sequence']    = self.sequence
         request['payload']     = self.payload
-        request['callback']    = self.callback
-        request['context']     = self.context
         request['timeout']     = self.timeout
         return json.dumps(request)
 
@@ -282,8 +281,6 @@ class MBusClient(object):
             self.__options.onDisconnect(self, self.__options.onContext, status)
 
     def __reset (self):
-        
-        self.__state           = MBusClientState.Disconnected
         if (self.__socket != None):
             self.__socket.close()
             self.__socket = None
@@ -325,32 +322,77 @@ class MBusClient(object):
         raise ValueError("not implemented yet")
     
     def __commandCreateRequest (self):
-        raise ValueError("not implemented yet")
+        payload = {}
+        if (self.__options.identifier != None):
+            payload['identifier'] = self._options.identifier
+        if (self.__options.pingInterval > 0):
+            payload['ping'] = {}
+            payload['ping']['interval'] = self.__options.pingInterval
+            payload['ping']['timeout'] = self.__options.pingTimeout
+            payload['ping']['threshold'] = self.__options.pingThreshold
+        payload['compressions'] = []
+        payload['compressions'].append("none")
+        rc = self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, self.__commandCreateResponse)
+        if (rc != 0):
+            return -1
+        return 0
     
     def __runConnect (self):
-        self.__reset();
+        status = MBusClientConnectStatus.InternalError
+        self.__reset()
         if (self.__options.serverProtocol.lower() == "tcp".lower()):
             self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__socket.setblocking(0)
             try:
                 self.__socket.connect((self.__options.serverAddress, self.__options.serverPort))
                 self.__socketConnected = 1
-                self.__commandCreateRequest()
+                status = MBusClientConnectStatus.Success
             except socket.error as error:
                 if (error.errno == errno.EINPROGRESS):
-                    pass
+                    status = MBusClientConnectStatus.Success
+                elif (error.errno == errno.ECONNREFUSED):
+                    status = MBusClientConnectStatus.ConnectionRefused
+                elif (error.errno == errno.ENOENT):
+                    status = MBusClientConnectStatus.ServerUnavailable
                 else:
-                    self.__socket.close()
-                    self.__socket = None
-                    raise ValueError("can not connect")
+                    status = MBusClientConnectStatus.InternalError
         else:
-            raise ValueError("invalid server protocol")
+            status = MBusClientConnectStatus.InvalidProtocol
         
-        raise ValueError("not implemented yet")
+        if (status == MBusClientConnectStatus.Success):
+            if (self.__socketConnected == 1):
+                self.__commandCreateRequest()
+            return 0
+        elif (status == MBusClientConnectStatus.ConnectionRefused or
+              status == MBusClientConnectStatus.ServerUnavailable):
+            self.__notifyConnect(status)
+            self.__reset()
+            if (self.__options.connectInterval > 0):
+                self.__state = MBusClientState.Connecting
+            else:
+                self.__state = MBusClientState.Disconnected
+            return 0
+        else:
+            self.__notifyConnect(status)
+            self.__reset()
+            return -1
     
     def __handleResult (self, json):
-        raise ValueError("not implemented yet")
-    
+        pending = None
+        sequence = json["sequence"]
+        if (sequence == None):
+            return -1
+        for p in self.__pendings:
+            if (p.sequence == sequence):
+                pending = p
+                break
+        if (pending == None):
+            return -1
+        self.__pendings.remove(pending)
+        if (pending.callback != None):
+            raise ValueError("not implemented yet")
+        return 0
+
     def __handleEvent (self, json):
         raise ValueError("not implemented yet")
     
@@ -358,7 +400,8 @@ class MBusClient(object):
         raise ValueError("not implemented yet")
     
     def __wakeUp (self, reason):
-        pass
+        buffer = struct.pack("I", reason)
+        os.write(self.__wakeupWrite, buffer)
     
     def __init__ (self, options = None):
         
@@ -384,6 +427,9 @@ class MBusClient(object):
         self.__socketConnected = None
         self.__sequence        = None
         self.__mutex           = None
+        self.__wakeupRead      = None
+        self.__wakeupWrite     = None
+        self.__wakeupRead, self.__wakeupWrite = os.pipe()
 
         if (options == None):
             self.__options = MBusClientOptions()
@@ -504,17 +550,68 @@ class MBusClient(object):
     def unregister (self, command):
         raise ValueError("not implemented yet")
     
-    def command (self, destination, command, payload, callback, context, timeout = None):
-        raise ValueError("not implemented yet")
+    def command (self, destination, command, payload, callback, context = None, timeout = None):
+        if (destination == None):
+            raise ValueError("destination is invalid")
+        if (command == None):
+            raise ValueError("command is invalid")
+        if (command == MBUS_SERVER_COMMAND_CREATE):
+            if (self.__state != MBusClientState.Connecting):
+                raise ValueError("client state is not connecting: {}".format(self.__state))
+        else:
+            if (self.__state != MBusClientState.Connected):
+                raise ValueError("client state is not connected: {}".format(self.__state))
+        if (timeout == None or
+            timeout <= 0):
+            timeout = self.__options.commandTimeout
+        request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, command, self.__sequence, payload, callback, context, timeout)
+        if (request == None):
+            raise ValueError("can not create request")
+        self.__sequence += 1
+        if (self.__sequence >= MBUS_METHOD_SEQUENCE_END):
+            self.__sequence = MBUS_METHOD_SEQUENCE_START
+        self.__requests.append(request)
 
     def getRunTimeout (self):
-        return 100
+        current = mbus_clock_get()
+        timeout = MBusClientDefaults.RunTimeout
+        if (self.__state == MBusClientState.Connecting):
+            if (self.__socket == None):
+                timeout = min(timeout, self.__options.connectInterval);
+            elif (self.__socketConnected == 0):
+                timeout = min(timeout, self.__options.connectTimeout);
+        elif (self.__state == MBusClientState.Connected):
+            if (self.__pingInterval > 0):
+                if (mbus_clock_after(current, self.__pingSendTsms + self.__pingInterval)):
+                    timeout = 0;
+                else:
+                    timeout = min(timeout, (self.__pingSendTsms + self.__pingInterval) - (current));
+            for request in self.__requests:
+                if (request.timeout >= 0):
+                    if (mbus_clock_after(current, request_get_created_at(request) + request.timeout)):
+                        timeout = 0;
+                    else:
+                        timeout = min(timeout, (long) ((request_get_created_at(request) + request.timeout) - (current)));
+            for request in self.__pendings:
+                if (request.timeout >= 0):
+                    if (mbus_clock_after(current, request_get_created_at(request) + request.timeout)):
+                        timeout = 0;
+                    else:
+                        timeout = min(timeout, (long) ((request_get_created_at(request) + request.timeout) - (current)));
+        elif (self.__state == MBusClientState.Disconnecting):
+            timeout = 0;
+        elif (self.__state == MBusClientState.Disconnected):
+            if (self.__options.connect_interval > 0):
+                if (mbus_clock_after(current, self.__connectTsms + self.__options.connect_interval)):
+                    timeout = 0;
+                else:
+                    timeout = min(timeout, (self.__connectTsms + self.__options.connectInterval) - (current));
+        return timeout;
         
     def breakRun (self):
         raise ValueError("not implemented yet")
         
     def run (self, timeout = -1):
-        
         if (self.__state == MBusClientState.Connecting):
             if (self.__socket == None):
                 current = mbus_clock_get()
@@ -538,11 +635,104 @@ class MBusClient(object):
         else:
             raise ValueError("client state: {} is invalid".format(self.__state))
 
+        rlist = [ self.__wakeupRead ]
+        wlist = [ ]
+        if (self.__socket != None):
+            if (self.__state == MBusClientState.Connecting and
+                self.__socketConnected == 0):
+                wlist.append(self.__socket)
+            else:
+                rlist.append(self.__socket)
+                if (len(self.__outgoing) > 0):
+                    wlist.append(self.__socket)
+        
         ptimeout = self.getRunTimeout()
         if (ptimeout < 0 or
             timeout < 0):
             ptimeout = max(ptimeout, timeout)
         else:
             ptimeout = min(ptimeout, timeout)
+
+        print("rlist: {}, wlist: {}, ptimeout: {}".format(rlist, wlist, ptimeout))
+        try:
+            socklist = select.select(rlist, wlist, [], ptimeout / 1000)
+        except TypeError:
+            raise ValueError("select failed");
+        except ValueError:
+            raise ValueError("select failed");
+        except KeyboardInterrupt:
+            raise ValueError("select failed");
+        except:
+            raise ValueError("select failed");
+
+        if (self.__wakeupRead in socklist[0]):
+            buffer = os.read(self.__wakeupRead, 4);
+            if (len(buffer) != 4):
+                raise ValueError("wakeup read failed");
+            reason, = struct.unpack("I", buffer);
+
+        if (self.__socket != None):
+            if (self.__socket in socklist[0]):
+                dlen = 0
+                try:
+                    data = self.__socket.recv(4096)
+                except socket.error as error:
+                    if error.errno == EAGAIN:
+                        pass
+                    raise ValueError("recv failed");
+                if (len(data) == 0):
+                    raise ValueError("recv failed");
+                self.__incoming += data
             
-        raise ValueError("not implemented yet")
+            if (self.__socket in socklist[1]):
+                if (self.__state == MBusClientState.Connecting and
+                    self.__socketConnected == 0):
+                    rc = self.__socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    if (rc == 0):
+                        self.__socketConnected = 1
+                        self.__commandCreateRequest()
+                    elif (rc == errno.ECONNREFUSED):
+                        self.__notifyConnect(MBusClientConnectStatus.ConnectionRefused)
+                        self.__reset()
+                        if (self.__options.connectInterval > 0):
+                            self.__state = MBusClientState.Connecting
+                        else:
+                            self.__state = MBusClientState.Disconnected
+                        return 0
+                elif (len(self.__outgoing) > 0):
+                    dlen = 0
+                    try:
+                        dlen = self.__socket.send(self.__outgoing)
+                    except socket.error as error:
+                        if error.errno == errno.EAGAIN:
+                            pass
+                        raise ValueError("send failed");
+                    if (dlen > 0):
+                        self.__outgoing = self.__outgoing[dlen:]
+        
+        while len(self.__incoming) >= 4:
+            dlen, = struct.unpack("!I", str(self.__incoming[0:4]))
+            if (dlen > len(self.__incoming) - 4):
+                break
+            slice = self.__incoming[4:4 + dlen]
+            self.__incoming = self.__incoming[4 + dlen:]
+            print("recv: {}".format(slice))
+            object = json.loads(slice)
+            if (object['type'].lower() == MBUS_METHOD_TYPE_RESULT.lower()):
+                self.__handleResult(object)
+            else:
+                raise ValueError("unknown type: {}", object['type']);
+
+        while (len(self.__requests) > 0):
+            request = self.__requests.popleft()
+            data = request.__str__()
+            dlen = struct.pack("!I", len(data))
+            self.__outgoing += dlen
+            self.__outgoing += data
+            print("send: {}".format(data))
+            if request.type.lower() == MBUS_METHOD_TYPE_EVENT:
+                pass
+            else:
+                self.__pendings.append(request)
+         
+        return 0
