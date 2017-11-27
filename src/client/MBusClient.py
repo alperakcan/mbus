@@ -703,9 +703,15 @@ class MBusClient(object):
         timeout = MBusClientDefaults.RunTimeout
         if (self.__state == MBusClientState.Connecting):
             if (self.__socket == None):
-                timeout = min(timeout, self.__options.connectInterval)
+                if (mbus_clock_after(current, self.__connectTsms + self.__options.connectInterval)):
+                    timeout = 0
+                else:
+                    timeout = min(timeout, (self.__connectTsms + self.__options.connectInterval) - (current))
             elif (self.__socketConnected == 0):
-                timeout = min(timeout, self.__options.connectTimeout)
+                if (mbus_clock_after(current, self.__connectTsms + self.__options.connectTimeout)):
+                    timeout = 0
+                else:
+                    timeout = min(timeout, (self.__connectTsms + self.__options.connectTimeout) - (current))
         elif (self.__state == MBusClientState.Connected):
             if (self.__pingInterval > 0):
                 if (mbus_clock_after(current, self.__pingSendTsms + self.__pingInterval)):
