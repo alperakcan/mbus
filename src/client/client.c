@@ -3124,7 +3124,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			memcpy(&expected, ptr, sizeof(expected));
 			ptr += sizeof(expected);
 			expected = ntohl(expected);
-			mbus_debugf("expected: %d", expected);
 			if (end - ptr < (int32_t) expected) {
 				break;
 			}
@@ -3133,7 +3132,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				int uncompressedlen;
 				memcpy(&uncompressed, ptr, sizeof(uncompressed));
 				uncompressed = ntohl(uncompressed);
-				mbus_debugf("uncompressed: %d", uncompressed);
 				uncompressedlen = uncompressed;
 				rc = mbus_uncompress_data(client->compression, (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
 				if (rc != 0) {
@@ -3148,7 +3146,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				data = ptr;
 				uncompressed = expected;
 			}
-			mbus_debugf("message: '%.*s'", uncompressed, data);
+			mbus_debugf("message: %s, e: %d, u: %d, '%.*s'", mbus_compress_method_string(client->compression), expected, uncompressed, uncompressed, data);
 			string = _strndup((char *) data, uncompressed);
 			if (string == NULL) {
 				mbus_errorf("can not allocate memory");
