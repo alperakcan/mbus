@@ -300,6 +300,32 @@ class MBusClientMessageCommand(object):
 
 class MBusClient(object):
     
+    def __notifyPublish (self, request, status):
+        if (self.__options.onPublish != None):
+            message = MBusClientMessageEvent(request)
+            self.__options.onPublish(self, self.__options.onContext, message, status)
+
+    def __notifySubscribe (self, source, event, status):
+        if (self.__options.onSubscribe != None):
+            self.__options.onSubscribe(self, self.__options.onContext, source, event, status)
+
+    def __notifyUnsubscribe (self, source, event, status):
+        if (self.__options.onUnsubscribe != None):
+            self.__options.onUnsubscribe(self, self.__options.onContext, source, event, status)
+
+    def __notifyRegister (self, command, status):
+        if (self.__options.onRegistered != None):
+            self.__options.onRegistered(self, self.__options.onContext, command, status)
+
+    def __notifyUnregister (self, command, status):
+        if (self.__options.onUnregistered != None):
+            self.__options.onUnregistered(self, self.__options.onContext, command, status)
+
+    def __notifyCommand (self, request, response, status):
+        if (request.callback != None):
+            message = MBusClientMessageCommand(json.loads(request.__str__()), response)
+            self.__options.onCommand(self, self.__options.onContext, message, status)
+
     def __notifyConnect (self, status):
         if (self.__options.onConnect != None):
             self.__options.onConnect(self, self.__options.onContext, status)
@@ -312,10 +338,55 @@ class MBusClient(object):
         if (self.__socket != None):
             self.__socket.close()
             self.__socket = None
+        
+        for request in self.__requests:
+            if (request.type == MBUS_METHOD_TYPE_EVENT):
+                if (request.destination != MBUS_SERVER_IDENTIFIER and
+                    request.identifier != MBUS_SERVER_EVENT_PING):
+                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Canceled)
+            elif (request.type == MBUS_METHOD_TYPE_COMMAND):
+                if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
+                    __notifyPublish(request.payload, MBusClientPublishStatus.Canceled)
+                elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
+                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Canceled)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
+                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Canceled)
+                elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
+                    __notifyRegister(request.payload["command"], MBusClientRegisterStatus.Canceled)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
+                    __notifyUnregister(request.payload["command"], MBusClientUnregisterStatus.Canceled)
+                else:
+                    __notifyCommand(request, None, MBusClientCommandStatus.Canceled)
         self.__requests.clear()
+
+        for pending in self.__pendings:
+            if (pending.type == MBUS_METHOD_TYPE_EVENT):
+                if (pending.destination != MBUS_SERVER_IDENTIFIER and
+                    pending.identifier != MBUS_SERVER_EVENT_PING):
+                    __notifyPublish(json.loads(pending.__str__()), MBusClientPublishStatus.Canceled)
+            elif (pending.type == MBUS_METHOD_TYPE_COMMAND):
+                if (pending.identifier == MBUS_SERVER_COMMAND_EVENT):
+                    __notifyPublish(pending.payload, MBusClientPublishStatus.Canceled)
+                elif (pending.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
+                    __notifySubscribe(pending.payload["source"], pending.payload["event"], MBusClientSubscribeStatus.Canceled)
+                elif (pending.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
+                    __notifyUnsubscribe(pending.payload["source"], pending.payload["event"], MBusClientUnsubscribeStatus.Canceled)
+                elif (pending.identifier == MBUS_SERVER_COMMAND_REGISTER):
+                    __notifyRegister(pending.payload["command"], MBusClientRegisterStatus.Canceled)
+                elif (pending.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
+                    __notifyUnregister(pending.payload["command"], MBusClientUnregisterStatus.Canceled)
+                else:
+                    __notifyCommand(pending, None, MBusClientCommandStatus.Canceled)
         self.__pendings.clear()
+        
+        for routine in self.__routines:
+            __notifyUnregister(routine.identifier, MBusClientUnregisterStatus.Canceled)
         self.__routines.clear()
+        
+        for subscription in self.__subscriptions:
+            __notifyUnsubscribe(subscription.source, subscription.identifier, MBusClientUnsubscribeStatus.Canceled)
         self.__subscriptions.clear()
+        
         self.__incoming        = ""
         self.__outgoing        = ""
         self.__identifier      = None
@@ -463,9 +534,7 @@ class MBusClient(object):
         if (pending == None):
             return -1
         self.__pendings.remove(pending)
-        if (pending.callback != None):
-            message = MBusClientMessageCommand(json.loads(pending.__str__()), object)
-            pending.callback(self, pending.context, message, MBusClientCommandStatus.Success)
+        self.__notifyCommand(pending, object, MBusClientCommandStatus.Success)
         return 0
 
     def __handleEvent (self, object):
@@ -487,7 +556,7 @@ class MBusClient(object):
                 if ((s.source == MBUS_METHOD_EVENT_SOURCE_ALL or s.source == source) and
                     (s.identifier == MBUS_METHOD_EVENT_IDENTIFIER_ALL or s.identifier == identifier)):
                     if (s.callback != None):
-                        callback = s.callback;
+                        callback = s.callback
                         callbackContext = s.context
                     break
             if (callback != None):
