@@ -324,7 +324,7 @@ class MBusClient(object):
     def __notifyCommand (self, request, response, status):
         if (request.callback != None):
             message = MBusClientMessageCommand(json.loads(request.__str__()), response)
-            self.__options.onCommand(self, self.__options.onContext, message, status)
+            request.callback(self, request.context, message, status)
 
     def __notifyConnect (self, status):
         if (self.__options.onConnect != None):
