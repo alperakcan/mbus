@@ -144,7 +144,7 @@ static void mbus_client_callback_subscribe (struct mbus_client *client, void *co
 	fprintf(stdout, "subscribe status: %d, %s, source: %s, event: %s\n", status, mbus_client_subscribe_status_string(status), source, event);
 }
 
-static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message_event *message)
 {
 	char *string;
 	(void) client;

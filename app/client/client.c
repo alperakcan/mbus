@@ -81,7 +81,7 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 	rl_on_new_line();
 }
 
-static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static void mbus_client_callback_message (struct mbus_client *client, void *context, struct mbus_client_message_event *message)
 {
 	char *string;
 	(void) client;
@@ -92,7 +92,7 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	rl_on_new_line();
 }
 
-static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
 	char *request_string;
@@ -154,7 +154,7 @@ bail:	if (request_string != NULL) {
 	return -1;
 }
 
-static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message_event *message, enum mbus_client_publish_status status)
 {
 	char *string;
 	(void) client;
@@ -198,7 +198,7 @@ static void mbus_client_callback_unregistered (struct mbus_client *client, void 
 	rl_on_new_line();
 }
 
-static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static void mbus_client_callback_message_callback (struct mbus_client *client, void *context, struct mbus_client_message_event *message)
 {
 	char *string;
 	(void) client;
@@ -209,7 +209,7 @@ static void mbus_client_callback_message_callback (struct mbus_client *client, v
 	rl_on_new_line();
 }
 
-static void mbus_client_callback_command_callback (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
+static void mbus_client_callback_command_callback (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
 {
 	char *request_string;
 	char *response_string;
@@ -225,7 +225,7 @@ static void mbus_client_callback_command_callback (struct mbus_client *client, v
 	rl_on_new_line();
 }
 
-static int mbus_client_callback_routine_callback (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static int mbus_client_callback_routine_callback (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
 	char *request_string;
@@ -320,6 +320,79 @@ static int command_quit (int argc, char *argv[])
 	return 1;
 }
 
+static int command_create (int argc, char *argv[])
+{
+	int rc;
+	struct mbus_client_options options;
+
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,	0,	'h' },
+		{ NULL,		0,		NULL,	0 }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, ":h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'h':
+				fprintf(stdout, "create mbus client\n");
+				fprintf(stdout, "  -h / --help    : this text\n");;
+				mbus_client_usage();
+				return 0;
+		}
+	}
+
+	rc = mbus_client_options_from_argv(&options, argc, argv);
+	if (rc != 0) {
+		fprintf(stderr, "can not parse options\n");
+		goto bail;
+	}
+	options.callbacks.connect     = mbus_client_callback_connect;
+	options.callbacks.disconnect  = mbus_client_callback_disconnect;
+	options.callbacks.message     = mbus_client_callback_message;
+	options.callbacks.routine     = mbus_client_callback_routine;
+	options.callbacks.publish     = mbus_client_callback_publish;
+	options.callbacks.subscribe   = mbus_client_callback_subscribe;
+	options.callbacks.unsubscribe = mbus_client_callback_unsubscribe;
+	options.callbacks.registered  = mbus_client_callback_registered;
+	options.callbacks.unregistered= mbus_client_callback_unregistered;
+	g_mbus_client = mbus_client_create(&options);
+	if (g_mbus_client == NULL) {
+		fprintf(stderr, "can not create client\n");
+		goto bail;
+	}
+	return 0;
+bail:	return -1;
+}
+
+static int command_destroy (int argc, char *argv[])
+{
+	int c;
+	struct option long_options[] = {
+		{ "help",	no_argument,	0,	'h' },
+		{ NULL,		0,		NULL,	0 }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
+		switch (c) {
+			case 'h':
+				fprintf(stdout, "destroy mbus client\n");
+				fprintf(stdout, "  -h / --help    : this text\n");;
+				return 0;
+			default:
+				fprintf(stderr, "invalid parameter\n");
+				return -1;
+		}
+	}
+	if (g_mbus_client == NULL) {
+		return 0;
+	}
+	mbus_client_destroy(g_mbus_client);
+	g_mbus_client = NULL;
+	return 0;
+}
+
 static int command_connect (int argc, char *argv[])
 {
 	int rc;
@@ -334,7 +407,8 @@ static int command_connect (int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'h':
-				fprintf(stdout, "connect\n");
+				fprintf(stdout, "connect to mbus server\n");
+				fprintf(stdout, "  -h / --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -369,7 +443,8 @@ static int command_disconnect (int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'h':
-				fprintf(stdout, "disconnect\n");
+				fprintf(stdout, "disconnect from mbus server\n");
+				fprintf(stdout, "  -h / --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -403,6 +478,7 @@ static int command_get_state (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "get state\n");
+				fprintf(stdout, "  -h / --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -886,6 +962,16 @@ static struct command *commands[] = {
 		"quit application"
 	},
 	&(struct command) {
+		"create",
+		command_create,
+		"ccreate mbus client"
+	},
+	&(struct command) {
+		"destroy",
+		command_destroy,
+		"destroy mbus client"
+	},
+	&(struct command) {
 		"connect",
 		command_connect,
 		"connect to mbus server"
@@ -1074,13 +1160,11 @@ int main (int argc, char *argv[])
 	int _argc;
 	char **_argv;
 
+	int timeout;
 	int npollfd;
 	struct pollfd pollfd[3];
 
-	struct mbus_client *client;
-	struct mbus_client_options options;
-
-	client = NULL;
+	g_mbus_client = NULL;
 	rl_initialize();
 
 	_argc = 0;
@@ -1103,31 +1187,12 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	rc = mbus_client_options_from_argv(&options, argc, argv);
-	if (rc != 0) {
-		fprintf(stderr, "can not parse options\n");
-		goto bail;
-	}
-	options.callbacks.connect     = mbus_client_callback_connect;
-	options.callbacks.disconnect  = mbus_client_callback_disconnect;
-	options.callbacks.message     = mbus_client_callback_message;
-	options.callbacks.routine     = mbus_client_callback_routine;
-	options.callbacks.publish     = mbus_client_callback_publish;
-	options.callbacks.subscribe   = mbus_client_callback_subscribe;
-	options.callbacks.unsubscribe = mbus_client_callback_unsubscribe;
-	options.callbacks.registered  = mbus_client_callback_registered;
-	options.callbacks.unregistered= mbus_client_callback_unregistered;
-	client = mbus_client_create(&options);
-	if (client == NULL) {
-		fprintf(stderr, "can not create client\n");
-		goto bail;
-	}
-
 	g_running = 1;
-	g_mbus_client = client;
+	g_mbus_client = NULL;
 	rl_callback_handler_install("client> ", process_line);
 
 	while (g_running != 0) {
+		timeout = -1;
 		npollfd = 0;
 		memset(pollfd, 0, sizeof(pollfd));
 
@@ -1136,21 +1201,24 @@ int main (int argc, char *argv[])
 		pollfd[npollfd].revents = 0;
 		npollfd += 1;
 
-		if (mbus_client_get_wakeup_fd(client) >= 0) {
-			pollfd[npollfd].fd = mbus_client_get_wakeup_fd(client);
-			pollfd[npollfd].events = mbus_client_get_wakeup_fd_events(client);
-			pollfd[npollfd].revents = 0;
-			npollfd += 1;
+		if (g_mbus_client != NULL) {
+			if (mbus_client_get_wakeup_fd(g_mbus_client) >= 0) {
+				pollfd[npollfd].fd = mbus_client_get_wakeup_fd(g_mbus_client);
+				pollfd[npollfd].events = mbus_client_get_wakeup_fd_events(g_mbus_client);
+				pollfd[npollfd].revents = 0;
+				npollfd += 1;
+			}
+
+			if (mbus_client_get_connection_fd(g_mbus_client) >= 0) {
+				pollfd[npollfd].fd = mbus_client_get_connection_fd(g_mbus_client);
+				pollfd[npollfd].events = mbus_client_get_connection_fd_events(g_mbus_client);
+				pollfd[npollfd].revents = 0;
+				npollfd += 1;
+			}
+			timeout = mbus_client_get_run_timeout(g_mbus_client);
 		}
 
-		if (mbus_client_get_connection_fd(client) >= 0) {
-			pollfd[npollfd].fd = mbus_client_get_connection_fd(client);
-			pollfd[npollfd].events = mbus_client_get_connection_fd_events(client);
-			pollfd[npollfd].revents = 0;
-			npollfd += 1;
-		}
-
-		rc = poll(pollfd, npollfd, mbus_client_get_run_timeout(client));
+		rc = poll(pollfd, npollfd, timeout);
 		if (rc < 0) {
 			fprintf(stderr, "poll failed with: %d\n", rc);
 			goto bail;
@@ -1160,21 +1228,23 @@ int main (int argc, char *argv[])
 			rl_callback_read_char();
 		}
 
-		rc = mbus_client_run(client, 0);
-		if (rc != 0) {
-			fprintf(stderr, "client run failed\n");
-			goto bail;
+		if (g_mbus_client != NULL) {
+			rc = mbus_client_run(g_mbus_client, 0);
+			if (rc != 0) {
+				fprintf(stderr, "client run failed\n");
+				goto bail;
+			}
 		}
 	}
 
 	rl_cleanup_after_signal();
 	clear_history();
 
-	mbus_client_destroy(client);
+	mbus_client_destroy(g_mbus_client);
 	free(_argv);
 	return 0;
-bail:	if (client != NULL) {
-		mbus_client_destroy(client);
+bail:	if (g_mbus_client != NULL) {
+		mbus_client_destroy(g_mbus_client);
 	}
 	if (_argv != NULL) {
 		free(_argv);

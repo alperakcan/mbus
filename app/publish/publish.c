@@ -76,7 +76,7 @@ struct arg {
 	int result;
 };
 
-static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_publish_status status)
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message_event *message, enum mbus_client_publish_status status)
 {
 	struct arg *arg = context;
 	(void) client;

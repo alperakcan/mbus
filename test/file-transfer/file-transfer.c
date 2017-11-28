@@ -102,7 +102,7 @@ static void usage (const char *name)
 	mbus_client_usage();
 }
 
-static int mbus_client_receiver_callback_command_put (struct mbus_client *client, void *context, struct mbus_client_message *message)
+static int mbus_client_receiver_callback_command_put (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
 	int fd;
@@ -186,7 +186,7 @@ static void mbus_client_receiver_callback_connect (struct mbus_client *client, v
 	}
 }
 
-static void mbus_client_sender_callback_command_put_result (struct mbus_client *client, void *context, struct mbus_client_message *message, enum mbus_client_command_status status)
+static void mbus_client_sender_callback_command_put_result (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
 {
 	struct sender_param *param = context;
 	(void) client;
