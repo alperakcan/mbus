@@ -143,7 +143,7 @@ struct mbus_client {
 	struct mbus_buffer *incoming;
 	struct mbus_buffer *outgoing;
 	char *identifier;
-	int connect_tsms;
+	unsigned long connect_tsms;
 	int ping_interval;
 	int ping_timeout;
 	int ping_threshold;
@@ -1779,6 +1779,23 @@ int mbus_client_unlock (struct mbus_client *client)
 	return 0;
 }
 
+const struct mbus_client_options * mbus_client_get_options (struct mbus_client *client)
+{
+	struct mbus_client_options *options;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	options = client->options;
+	mbus_client_unlock(client);
+	return options;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return NULL;
+}
+
 enum mbus_client_state mbus_client_get_state (struct mbus_client *client)
 {
 	enum mbus_client_state state;
@@ -2416,7 +2433,7 @@ int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, co
 	mbus_json_add_string_to_object_cs(jpayload, "identifier", event);
 	mbus_json_add_item_to_object_cs(jpayload, "payload", jdata);
 	jdata = NULL;
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, client->sequence, jpayload, mbus_client_command_event_response, client, timeout);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, client->sequence, jpayload, mbus_client_command_event_response, NULL, timeout);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		goto bail;
@@ -2838,6 +2855,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		goto out;
 	} else if (client->state == mbus_client_state_disconnected) {
 		if (client->options->connect_interval > 0) {
+			mbus_errorf("disconnected -> connecting");
 			client->state = mbus_client_state_connecting;
 			goto out;
 		}

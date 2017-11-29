@@ -153,6 +153,7 @@ void mbus_client_destroy (struct mbus_client *client);
 int mbus_client_lock (struct mbus_client *client);
 int mbus_client_unlock (struct mbus_client *client);
 
+const struct mbus_client_options * mbus_client_get_options (struct mbus_client *client);
 enum mbus_client_state mbus_client_get_state (struct mbus_client *client);
 const char * mbus_client_get_name (struct mbus_client *client);
 int mbus_client_get_wakeup_fd (struct mbus_client *client);
