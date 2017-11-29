@@ -126,7 +126,7 @@ def onDisconnect (client, context, status):
         context.disconnected = 1
     
 def onSubscribe (client, context, source, event, status):
-    print("subscribe: {}, source: {}, event: {}".format(status, source, event))
+    print("subscribe: {}, {}, source: {}, event: {}".format(status, MBusClient.MBusClientSubscribeStatusString(status), source, event))
 
 def onMessage (client, context, message):
     print("{}.{}.{}".format(message.getSource(), message.getIdentifier(), json.dumps(message.getPayload())))

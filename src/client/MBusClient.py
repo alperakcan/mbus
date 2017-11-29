@@ -146,36 +146,96 @@ class MBusClientPublishStatus:
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientPublishStatusString (status):
+    if (status == MBusClientPublishStatus.Success):
+        return "success"
+    if (status == MBusClientPublishStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientPublishStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientPublishStatus.Canceled):
+        return "canceled"
+    
 class MBusClientSubscribeStatus:
     Success       = 0
     InternalError = 1
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientSubscribeStatusString (status):
+    if (status == MBusClientSubscribeStatus.Success):
+        return "success"
+    if (status == MBusClientSubscribeStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientSubscribeStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientSubscribeStatus.Canceled):
+        return "canceled"
+    
 class MBusClientUnsubscribeStatus:
     Success       = 0
     InternalError = 1
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientUnsubscribeStatusString (status):
+    if (status == MBusClientUnsubscribeStatus.Success):
+        return "success"
+    if (status == MBusClientUnsubscribeStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientUnsubscribeStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientUnsubscribeStatus.Canceled):
+        return "canceled"
+    
 class MBusClientRegisterStatus:
     Success       = 0
     InternalError = 1
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientRegisterStatusString (status):
+    if (status == MBusClientRegisterStatus.Success):
+        return "success"
+    if (status == MBusClientRegisterStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientRegisterStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientRegisterStatus.Canceled):
+        return "canceled"
+    
 class MBusClientUnregisterStatus:
     Success       = 0
     InternalError = 1
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientUnregisterStatusString (status):
+    if (status == MBusClientUnregisterStatus.Success):
+        return "success"
+    if (status == MBusClientUnregisterStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientUnregisterStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientUnregisterStatus.Canceled):
+        return "canceled"
+    
 class MBusClientCommandStatus:
     Success       = 0
     InternalError = 1
     Timeout       = 2
     Canceled      = 3
 
+def MBusClientCommandStatusString (status):
+    if (status == MBusClientCommandStatus.Success):
+        return "success"
+    if (status == MBusClientCommandStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientCommandStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientCommandStatus.Canceled):
+        return "canceled"
+    
 class MBusClientWakeUpReason:
     Break      = 0
     Connect    = 1
