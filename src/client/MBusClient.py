@@ -8,9 +8,6 @@ import json
 import collections
 import select
 import struct
-from abc import ABCMeta, abstractmethod
-from _ast import Or
-from numpy.f2py.auxfuncs import options
 
 MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
 MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"
