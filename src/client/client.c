@@ -3189,17 +3189,14 @@ out:
 	    client->socket != NULL &&
 	    client->socket_connected == 0) {
 		if (mbus_clock_after(current, client->connect_tsms + client->options->connect_timeout)) {
+			mbus_client_notify_connect(client, mbus_client_connect_status_timeout);
+			mbus_client_reset(client);
 			if (client->options->connect_interval > 0) {
-				mbus_client_notify_connect(client, mbus_client_connect_status_timeout);
-				mbus_client_reset(client);
 				client->state = mbus_client_state_connecting;
-				goto out;
 			} else {
-				mbus_client_notify_connect(client, mbus_client_connect_status_timeout);
-				mbus_client_reset(client);
 				client->state = mbus_client_state_disconnected;
-				goto out;
 			}
+			goto out;
 		}
 	}
 

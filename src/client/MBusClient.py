@@ -9,6 +9,7 @@ import collections
 import select
 import struct
 from abc import ABCMeta, abstractmethod
+from _ast import Or
 
 MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
 MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"
@@ -255,6 +256,9 @@ class MBusClientRequest(object):
     def __callback (self, client, context, message, status):
         pass
     
+    def getJson (self):
+        return json.loads(self.__str__())
+    
     def __str__ (self):
         request = {}
         request['type']        = self.type
@@ -286,7 +290,7 @@ class MBusClientMessageEvent(object):
 class MBusClientMessageCommand(object):
     def __init__ (self, request, response):
         self.__type = MBusClientMessageType.Command
-        self.__request = request
+        self.__request = request.getJson()
         self.__response = response
     
     def getRequestPayload (self):
@@ -313,17 +317,17 @@ class MBusClient(object):
         if (self.__options.onUnsubscribe != None):
             self.__options.onUnsubscribe(self, self.__options.onContext, source, event, status)
 
-    def __notifyRegister (self, command, status):
+    def __notifyRegistered (self, command, status):
         if (self.__options.onRegistered != None):
             self.__options.onRegistered(self, self.__options.onContext, command, status)
 
-    def __notifyUnregister (self, command, status):
+    def __notifyUnregistered (self, command, status):
         if (self.__options.onUnregistered != None):
             self.__options.onUnregistered(self, self.__options.onContext, command, status)
 
     def __notifyCommand (self, request, response, status):
         if (request.callback != None):
-            message = MBusClientMessageCommand(json.loads(request.__str__()), response)
+            message = MBusClientMessageCommand(request, response)
             request.callback(self, request.context, message, status)
 
     def __notifyConnect (self, status):
@@ -336,8 +340,12 @@ class MBusClient(object):
 
     def __reset (self):
         if (self.__socket != None):
+            self.__socket.shutdown(socket.SHUT_WR)
             self.__socket.close()
             self.__socket = None
+        
+        self.__incoming = ""
+        self.__outgoing = ""
         
         for request in self.__requests:
             if (request.type == MBUS_METHOD_TYPE_EVENT):
@@ -352,9 +360,9 @@ class MBusClient(object):
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
                     __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegister(request.payload["command"], MBusClientRegisterStatus.Canceled)
+                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregister(request.payload["command"], MBusClientUnregisterStatus.Canceled)
+                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Canceled)
                 else:
                     __notifyCommand(request, None, MBusClientCommandStatus.Canceled)
         self.__requests.clear()
@@ -372,23 +380,21 @@ class MBusClient(object):
                 elif (pending.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
                     __notifyUnsubscribe(pending.payload["source"], pending.payload["event"], MBusClientUnsubscribeStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegister(pending.payload["command"], MBusClientRegisterStatus.Canceled)
+                    __notifyRegistered(pending.payload["command"], MBusClientRegisterStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregister(pending.payload["command"], MBusClientUnregisterStatus.Canceled)
+                    __notifyUnregistered(pending.payload["command"], MBusClientUnregisterStatus.Canceled)
                 else:
                     __notifyCommand(pending, None, MBusClientCommandStatus.Canceled)
         self.__pendings.clear()
         
         for routine in self.__routines:
-            __notifyUnregister(routine.identifier, MBusClientUnregisterStatus.Canceled)
+            __notifyUnregistered(routine.identifier, MBusClientUnregisterStatus.Canceled)
         self.__routines.clear()
         
         for subscription in self.__subscriptions:
             __notifyUnsubscribe(subscription.source, subscription.identifier, MBusClientUnsubscribeStatus.Canceled)
         self.__subscriptions.clear()
         
-        self.__incoming        = ""
-        self.__outgoing        = ""
         self.__identifier      = None
         self.__pingInterval    = 0
         self.__pingTimeout     = 0
@@ -397,9 +403,9 @@ class MBusClient(object):
         self.__pongRecvTsms    = 0
         self.__pingWaitPong    = 0
         self.__pongMissedCount = 0
+        self.__sequence        = MBUS_METHOD_SEQUENCE_START
         self.__compression     = None
         self.__socketConnected = 0
-        self.__sequence        = MBUS_METHOD_SEQUENCE_START
     
     def __commandRegisterResponse (self, this, context, message, status):
         raise ValueError("not implemented yet")
@@ -666,19 +672,29 @@ class MBusClient(object):
         return identifier
     
     def getWakeUpFd (self):
-        raise ValueError("not implemented yet")
+        fd = None
+        fd = self.__wakeupRead
+        return fd
     
     def getWakeUpFdEvents (self):
         raise ValueError("not implemented yet")
     
     def getConnectionFd (self):
-        raise ValueError("not implemented yet")
+        fd = None
+        fd = self.__socket
+        return fd
     
     def getConnectionFdEvents (self):
         raise ValueError("not implemented yet")
     
     def hasPending (self):
-        raise ValueError("not implemented yet")
+        rc = 0
+        if (len(self.__requests) > 0 or
+            len(self.__pendings) > 0 or
+            len(self.__incoming) > 0 or
+            len(self.__outgoing) > 0):
+            rc = 1
+        return rc
     
     def connect (self):
         if (self.__state != MBusClientState.Connected):
@@ -691,6 +707,8 @@ class MBusClient(object):
             self.__wakeUp(MBusClientWakeUpReason.Disconnect)
     
     def subscribe (self, event, callback = None, context = None, source = None, timeout = None):
+        if (self.__state != MBusClientState.Connected):
+            raise ValueError("client state is not connected: {}".format(self.__state))
         if (source == None):
             source = MBUS_METHOD_EVENT_SOURCE_ALL
         if (event == None):
@@ -810,7 +828,8 @@ class MBusClient(object):
         return timeout
         
     def breakRun (self):
-        raise ValueError("not implemented yet")
+        self.__wakeUp(MBusClientWakeUpReason.Break)
+        return 0
         
     def run (self, timeout = -1):
         if (self.__state == MBusClientState.Connecting):
@@ -878,11 +897,18 @@ class MBusClient(object):
                 try:
                     data = self.__socket.recv(4096)
                 except socket.error as error:
-                    if error.errno == EAGAIN:
+                    if error.errno == errno.EAGAIN:
+                        pass
+                    if error.errno == errno.EINTR:
+                        pass
+                    if error.errno == errno.EWOULDBLOCK:
                         pass
                     raise ValueError("recv failed")
                 if (len(data) == 0):
-                    raise ValueError("recv failed")
+                    self.__notifyConnect(MBusClientDisconnectStatus.ConnectionClosed)
+                    self.__reset()
+                    self.__state = MBusClientState.Disconnected
+                    return 0
                 self.__incoming += data
             
             if (self.__socket in socklist[1]):
@@ -893,7 +919,6 @@ class MBusClient(object):
                         self.__socketConnected = 1
                         self.__commandCreateRequest()
                     elif (rc == errno.ECONNREFUSED):
-                        print("notify ConnectionRefused")
                         self.__notifyConnect(MBusClientConnectStatus.ConnectionRefused)
                         self.__reset()
                         if (self.__options.connectInterval > 0):
@@ -901,6 +926,9 @@ class MBusClient(object):
                         else:
                             self.__state = MBusClientState.Disconnected
                         return 0
+                    else:
+                        self.__notifyConnect(MBusClientConnectStatus.InternalError)
+                        raise ValueError("can not connect to server")
                 elif (len(self.__outgoing) > 0):
                     dlen = 0
                     try:
@@ -908,11 +936,42 @@ class MBusClient(object):
                     except socket.error as error:
                         if error.errno == errno.EAGAIN:
                             pass
+                        if error.errno == errno.EINTR:
+                            pass
+                        if error.errno == errno.EWOULDBLOCK:
+                            pass
                         raise ValueError("send failed")
                     if (dlen > 0):
                         self.__outgoing = self.__outgoing[dlen:]
         
         current = mbus_clock_get()
+
+        while len(self.__incoming) >= 4:
+            dlen, = struct.unpack("!I", str(self.__incoming[0:4]))
+            if (dlen > len(self.__incoming) - 4):
+                break
+            slice = self.__incoming[4:4 + dlen]
+            self.__incoming = self.__incoming[4 + dlen:]
+            #print("recv: {}".format(slice))
+            object = json.loads(slice)
+            if (object['type'] == MBUS_METHOD_TYPE_RESULT):
+                self.__handleResult(object)
+            elif (object['type'] == MBUS_METHOD_TYPE_EVENT):
+                self.__handleEvent(object)
+            else:
+                raise ValueError("unknown type: {}", object['type'])
+
+        if (self.__state == MBusClientState.Connecting and
+            self.__socket != None and
+            self.__socketConnected == 0):
+            if (mbus_clock_after(current, self.__connectTsms + self.__options.connectTimeout)):
+                self.__notifyConnect(MBusClientConnectStatus.Timeout)
+                self.__reset()
+                if (self.__options.connectInterval > 0):
+                    self.__state == MBusClientState.Connecting
+                else:
+                    self.__state == MBusClientState.Disconnected
+                return 0
 
         if (self.__state == MBusClientState.Connected and
             self.__pingInterval > 0):
@@ -932,20 +991,49 @@ class MBusClient(object):
             if (self.__pongMissedCount > self.__pingThreshold):
                 raise ValueError("missed too many pongs, {} > {}".format(self.__pongMissedCount, self.__pingThreshold))
 
-        while len(self.__incoming) >= 4:
-            dlen, = struct.unpack("!I", str(self.__incoming[0:4]))
-            if (dlen > len(self.__incoming) - 4):
-                break
-            slice = self.__incoming[4:4 + dlen]
-            self.__incoming = self.__incoming[4 + dlen:]
-            #print("recv: {}".format(slice))
-            object = json.loads(slice)
-            if (object['type'] == MBUS_METHOD_TYPE_RESULT):
-                self.__handleResult(object)
-            elif (object['type'] == MBUS_METHOD_TYPE_EVENT):
-                self.__handleEvent(object)
-            else:
-                raise ValueError("unknown type: {}", object['type'])
+        for request in self.__requests:
+            if (request.timeout < 0 or
+                mbus_clock_before(current, request.createdAt + request.timeout)):
+                continue;
+            if (request.type == MBUS_METHOD_TYPE_EVENT):
+                if (request.destination != MBUS_SERVER_IDENTIFIER and
+                    request.identifier != MBUS_SERVER_EVENT_PING):
+                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
+            elif (request.type == MBUS_METHOD_TYPE_COMMAND):
+                if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
+                    __notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
+                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
+                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
+                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
+                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
+                else:
+                    __notifyCommand(request, None, MBusClientCommandStatus.Timeout)
+
+        for request in self.__pendings:
+            if (request.timeout < 0 or
+                mbus_clock_before(current, request.createdAt + request.timeout)):
+                continue;
+            if (request.type == MBUS_METHOD_TYPE_EVENT):
+                if (request.destination != MBUS_SERVER_IDENTIFIER and
+                    request.identifier != MBUS_SERVER_EVENT_PING):
+                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
+            elif (request.type == MBUS_METHOD_TYPE_COMMAND):
+                if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
+                    __notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
+                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
+                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
+                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
+                elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
+                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
+                else:
+                    __notifyCommand(request, None, MBusClientCommandStatus.Timeout)
 
         while (len(self.__requests) > 0):
             request = self.__requests.popleft()
@@ -955,7 +1043,9 @@ class MBusClient(object):
             self.__outgoing += data
             #print("send: {}".format(data))
             if request.type == MBUS_METHOD_TYPE_EVENT:
-                pass
+                if (request.destination != MBUS_SERVER_IDENTIFIER and
+                    request.identifier != MBUS_SERVER_EVENT_PING):
+                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Success)
             else:
                 self.__pendings.append(request)
          

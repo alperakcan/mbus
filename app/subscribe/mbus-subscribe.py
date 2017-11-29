@@ -20,7 +20,7 @@ mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
 subscriptions = []
 
-options, remainder = getopt.gnu_getopt(sys.argv[1:], 's:h', ['help', 
+options, remainder = getopt.gnu_getopt(sys.argv[1:], 'e:h', ['help', 
                                                              'event=',
                                                              'mbus-client-identifier=',
                                                              'mbus-client-server-protocol=',

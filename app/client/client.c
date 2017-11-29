@@ -342,6 +342,10 @@ static int command_create (int argc, char *argv[])
 		}
 	}
 
+	if (g_mbus_client != NULL) {
+		fprintf(stderr, "mbus client already exists\n");
+		goto bail;
+	}
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
 		fprintf(stderr, "can not parse options\n");
