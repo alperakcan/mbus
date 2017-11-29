@@ -346,6 +346,7 @@ static char * _strndup (const char *s, size_t n)
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 
+static void ws_log_callback (int level, const char *line);
 static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 
 static struct lws_protocols ws_protocols[] = {
@@ -881,6 +882,7 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		info.extensions = ws_extensions;
 		info.gid = -1;
 		info.uid = -1;
+		lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
 		listener->u.ws.context = lws_create_context(&info);
 		if (listener->u.ws.context == NULL) {
 			mbus_errorf("can not create ws context for: '%s:%s:%d'", "ws", address, port);
@@ -2595,6 +2597,28 @@ bail:	if (method != NULL) {
 }
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
+
+static void ws_log_callback (int level, const char *line)
+{
+	int len;
+	if (line == NULL) {
+		return;
+	}
+	len = strlen(line);
+	if (len > 0 &&
+	    line[len - 1] == '\n') {
+		len -= 1;
+	}
+	if (level == LLL_ERR) {
+		mbus_errorf("ws: %.*s", len, line);
+	} else if (level == LLL_WARN) {
+		mbus_warningf("ws: %.*s", len, line);
+	} else if (level == LLL_NOTICE) {
+		mbus_noticef("ws: %.*s", len, line);
+	} else if (level >= LLL_DEBUG) {
+		mbus_debugf("ws: %.*s", len, line);
+	}
+}
 
 static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {

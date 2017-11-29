@@ -43,6 +43,8 @@ const char * mbus_debug_level_to_string (enum mbus_debug_level level)
 	switch (level) {
 		case mbus_debug_level_silent: return "silent";
 		case mbus_debug_level_error: return "error";
+		case mbus_debug_level_warning: return "warning";
+		case mbus_debug_level_notice: return "notice";
 		case mbus_debug_level_info: return "info";
 		case mbus_debug_level_debug: return "debug";
 	}
@@ -54,16 +56,22 @@ enum mbus_debug_level mbus_debug_level_from_string (const char *string)
 	if (string == NULL) {
 		return mbus_debug_level_error;
 	}
-	if (strcmp(string, "silent") == 0) {
+	if (strcmp(string, "silent") == 0 || strcmp(string, "s") == 0) {
 		return mbus_debug_level_silent;
 	}
-	if (strcmp(string, "error") == 0) {
+	if (strcmp(string, "error") == 0 || strcmp(string, "e") == 0) {
 		return mbus_debug_level_error;
 	}
-	if (strcmp(string, "info") == 0) {
+	if (strcmp(string, "warning") == 0 || strcmp(string, "w") == 0) {
+		return mbus_debug_level_warning;
+	}
+	if (strcmp(string, "notice") == 0 || strcmp(string, "n") == 0) {
+		return mbus_debug_level_notice;
+	}
+	if (strcmp(string, "info") == 0 || strcmp(string, "i") == 0) {
 		return mbus_debug_level_info;
 	}
-	if (strcmp(string, "debug") == 0) {
+	if (strcmp(string, "debug") == 0 || strcmp(string, "d") == 0) {
 		return mbus_debug_level_debug;
 	}
 	return mbus_debug_level_error;
