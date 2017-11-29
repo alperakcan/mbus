@@ -2855,7 +2855,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		goto out;
 	} else if (client->state == mbus_client_state_disconnected) {
 		if (client->options->connect_interval > 0) {
-			mbus_errorf("disconnected -> connecting");
 			client->state = mbus_client_state_connecting;
 			goto out;
 		}

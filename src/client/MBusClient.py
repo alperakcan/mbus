@@ -132,6 +132,14 @@ class MBusClientDisconnectStatus:
     InternalError    = 1
     ConnectionClosed = 2
 
+def MBusClientDisconnectStatusString (status):
+    if (status == MBusClientDisconnectStatus.Success):
+        return "success"
+    if (status == MBusClientDisconnectStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientDisconnectStatus.ConnectionClosed):
+        return "connection closed"
+
 class MBusClientPublishStatus:
     Success       = 0
     InternalError = 1
@@ -944,7 +952,7 @@ class MBusClient(object):
                         pass
                     raise ValueError("recv failed")
                 if (len(data) == 0):
-                    self.__notifyConnect(MBusClientDisconnectStatus.ConnectionClosed)
+                    self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
                     self.__reset()
                     self.__state = MBusClientState.Disconnected
                     return 0

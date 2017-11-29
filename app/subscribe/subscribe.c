@@ -135,8 +135,10 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 {
 	struct arg *arg = context;
 	(void) client;
-	arg->disconnected = 1;
 	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
+	if (mbus_client_get_options(client)->connect_interval <= 0) {
+		arg->disconnected = 1;
+	}
 }
 
 static void mbus_client_callback_subscribe (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status)
