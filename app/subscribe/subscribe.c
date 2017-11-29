@@ -123,7 +123,9 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 			}
 		}
 	} else {
-		arg->connected = -1;
+		if (mbus_client_get_options(client)->connect_interval <= 0) {
+			arg->connected = -1;
+		}
 	}
 	return;
 bail:	return;
