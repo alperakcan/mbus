@@ -108,7 +108,7 @@ class onParam(object):
         self.disconnected = 0
     
 def onConnect (client, context, status):
-    print("connect: {}".format(status))
+    print("connect: {}, {}".format(status, MBusClient.MBusClientConnectStatusString(status)))
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
         if (len(subscriptions) == 0):
@@ -117,7 +117,8 @@ def onConnect (client, context, status):
             for s in subscriptions:
                 client.subscribe(s)
     else:
-        context.connected = -1
+        if (client.getOptions().connectInterval <= 0):
+            context.connected = -1
 
 def onDisconnect (client, context, status):
     print("disconnect: {}".format(status))

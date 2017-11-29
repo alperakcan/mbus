@@ -10,6 +10,7 @@ import select
 import struct
 from abc import ABCMeta, abstractmethod
 from _ast import Or
+from numpy.f2py.auxfuncs import options
 
 MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
 MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"
@@ -105,6 +106,26 @@ class MBusClientConnectStatus:
     InvalidProtocolVersion  = 6
     InvalidClientIdentifier = 7
     ServerError             = 8
+    
+def MBusClientConnectStatusString (status):
+    if (status == MBusClientConnectStatus.Success):
+        return "success"
+    if (status == MBusClientConnectStatus.InternalError):
+        return "internal error"
+    if (status == MBusClientConnectStatus.InvalidProtocol):
+        return "invalid protocol"
+    if (status == MBusClientConnectStatus.ConnectionRefused):
+        return "connection refused"
+    if (status == MBusClientConnectStatus.ServerUnavailable):
+        return "server unavailable"
+    if (status == MBusClientConnectStatus.Timeout):
+        return "timeout"
+    if (status == MBusClientConnectStatus.InvalidProtocolVersion):
+        return "invalid protocol version"
+    if (status == MBusClientConnectStatus.InvalidClientIdentifier):
+        return "invalid client identifier"
+    if (status == MBusClientConnectStatus.ServerError):
+        return "server error"
 
 class MBusClientDisconnectStatus:
     Success          = 0
@@ -340,7 +361,11 @@ class MBusClient(object):
 
     def __reset (self):
         if (self.__socket != None):
-            self.__socket.shutdown(socket.SHUT_WR)
+            try:
+                self.__socket.shutdown(socket.SHUT_WR)
+            except socket.error as error:
+                if (error.errno == errno.ENOTCONN):
+                    pass
             self.__socket.close()
             self.__socket = None
         
@@ -351,48 +376,48 @@ class MBusClient(object):
             if (request.type == MBUS_METHOD_TYPE_EVENT):
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):
-                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Canceled)
+                    self.__notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Canceled)
             elif (request.type == MBUS_METHOD_TYPE_COMMAND):
                 if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
-                    __notifyPublish(request.payload, MBusClientPublishStatus.Canceled)
+                    self.__notifyPublish(request.payload, MBusClientPublishStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
-                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Canceled)
+                    self.__notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
-                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Canceled)
+                    self.__notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Canceled)
+                    self.__notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Canceled)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Canceled)
+                    self.__notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Canceled)
                 else:
-                    __notifyCommand(request, None, MBusClientCommandStatus.Canceled)
+                    self.__notifyCommand(request, None, MBusClientCommandStatus.Canceled)
         self.__requests.clear()
 
         for pending in self.__pendings:
             if (pending.type == MBUS_METHOD_TYPE_EVENT):
                 if (pending.destination != MBUS_SERVER_IDENTIFIER and
                     pending.identifier != MBUS_SERVER_EVENT_PING):
-                    __notifyPublish(json.loads(pending.__str__()), MBusClientPublishStatus.Canceled)
+                    self.__notifyPublish(json.loads(pending.__str__()), MBusClientPublishStatus.Canceled)
             elif (pending.type == MBUS_METHOD_TYPE_COMMAND):
                 if (pending.identifier == MBUS_SERVER_COMMAND_EVENT):
-                    __notifyPublish(pending.payload, MBusClientPublishStatus.Canceled)
+                    self.__notifyPublish(pending.payload, MBusClientPublishStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
-                    __notifySubscribe(pending.payload["source"], pending.payload["event"], MBusClientSubscribeStatus.Canceled)
+                    self.__notifySubscribe(pending.payload["source"], pending.payload["event"], MBusClientSubscribeStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
-                    __notifyUnsubscribe(pending.payload["source"], pending.payload["event"], MBusClientUnsubscribeStatus.Canceled)
+                    self.__notifyUnsubscribe(pending.payload["source"], pending.payload["event"], MBusClientUnsubscribeStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegistered(pending.payload["command"], MBusClientRegisterStatus.Canceled)
+                    self.__notifyRegistered(pending.payload["command"], MBusClientRegisterStatus.Canceled)
                 elif (pending.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregistered(pending.payload["command"], MBusClientUnregisterStatus.Canceled)
+                    self.__notifyUnregistered(pending.payload["command"], MBusClientUnregisterStatus.Canceled)
                 else:
-                    __notifyCommand(pending, None, MBusClientCommandStatus.Canceled)
+                    self.__notifyCommand(pending, None, MBusClientCommandStatus.Canceled)
         self.__pendings.clear()
         
         for routine in self.__routines:
-            __notifyUnregistered(routine.identifier, MBusClientUnregisterStatus.Canceled)
+            self.__notifyUnregistered(routine.identifier, MBusClientUnregisterStatus.Canceled)
         self.__routines.clear()
         
         for subscription in self.__subscriptions:
-            __notifyUnsubscribe(subscription.source, subscription.identifier, MBusClientUnsubscribeStatus.Canceled)
+            self.__notifyUnsubscribe(subscription.source, subscription.identifier, MBusClientUnsubscribeStatus.Canceled)
         self.__subscriptions.clear()
         
         self.__identifier      = None
@@ -661,6 +686,11 @@ class MBusClient(object):
     def unlock (self):
         pass
     
+    def getOptions (self):
+        options = None
+        options = self.__options
+        return options
+    
     def getState (self):
         state = None
         state = self.__state
@@ -741,19 +771,28 @@ class MBusClient(object):
         if (event == None):
             raise ValueError("event is invalid")
         if (qos == None):
-            MBusClientQoS.Async
+            qos = MBusClientQoS.Async
         if (destination == None):
             destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS
         if (timeout == None or
             timeout <= 0):
             timeout = self.__options.publishTimeout
-        request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, destination, event, self.__sequence, payload, None, None, timeout)
-        if (request == None):
-            raise ValueError("can not create request")
-        self.__sequence += 1
-        if (self.__sequence >= MBUS_METHOD_SEQUENCE_END):
-            self.__sequence = MBUS_METHOD_SEQUENCE_START
-        self.__requests.append(request)
+        if (qos == MBusClientQoS.Async):
+            request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, destination, event, self.__sequence, payload, None, None, timeout)
+            if (request == None):
+                raise ValueError("can not create request")
+            self.__sequence += 1
+            if (self.__sequence >= MBUS_METHOD_SEQUENCE_END):
+                self.__sequence = MBUS_METHOD_SEQUENCE_START
+                self.__requests.append(request)
+        elif (qos == MBusClientQoS.SyncSender):
+            cpayload = {}
+            cpayload["destination"] = destination
+            cpayload["identifier"] = event
+            cpayload["payload"] = payload
+            self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, __commandEventResponse, None, timeout)
+        else:
+            raise ValueError("qos: {} is invalid".format(qos))
         return 0
 
     def register (self, command, callback, context, timeout):
@@ -998,20 +1037,20 @@ class MBusClient(object):
             if (request.type == MBUS_METHOD_TYPE_EVENT):
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):
-                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
+                    self.__notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
             elif (request.type == MBUS_METHOD_TYPE_COMMAND):
                 if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
-                    __notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
+                    self.__notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
-                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
+                    self.__notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
-                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
+                    self.__notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
+                    self.__notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
+                    self.__notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
                 else:
-                    __notifyCommand(request, None, MBusClientCommandStatus.Timeout)
+                    self.__notifyCommand(request, None, MBusClientCommandStatus.Timeout)
 
         for request in self.__pendings:
             if (request.timeout < 0 or
@@ -1020,20 +1059,20 @@ class MBusClient(object):
             if (request.type == MBUS_METHOD_TYPE_EVENT):
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):
-                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
+                    self.__notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Timeout)
             elif (request.type == MBUS_METHOD_TYPE_COMMAND):
                 if (request.identifier == MBUS_SERVER_COMMAND_EVENT):
-                    __notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
+                    self.__notifyPublish(request.payload, MBusClientPublishStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE):
-                    __notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
+                    self.__notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE):
-                    __notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
+                    self.__notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_REGISTER):
-                    __notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
+                    self.__notifyRegistered(request.payload["command"], MBusClientRegisterStatus.Timeout)
                 elif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER):
-                    __notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
+                    self.__notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
                 else:
-                    __notifyCommand(request, None, MBusClientCommandStatus.Timeout)
+                    self.__notifyCommand(request, None, MBusClientCommandStatus.Timeout)
 
         while (len(self.__requests) > 0):
             request = self.__requests.popleft()
@@ -1045,7 +1084,7 @@ class MBusClient(object):
             if request.type == MBUS_METHOD_TYPE_EVENT:
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):
-                    __notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Success)
+                    self.__notifyPublish(json.loads(request.__str__()), MBusClientPublishStatus.Success)
             else:
                 self.__pendings.append(request)
          
