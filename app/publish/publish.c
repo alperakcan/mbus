@@ -100,7 +100,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	struct arg *arg = context;
 	if (status == mbus_client_connect_status_success) {
 		for (p = 0; p < arg->flood; p++) {
-			rc = mbus_client_publish_sync_to(client, arg->destination, arg->event, arg->payload);
+			rc = mbus_client_publish_qos_to(client, arg->destination, arg->event, arg->payload, mbus_client_qos_at_least_once);
 			if (rc != 0) {
 				break;
 			}

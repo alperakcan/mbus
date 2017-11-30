@@ -2287,90 +2287,45 @@ int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *des
 
 int mbus_client_publish_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
 {
-	int rc;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	mbus_client_lock(client);
-	rc = mbus_client_publish_to_timeout_unlocked(client, destination, event, payload, timeout);
-	mbus_client_unlock(client);
-	return rc;
-bail:	if (client != NULL) {
-		mbus_client_unlock(client);
-	}
-	return -1;
+	return mbus_client_publish_qos_to_timeout(client, destination, event, payload, mbus_client_qos_at_most_once, timeout);
 }
 
 int mbus_client_publish_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
 {
-	struct request *request;
-	request = NULL;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (client->state != mbus_client_state_connected) {
-		mbus_errorf("client is not connected");
-		goto bail;
-	}
-	if (destination == NULL) {
-		mbus_debugf("destination is invalid, using: %s", MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS);
-		destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
-	}
-	if (event == NULL) {
-		mbus_errorf("command is invalid");
-		goto bail;
-	}
-	if (timeout < 0) {
-		mbus_debugf("timeout is invalid, using: %d", client->options->publish_timeout);
-		timeout = client->options->publish_timeout;
-	}
-	request = request_create(MBUS_METHOD_TYPE_EVENT, destination, event, client->sequence, payload, NULL, NULL, timeout);
-	if (request == NULL) {
-		mbus_errorf("can not create request");
-		goto bail;
-	}
-	client->sequence += 1;
-	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
-		client->sequence = MBUS_METHOD_SEQUENCE_START;
-	}
-	TAILQ_INSERT_TAIL(&client->requests, request, requests);
-	return 0;
-bail:	return -1;
+	return mbus_client_publish_qos_to_timeout_unlocked(client, destination, event, payload, mbus_client_qos_at_most_once, timeout);
 }
 
-int mbus_client_publish_sync (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_qos (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos)
 {
-	return mbus_client_publish_sync_timeout(client, event, payload, client->options->publish_timeout);
+	return mbus_client_publish_qos_timeout(client, event, payload, qos, client->options->publish_timeout);
 }
 
-int mbus_client_publish_sync_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_qos_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos)
 {
-	return mbus_client_publish_sync_timeout_unlocked(client, event, payload, client->options->publish_timeout);
+	return mbus_client_publish_qos_timeout_unlocked(client, event, payload, qos, client->options->publish_timeout);
 }
 
-int mbus_client_publish_sync_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_qos_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout)
 {
-	return mbus_client_publish_sync_to_timeout(client, NULL, event, payload, timeout);
+	return mbus_client_publish_qos_to_timeout(client, NULL, event, payload, qos, timeout);
 }
 
-int mbus_client_publish_sync_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_qos_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout)
 {
-	return mbus_client_publish_sync_to_timeout_unlocked(client, NULL, event, payload, timeout);
+	return mbus_client_publish_qos_to_timeout_unlocked(client, NULL, event, payload, qos, timeout);
 }
 
-int mbus_client_publish_sync_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_qos_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos)
 {
-	return mbus_client_publish_sync_to_timeout(client, destination, event, payload, client->options->publish_timeout);
+	return mbus_client_publish_qos_to_timeout(client, destination, event, payload, qos, client->options->publish_timeout);
 }
 
-int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload)
+int mbus_client_publish_qos_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos)
 {
-	return mbus_client_publish_sync_to_timeout_unlocked(client, destination, event, payload, client->options->publish_timeout);
+	return mbus_client_publish_qos_to_timeout_unlocked(client, destination, event, payload, qos, client->options->publish_timeout);
 }
 
-int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_qos_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout)
 {
 	int rc;
 	if (client == NULL) {
@@ -2378,7 +2333,7 @@ int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char 
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_client_publish_sync_to_timeout_unlocked(client, destination, event, payload, timeout);
+	rc = mbus_client_publish_qos_to_timeout_unlocked(client, destination, event, payload, qos, timeout);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2387,8 +2342,9 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout)
+int mbus_client_publish_qos_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout)
 {
+	int rc;
 	struct request *request;
 	struct mbus_json *jdata;
 	struct mbus_json *jpayload;
@@ -2415,35 +2371,50 @@ int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, co
 		mbus_debugf("timeout is invalid, using: %d", client->options->publish_timeout);
 		timeout = client->options->publish_timeout;
 	}
-	if (payload == NULL) {
-		jdata = mbus_json_create_object();
+	if (qos == mbus_client_qos_at_most_once) {
+		request = request_create(MBUS_METHOD_TYPE_EVENT, destination, event, client->sequence, payload, NULL, NULL, timeout);
+		if (request == NULL) {
+			mbus_errorf("can not create request");
+			goto bail;
+		}
+		client->sequence += 1;
+		if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
+			client->sequence = MBUS_METHOD_SEQUENCE_START;
+		}
+		TAILQ_INSERT_TAIL(&client->requests, request, requests);
+	} else if (qos == mbus_client_qos_at_least_once) {
+		if (payload == NULL) {
+			jdata = mbus_json_create_object();
+		} else {
+			jdata = mbus_json_duplicate(payload, 1);
+		}
+		if (jdata == NULL) {
+			mbus_errorf("can not create data");
+			goto bail;
+		}
+		jpayload = mbus_json_create_object();
+		if (jpayload == NULL) {
+			mbus_errorf("can not create command payload");
+			goto bail;
+		}
+		mbus_json_add_string_to_object_cs(jpayload, "destination", destination);
+		mbus_json_add_string_to_object_cs(jpayload, "identifier", event);
+		mbus_json_add_item_to_object_cs(jpayload, "payload", jdata);
+		jdata = NULL;
+		rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, jpayload, mbus_client_command_event_response, NULL, timeout);
+		if (rc != 0) {
+			mbus_errorf("can mot execute command");
+		}
 	} else {
-		jdata = mbus_json_duplicate(payload, 1);
-	}
-	if (jdata == NULL) {
-		mbus_errorf("can not create data");
+		mbus_errorf("qos: %d is invalid", qos);
 		goto bail;
 	}
-	jpayload = mbus_json_create_object();
-	if (jpayload == NULL) {
-		mbus_errorf("can not create command payload");
-		goto bail;
+	if (jpayload != NULL) {
+		mbus_json_delete(jpayload);
 	}
-	mbus_json_add_string_to_object_cs(jpayload, "destination", destination);
-	mbus_json_add_string_to_object_cs(jpayload, "identifier", event);
-	mbus_json_add_item_to_object_cs(jpayload, "payload", jdata);
-	jdata = NULL;
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, client->sequence, jpayload, mbus_client_command_event_response, NULL, timeout);
-	if (request == NULL) {
-		mbus_errorf("can not create request");
-		goto bail;
+	if (jdata != NULL) {
+		mbus_json_delete(jdata);
 	}
-	client->sequence += 1;
-	if (client->sequence >= MBUS_METHOD_SEQUENCE_END) {
-		client->sequence = MBUS_METHOD_SEQUENCE_START;
-	}
-	TAILQ_INSERT_TAIL(&client->requests, request, requests);
-	mbus_json_delete(jpayload);
 	return 0;
 bail:	if (jpayload != NULL) {
 		mbus_json_delete(jpayload);

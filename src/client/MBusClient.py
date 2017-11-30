@@ -81,10 +81,9 @@ class MBusClientDefaults:
     PingThreshold     = 2
 
 class MBusClientQoS:
-    Async              = 0
-    SyncSender         = 1
-    SyncReceiver       = 2
-    SyncSenderReceiver = 3
+    AtMostOnce         = 0
+    AtLeastOnce        = 1
+    ExactlyOnce        = 2
 
 class MBusClientState:
     Unknown       = 0
@@ -843,21 +842,21 @@ class MBusClient (object):
         if (event == None):
             raise ValueError("event is invalid")
         if (qos == None):
-            qos = MBusClientQoS.Async
+            qos = MBusClientQoS.AtMostOnce
         if (destination == None):
             destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS
         if (timeout == None or
             timeout <= 0):
             timeout = self.__options.publishTimeout
-        if (qos == MBusClientQoS.Async):
+        if (qos == MBusClientQoS.AtMostOnce):
             request = MBusClientRequest(MBUS_METHOD_TYPE_EVENT, destination, event, self.__sequence, payload, None, None, timeout)
             if (request == None):
                 raise ValueError("can not create request")
             self.__sequence += 1
             if (self.__sequence >= MBUS_METHOD_SEQUENCE_END):
                 self.__sequence = MBUS_METHOD_SEQUENCE_START
-                self.__requests.append(request)
-        elif (qos == MBusClientQoS.SyncSender):
+            self.__requests.append(request)
+        elif (qos == MBusClientQoS.AtLeastOnce):
             cpayload = {}
             cpayload["destination"] = destination
             cpayload["identifier"] = event

@@ -647,7 +647,7 @@ static int command_publish (int argc, char *argv[])
 	const char *destination;
 	const char *event;
 	const char *payload;
-	int sync;
+	int qos;
 	int timeout;
 	struct mbus_json *jpayload;
 
@@ -657,7 +657,7 @@ static int command_publish (int argc, char *argv[])
 		{ "destination",required_argument,	0,	'd' },
 		{ "event",	required_argument,	0,	'e' },
 		{ "payload",	required_argument,	0,	'p' },
-		{ "sync",	required_argument,	0,	's' },
+		{ "qos",		required_argument,	0,	'q' },
 		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
@@ -665,13 +665,13 @@ static int command_publish (int argc, char *argv[])
 	destination = NULL;
 	event = NULL;
 	payload = NULL;
-	sync = 0;
+	qos = mbus_client_qos_at_most_once;
 	timeout = -1;
 
 	jpayload = NULL;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "d:e:p:s:t:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:e:p:q:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
 				destination = optarg;
@@ -682,8 +682,8 @@ static int command_publish (int argc, char *argv[])
 			case 'p':
 				payload = optarg;
 				break;
-			case 's':
-				sync = atoi(optarg);
+			case 'q':
+				qos = atoi(optarg);
 				break;
 			case 't':
 				timeout = atoi(optarg);
@@ -693,7 +693,7 @@ static int command_publish (int argc, char *argv[])
 				fprintf(stdout, "  -d / --destination: event destination to publish (default: %s)\n", destination);
 				fprintf(stdout, "  -e / --event      : event identifier to publish (default: %s)\n", event);
 				fprintf(stdout, "  -p / --payload    : event payload to publish (default: %s)\n", payload);
-				fprintf(stdout, "  -s / --sync       : syncronized event (default: %d)\n", sync);
+				fprintf(stdout, "  -q / --qos        : event qos (default: %d)\n", qos);
 				fprintf(stdout, "  -t / --timeout    : publish timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h / --help       : this text\n");;
 				fprintf(stdout, "\n");
@@ -723,11 +723,7 @@ static int command_publish (int argc, char *argv[])
 		}
 	}
 
-	if (sync == 0) {
-		rc = mbus_client_publish_to_timeout(g_mbus_client, destination, event, jpayload, timeout);
-	} else {
-		rc = mbus_client_publish_sync_to_timeout(g_mbus_client, destination, event, jpayload, timeout);
-	}
+	rc = mbus_client_publish_qos_to_timeout(g_mbus_client, destination, event, jpayload, qos, timeout);
 	if (rc != 0) {
 		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", destination, event, payload);
 		goto bail;

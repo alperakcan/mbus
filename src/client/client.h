@@ -114,6 +114,12 @@ enum mbus_client_command_status {
 	mbus_client_command_status_canceled
 };
 
+enum mbus_client_qos {
+	mbus_client_qos_at_most_once,
+	mbus_client_qos_at_least_once,
+	mbus_client_qos_exactly_once
+};
+
 struct mbus_client_options {
 	char *identifier;
 	char *server_protocol;
@@ -203,14 +209,14 @@ int mbus_client_publish_to_unlocked (struct mbus_client *client, const char *des
 int mbus_client_publish_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
 int mbus_client_publish_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
 
-int mbus_client_publish_sync (struct mbus_client *client, const char *event, const struct mbus_json *payload);
-int mbus_client_publish_sync_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload);
-int mbus_client_publish_sync_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout);
-int mbus_client_publish_sync_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, int timeout);
-int mbus_client_publish_sync_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
-int mbus_client_publish_sync_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload);
-int mbus_client_publish_sync_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
-int mbus_client_publish_sync_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, int timeout);
+int mbus_client_publish_qos (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos);
+int mbus_client_publish_qos_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos);
+int mbus_client_publish_qos_timeout (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout);
+int mbus_client_publish_qos_timeout_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout);
+int mbus_client_publish_qos_to (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos);
+int mbus_client_publish_qos_to_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos);
+int mbus_client_publish_qos_to_timeout (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout);
+int mbus_client_publish_qos_to_timeout_unlocked (struct mbus_client *client, const char *destination, const char *event, const struct mbus_json *payload, enum mbus_client_qos qos, int timeout);
 
 int mbus_client_register (struct mbus_client *client, const char *command);
 int mbus_client_register_unlocked (struct mbus_client *client, const char *command);

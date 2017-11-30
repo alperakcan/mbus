@@ -140,7 +140,7 @@ def onConnect (client, context, status):
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
         for p in xrange(0, context.flood):
-            client.publish(context.event, context.payload, MBusClient.MBusClientQoS.SyncSender)
+            client.publish(context.event, context.payload, MBusClient.MBusClientQoS.AtLeastOnce)
     else:
         if (client.getOptions().connectInterval <= 0):
             context.connected = -1
