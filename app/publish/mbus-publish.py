@@ -48,10 +48,10 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:e:p:f:h', ['help',
 for opt, arg in options:
     if opt in ('-h', '--help'):
         print("publish usage:\n" \
-              "  --destination                  : publish destination identifier (default: {})\n" \
-              "  --event                        : publish event identifier (default: {})\n" \
-              "  --payload                      : publish payload (default: {})\n" \
-              "  --flood                        : publish event n timed (default: {})\n" \
+              "  -d, --destination              : publish destination identifier (default: {})\n" \
+              "  -e, --event                    : publish event identifier (default: {})\n" \
+              "  -p, --payload                  : publish payload (default: {})\n" \
+              "  -f, --flood                    : publish event n timed (default: {})\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \

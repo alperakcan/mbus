@@ -40,7 +40,7 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 'e:h', ['help',
 for opt, arg in options:
     if opt in ('-h', '--help'):
         print("subscribe usage:\n" \
-              "  --event                        : subscribe to an event identifier\n" \
+              "  -e, --event                    : subscribe to an event identifier\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
