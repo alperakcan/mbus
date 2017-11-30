@@ -803,7 +803,7 @@ static void mbus_client_command_subscribe_response (struct mbus_client *client, 
 static void mbus_client_command_unsubscribe_response (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
 {
 	enum mbus_client_unsubscribe_status cstatus;
-	(void) context;
+	struct subscription *subscription = context;
 	mbus_client_lock(client);
 	if (status != mbus_client_command_status_success) {
 		if (status == mbus_client_command_status_internal_error) {
@@ -815,6 +815,10 @@ static void mbus_client_command_unsubscribe_response (struct mbus_client *client
 		}
 	} else if (mbus_client_message_command_response_result(message) == 0) {
 		cstatus = mbus_client_unsubscribe_status_success;
+		if (subscription != NULL) {
+			TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
+			subscription_destroy(subscription);
+		}
 	} else {
 		cstatus = mbus_client_unsubscribe_status_internal_error;
 	}
@@ -1987,83 +1991,17 @@ bail:	if (client != NULL) {
 
 int mbus_client_subscribe (struct mbus_client *client, const char *event)
 {
-	return mbus_client_subscribe_timeout(client, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_unlocked (struct mbus_client *client, const char *event)
-{
-	return mbus_client_subscribe_timeout_unlocked(client, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_timeout (struct mbus_client *client, const char *event, int timeout)
-{
-	return mbus_client_subscribe_callback_timeout(client, event, NULL, NULL, timeout);
-}
-
-int mbus_client_subscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout)
-{
-	return mbus_client_subscribe_callback_timeout_unlocked(client, event, NULL, NULL, timeout);
-}
-
-int mbus_client_subscribe_callback (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context)
-{
-	return mbus_client_subscribe_callback_timeout(client, event, callback, context, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_callback_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context)
-{
-	return mbus_client_subscribe_callback_timeout_unlocked(client, event, callback, context, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout)
-{
-	return mbus_client_subscribe_from_callback_timeout(client, NULL, event, callback, context, timeout);
-}
-
-int mbus_client_subscribe_callback_timeout_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout)
-{
-	return mbus_client_subscribe_from_callback_timeout_unlocked(client, NULL, event, callback, context, timeout);
-}
-
-int mbus_client_subscribe_from (struct mbus_client *client, const char *source, const char *event)
-{
-	return mbus_client_subscribe_from_timeout(client, source, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event)
-{
-	return mbus_client_subscribe_from_timeout_unlocked(client, source, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
-{
-	return mbus_client_subscribe_from_callback_timeout(client, source, event, NULL, NULL, timeout);
-}
-
-int mbus_client_subscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout)
-{
-	return mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, NULL, NULL, timeout);
-}
-
-int mbus_client_subscribe_from_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context)
-{
-	return mbus_client_subscribe_from_callback_timeout(client, source, event, callback, context, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_from_callback_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context)
-{
-	return mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, callback, context, client->options->subscribe_timeout);
-}
-
-int mbus_client_subscribe_from_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout)
-{
 	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (event == NULL) {
+		mbus_errorf("event is invalid");
+		goto bail;
+	}
 	mbus_client_lock(client);
-	rc = mbus_client_subscribe_from_callback_timeout_unlocked(client, source, event, callback, context, timeout);
+	rc = mbus_client_subscribe_unlocked(client, event);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2072,7 +2010,54 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_subscribe_from_callback_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout)
+int mbus_client_subscribe_unlocked (struct mbus_client *client, const char *event)
+{
+	int rc;
+	struct mbus_client_subscribe_options options;
+	rc = mbus_client_subscribe_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	options.event = event;
+	return mbus_client_subscribe_with_options_unlocked(client, &options);
+bail:	return -1;
+}
+
+int mbus_client_subscribe_options_default (struct mbus_client_subscribe_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_subscribe_options));
+	options->qos = mbus_client_qos_at_most_once;
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_subscribe_with_options (struct mbus_client *client, struct mbus_client_subscribe_options *options)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_subscribe_with_options_unlocked(client, options);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_subscribe_with_options_unlocked (struct mbus_client *client, struct mbus_client_subscribe_options *options)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2088,51 +2073,55 @@ int mbus_client_subscribe_from_callback_timeout_unlocked (struct mbus_client *cl
 		mbus_errorf("client is not connected");
 		goto bail;
 	}
-	if (source == NULL) {
+	if (options->source == NULL) {
 		mbus_debugf("source is invalid, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
-		source = MBUS_METHOD_EVENT_SOURCE_ALL;
+		options->source = MBUS_METHOD_EVENT_SOURCE_ALL;
 	}
-	if (event == NULL) {
+	if (options->event == NULL) {
 		mbus_errorf("event is invalid");
 		goto bail;
 	}
-	if (timeout < 0) {
+	if (options->timeout <= 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
-		timeout = client->options->subscribe_timeout;
+		options->timeout = client->options->subscribe_timeout;
 	}
 	TAILQ_FOREACH_SAFE(subscription, &client->subscriptions, subscriptions, nsubscription) {
-		if (strcmp(subscription_get_source(subscription), source) == 0 &&
-		    strcmp(subscription_get_identifier(subscription), event) == 0) {
-			goto out;
+		if (strcmp(subscription_get_source(subscription), options->source) == 0 &&
+		    strcmp(subscription_get_identifier(subscription), options->event) == 0) {
+			break;
 		}
+	}
+	if (subscription != NULL) {
+		mbus_errorf("already subscribed to source: %s, event: %s", options->source, options->event);
+		goto bail;
 	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "source", source);
+	rc = mbus_json_add_string_to_object_cs(payload, "source", options->source);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "event", event);
+	rc = mbus_json_add_string_to_object_cs(payload, "event", options->event);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	subscription = subscription_create(source, event, callback, context);
+	subscription = subscription_create(options->source, options->event, options->callback, options->context);
 	if (subscription == NULL) {
 		mbus_errorf("can not create subscription");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, options->timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
 	}
 	mbus_json_delete(payload);
-out:	return 0;
+	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
@@ -2144,43 +2133,17 @@ bail:	if (payload != NULL) {
 
 int mbus_client_unsubscribe (struct mbus_client *client, const char *event)
 {
-	return mbus_client_unsubscribe_timeout(client, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_unsubscribe_unlocked (struct mbus_client *client, const char *event)
-{
-	return mbus_client_unsubscribe_timeout_unlocked(client, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *event, int timeout)
-{
-	return mbus_client_unsubscribe_from_timeout(client, NULL, event, timeout);
-}
-
-int mbus_client_unsubscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout)
-{
-	return mbus_client_unsubscribe_from_timeout_unlocked(client, NULL, event, timeout);
-}
-
-int mbus_client_unsubscribe_from (struct mbus_client *client, const char *source, const char *event)
-{
-	return mbus_client_unsubscribe_from_timeout(client, source, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_unsubscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event)
-{
-	return mbus_client_unsubscribe_from_timeout_unlocked(client, source, event, client->options->subscribe_timeout);
-}
-
-int mbus_client_unsubscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout)
-{
 	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (event == NULL) {
+		mbus_errorf("event is invalid");
+		goto bail;
+	}
 	mbus_client_lock(client);
-	rc = mbus_client_unsubscribe_from_timeout_unlocked(client, source, event, timeout);
+	rc = mbus_client_unsubscribe_unlocked(client, event);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2189,7 +2152,53 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_unsubscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout)
+int mbus_client_unsubscribe_unlocked (struct mbus_client *client, const char *event)
+{
+	int rc;
+	struct mbus_client_unsubscribe_options options;
+	rc = mbus_client_unsubscribe_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	options.event = event;
+	return mbus_client_unsubscribe_with_options_unlocked(client, &options);
+bail:	return -1;
+}
+
+int mbus_client_unsubscribe_options_default (struct mbus_client_unsubscribe_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_unsubscribe_options));
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_unsubscribe_with_options (struct mbus_client *client, struct mbus_client_unsubscribe_options *options)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_unsubscribe_with_options_unlocked(client, options);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_unsubscribe_with_options_unlocked (struct mbus_client *client, struct mbus_client_unsubscribe_options *options)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -2204,41 +2213,44 @@ int mbus_client_unsubscribe_from_timeout_unlocked (struct mbus_client *client, c
 		mbus_errorf("client is not connected");
 		goto bail;
 	}
-	if (source == NULL) {
+	if (options->source == NULL) {
 		mbus_debugf("source is invalid, using: %s", MBUS_METHOD_EVENT_SOURCE_ALL);
-		source = MBUS_METHOD_EVENT_SOURCE_ALL;
+		options->source = MBUS_METHOD_EVENT_SOURCE_ALL;
 	}
-	if (event == NULL) {
+	if (options->event == NULL) {
 		mbus_errorf("event is invalid");
 		goto bail;
 	}
-	if (timeout < 0) {
+	if (options->timeout <= 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->subscribe_timeout);
-		timeout = client->options->subscribe_timeout;
+		options->timeout = client->options->subscribe_timeout;
 	}
 	TAILQ_FOREACH_SAFE(subscription, &client->subscriptions, subscriptions, nsubscription) {
-		if (strcmp(subscription_get_source(subscription), source) == 0 &&
-		    strcmp(subscription_get_identifier(subscription), event) == 0) {
-			TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
-			subscription_destroy(subscription);
+		if (strcmp(subscription_get_source(subscription), options->source) == 0 &&
+		    strcmp(subscription_get_identifier(subscription), options->event) == 0) {
+			break;
 		}
+	}
+	if (subscription == NULL) {
+		mbus_errorf("can not find subscription for source: %s, event: %s", options->source, options->event);
+		goto bail;
 	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "source", source);
+	rc = mbus_json_add_string_to_object_cs(payload, "source", options->source);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "event", event);
+	rc = mbus_json_add_string_to_object_cs(payload, "event", options->event);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, NULL, timeout);
+	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, subscription, options->timeout);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;

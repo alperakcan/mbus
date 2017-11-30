@@ -120,6 +120,21 @@ enum mbus_client_qos {
 	mbus_client_qos_exactly_once
 };
 
+struct mbus_client_subscribe_options {
+	const char *source;
+	const char *event;
+	enum mbus_client_qos qos;
+	void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message);
+	void *context;
+	int timeout;
+};
+
+struct mbus_client_unsubscribe_options {
+	const char *source;
+	const char *event;
+	int timeout;
+};
+
 struct mbus_client_options {
 	char *identifier;
 	char *server_protocol;
@@ -173,31 +188,17 @@ int mbus_client_disconnect (struct mbus_client *client);
 
 int mbus_client_subscribe (struct mbus_client *client, const char *event);
 int mbus_client_subscribe_unlocked (struct mbus_client *client, const char *event);
-int mbus_client_subscribe_timeout (struct mbus_client *client, const char *event, int timeout);
-int mbus_client_subscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout);
-int mbus_client_subscribe_callback (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context);
-int mbus_client_subscribe_callback_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context);
-int mbus_client_subscribe_callback_timeout (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout);
-int mbus_client_subscribe_callback_timeout_unlocked (struct mbus_client *client, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout);
 
-int mbus_client_subscribe_from (struct mbus_client *client, const char *source, const char *event);
-int mbus_client_subscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event);
-int mbus_client_subscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout);
-int mbus_client_subscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout);
-int mbus_client_subscribe_from_callback (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context);
-int mbus_client_subscribe_from_callback_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context);
-int mbus_client_subscribe_from_callback_timeout (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout);
-int mbus_client_subscribe_from_callback_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message), void *context, int timeout);
+int mbus_client_subscribe_options_default (struct mbus_client_subscribe_options *options);
+int mbus_client_subscribe_with_options (struct mbus_client *client, struct mbus_client_subscribe_options *options);
+int mbus_client_subscribe_with_options_unlocked (struct mbus_client *client, struct mbus_client_subscribe_options *options);
 
 int mbus_client_unsubscribe (struct mbus_client *client, const char *event);
 int mbus_client_unsubscribe_unlocked (struct mbus_client *client, const char *event);
-int mbus_client_unsubscribe_timeout (struct mbus_client *client, const char *event, int timeout);
-int mbus_client_unsubscribe_timeout_unlocked (struct mbus_client *client, const char *event, int timeout);
 
-int mbus_client_unsubscribe_from (struct mbus_client *client, const char *source, const char *event);
-int mbus_client_unsubscribe_from_unlocked (struct mbus_client *client, const char *source, const char *event);
-int mbus_client_unsubscribe_from_timeout (struct mbus_client *client, const char *source, const char *event, int timeout);
-int mbus_client_unsubscribe_from_timeout_unlocked (struct mbus_client *client, const char *source, const char *event, int timeout);
+int mbus_client_unsubscribe_options_default (struct mbus_client_unsubscribe_options *options);
+int mbus_client_unsubscribe_with_options (struct mbus_client *client, struct mbus_client_unsubscribe_options *options);
+int mbus_client_unsubscribe_with_options_unlocked (struct mbus_client *client, struct mbus_client_unsubscribe_options *options);
 
 int mbus_client_publish (struct mbus_client *client, const char *event, const struct mbus_json *payload);
 int mbus_client_publish_unlocked (struct mbus_client *client, const char *event, const struct mbus_json *payload);

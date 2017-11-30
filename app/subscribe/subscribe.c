@@ -102,21 +102,37 @@ bail:	if (subscription != NULL) {
 static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
-	struct arg *arg = context;
+	struct arg *arg;
+	struct subscription *subscription;
+	struct mbus_client_subscribe_options subscribe_options;
+	arg = context;
 	fprintf(stdout, "connect: %s\n", mbus_client_connect_status_string(status));
 	if (status == mbus_client_connect_status_success) {
 		arg->connected = 1;
 		if (arg->subscriptions->count > 0) {
-			struct subscription *subscription;
 			TAILQ_FOREACH(subscription, arg->subscriptions, subscriptions) {
-				rc = mbus_client_subscribe_from(client, subscription->source, subscription->event);
+				rc = mbus_client_subscribe_options_default(&subscribe_options);
+				if (rc != 0) {
+					fprintf(stderr, "can not get default subscribe options\n");
+					goto bail;
+				}
+				subscribe_options.source = subscription->source;
+				subscribe_options.event = subscription->event;
+				rc = mbus_client_subscribe_with_options(client, &subscribe_options);
 				if (rc != 0) {
 					fprintf(stderr, "can not subscribe to event\n");
 					goto bail;
 				}
 			}
 		} else {
-			rc = mbus_client_subscribe_from(client, MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+			rc = mbus_client_subscribe_options_default(&subscribe_options);
+			if (rc != 0) {
+				fprintf(stderr, "can not get default subscribe options\n");
+				goto bail;
+			}
+			subscribe_options.source = MBUS_METHOD_EVENT_SOURCE_ALL;
+			subscribe_options.event = MBUS_METHOD_EVENT_IDENTIFIER_ALL;
+			rc = mbus_client_subscribe_with_options(client, &subscribe_options);
 			if (rc != 0) {
 				fprintf(stderr, "can not subscribe to events\n");
 				goto bail;
