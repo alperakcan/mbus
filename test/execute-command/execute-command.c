@@ -31,12 +31,12 @@ static struct option options[] = {
 static void print_help (const char *name)
 {
 	fprintf(stdout, "%s options command\n", name);
-	fprintf(stdout, "  -r / --reader     : mode reader\n");
-	fprintf(stdout, "  -w / --writer     : mode writer\n");
-	fprintf(stdout, "  -i / --identifier : mbus identifier\n");
-	fprintf(stdout, "  -l / --reconnect  : reconnect on error\n");
-	fprintf(stdout, "  -c / --command    : request command\n");
-	fprintf(stdout, "  -t / --timeout    : request timeout milliseconds\n");
+	fprintf(stdout, "  -r, --reader     : mode reader\n");
+	fprintf(stdout, "  -w, --writer     : mode writer\n");
+	fprintf(stdout, "  -i, --identifier : mbus identifier\n");
+	fprintf(stdout, "  -l, --reconnect  : reconnect on error\n");
+	fprintf(stdout, "  -c, --command    : request command\n");
+	fprintf(stdout, "  -t, --timeout    : request timeout milliseconds\n");
 	fprintf(stdout, "example:\n");
 	fprintf(stdout, "  %s -r -i org.mbus.client.execute-command -c 1\n", name);
 	fprintf(stdout, "  %s -w -i org.mbus.client.execute-command -t 60000 -c 'ls -al'\n", name);

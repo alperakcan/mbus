@@ -40,11 +40,11 @@
 #include "mbus/client.h"
 #include "mbus/server.h"
 
-#define OPTION_HELP		0x100
-#define OPTION_DESTINATION	0x101
-#define OPTION_EVENT		0x102
-#define OPTION_PAYLOAD		0x103
-#define OPTION_FLOOD		0x104
+#define OPTION_HELP		'h'
+#define OPTION_DESTINATION	'd'
+#define OPTION_EVENT		'e'
+#define OPTION_PAYLOAD		'p'
+#define OPTION_FLOOD		'f'
 static struct option longopts[] = {
 	{ "help",		no_argument,		NULL,	OPTION_HELP },
 	{ "destination",	required_argument,	NULL,	OPTION_DESTINATION },
@@ -57,11 +57,11 @@ static struct option longopts[] = {
 static void usage (void)
 {
 	fprintf(stdout, "mbus publish arguments:\n");
-	fprintf(stdout, "  --destination            : destination identifier (default: null)\n");
-	fprintf(stdout, "  --event                  : event identifier (default: null)\n");
-	fprintf(stdout, "  --payload                : payload json (default: null)\n");
-	fprintf(stdout, "  --flood                  : flood event n times (default: 1)\n");
-	fprintf(stdout, "  --help                   : this text\n");
+	fprintf(stdout, "  -d, --destination        : destination identifier (default: null)\n");
+	fprintf(stdout, "  -e, --event              : event identifier (default: null)\n");
+	fprintf(stdout, "  -p, --payload            : payload json (default: null)\n");
+	fprintf(stdout, "  -f, --flood              : flood event n times (default: 1)\n");
+	fprintf(stdout, "  -h, --help               : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 	mbus_client_usage();
 }
@@ -145,7 +145,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":d:e:p:f:", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_DESTINATION:
 				arg.destination = optarg;

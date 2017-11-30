@@ -336,7 +336,7 @@ static int command_create (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "create mbus client\n");
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				mbus_client_usage();
 				return 0;
 		}
@@ -382,7 +382,7 @@ static int command_destroy (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "destroy mbus client\n");
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -412,7 +412,7 @@ static int command_connect (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "connect to mbus server\n");
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -448,7 +448,7 @@ static int command_disconnect (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "disconnect from mbus server\n");
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -482,7 +482,7 @@ static int command_get_state (int argc, char *argv[])
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "get state\n");
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -539,11 +539,11 @@ static int command_subscribe (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "subscribe to source/event\n");
-				fprintf(stdout, "  -s / --source  : event source to subscribe (default: %s)\n", source);
-				fprintf(stdout, "  -e / --event   : event identifier to subscribe (default: %s)\n", event);
-				fprintf(stdout, "  -c / --callback: subscribe with callback (default: %d)\n", callback);
-				fprintf(stdout, "  -t / --timeout : subscribe timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -s, --source  : event source to subscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e, --event   : event identifier to subscribe (default: %s)\n", event);
+				fprintf(stdout, "  -c, --callback: subscribe with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -t, --timeout : subscribe timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
 				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
@@ -609,10 +609,10 @@ static int command_unsubscribe (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "unsubscribe from source/event\n");
-				fprintf(stdout, "  -s / --source : event source to unsubscribe (default: %s)\n", source);
-				fprintf(stdout, "  -e / --event  : event identifier to unsubscribe (default: %s)\n", event);
-				fprintf(stdout, "  -t / --timeout: unsubscribe timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help   : this text\n");;
+				fprintf(stdout, "  -s, --source : event source to unsubscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e, --event  : event identifier to unsubscribe (default: %s)\n", event);
+				fprintf(stdout, "  -t, --timeout: unsubscribe timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help   : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
 				fprintf(stdout, "  source all: %s\n", MBUS_METHOD_EVENT_SOURCE_ALL);
@@ -690,12 +690,12 @@ static int command_publish (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "publish to a destination/event\n");
-				fprintf(stdout, "  -d / --destination: event destination to publish (default: %s)\n", destination);
-				fprintf(stdout, "  -e / --event      : event identifier to publish (default: %s)\n", event);
-				fprintf(stdout, "  -p / --payload    : event payload to publish (default: %s)\n", payload);
-				fprintf(stdout, "  -q / --qos        : event qos (default: %d)\n", qos);
-				fprintf(stdout, "  -t / --timeout    : publish timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help       : this text\n");;
+				fprintf(stdout, "  -d, --destination: event destination to publish (default: %s)\n", destination);
+				fprintf(stdout, "  -e, --event      : event identifier to publish (default: %s)\n", event);
+				fprintf(stdout, "  -p, --payload    : event payload to publish (default: %s)\n", payload);
+				fprintf(stdout, "  -q, --qos        : event qos (default: %d)\n", qos);
+				fprintf(stdout, "  -t, --timeout    : publish timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help       : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
 				fprintf(stdout, "  destination all        : %s\n", MBUS_METHOD_EVENT_DESTINATION_ALL);
@@ -782,11 +782,11 @@ static int command_command (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "command to a destination/event\n");
-				fprintf(stdout, "  -d / --destination: destination to execute command (default: %s)\n", destination);
-				fprintf(stdout, "  -c / --command    : command identifier to execute (default: %s)\n", command);
-				fprintf(stdout, "  -p / --payload    : command payload (default: %s)\n", payload);
-				fprintf(stdout, "  -t / --timeout    : command timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help       : this text\n");;
+				fprintf(stdout, "  -d, --destination: destination to execute command (default: %s)\n", destination);
+				fprintf(stdout, "  -c, --command    : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -p, --payload    : command payload (default: %s)\n", payload);
+				fprintf(stdout, "  -t, --timeout    : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help       : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -864,10 +864,10 @@ static int command_register (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "command to a destination/event\n");
-				fprintf(stdout, "  -c / --command : command identifier to execute (default: %s)\n", command);
-				fprintf(stdout, "  -b / --callback: register with callback (default: %d)\n", callback);
-				fprintf(stdout, "  -t / --timeout : command timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -c, --command : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -b, --callback: register with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -t, --timeout : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");
@@ -926,9 +926,9 @@ static int command_unregister (int argc, char *argv[])
 				break;
 			case 'h':
 				fprintf(stdout, "command to a destination/event\n");
-				fprintf(stdout, "  -c / --command : command identifier to execute (default: %s)\n", command);
-				fprintf(stdout, "  -t / --timeout : command timeout (default: %d)\n", timeout);
-				fprintf(stdout, "  -h / --help    : this text\n");;
+				fprintf(stdout, "  -c, --command : command identifier to execute (default: %s)\n", command);
+				fprintf(stdout, "  -t, --timeout : command timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -h, --help    : this text\n");;
 				return 0;
 			default:
 				fprintf(stderr, "invalid parameter\n");

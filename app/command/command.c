@@ -40,10 +40,10 @@
 #include "mbus/client.h"
 #include "mbus/server.h"
 
-#define OPTION_HELP		0x100
-#define OPTION_DESTINATION	0x101
-#define OPTION_COMMAND		0x102
-#define OPTION_PAYLOAD		0x103
+#define OPTION_HELP		'h'
+#define OPTION_DESTINATION	'd'
+#define OPTION_COMMAND		'c'
+#define OPTION_PAYLOAD		'p'
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
@@ -55,10 +55,10 @@ static struct option longopts[] = {
 static void usage (void)
 {
 	fprintf(stdout, "mbus command arguments:\n");
-	fprintf(stdout, "  --destination            : destination identifier\n");
-	fprintf(stdout, "  --command                : command identifier\n");
-	fprintf(stdout, "  --payload                : payload json\n");
-	fprintf(stdout, "  --help                   : this text\n");
+	fprintf(stdout, "  -d, --destination        : destination identifier\n");
+	fprintf(stdout, "  -c, --command            : command identifier\n");
+	fprintf(stdout, "  -p, --payload            : payload json\n");
+	fprintf(stdout, "  -h, --help               : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 	mbus_client_usage();
 }
@@ -132,7 +132,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":d:c:p:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_DESTINATION:
 				arg.destination = optarg;
@@ -143,7 +143,7 @@ int main (int argc, char *argv[])
 			case OPTION_PAYLOAD:
 				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
-					fprintf(stderr, "invalid payload: %s\n", optarg);
+					fprintf(stderr, "invalid payload: '%s'\n", optarg);
 					goto bail;
 				}
 				break;
