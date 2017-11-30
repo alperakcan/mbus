@@ -645,12 +645,9 @@ static int command_unsubscribe (int argc, char *argv[])
 static int command_publish (int argc, char *argv[])
 {
 	int rc;
-	const char *destination;
-	const char *event;
 	const char *payload;
-	int qos;
-	int timeout;
 	struct mbus_json *jpayload;
+	struct mbus_client_publish_options options;
 
 	int c;
 	struct option long_options[] = {
@@ -663,39 +660,40 @@ static int command_publish (int argc, char *argv[])
 		{ NULL,		0,			NULL,	0 }
 	};
 
-	destination = NULL;
-	event = NULL;
-	payload = NULL;
-	qos = mbus_client_qos_at_most_once;
-	timeout = -1;
+	rc = mbus_client_publish_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get publish default options\n");
+		return -1;
+	}
 
+	payload = NULL;
 	jpayload = NULL;
 
 	optind = 0;
 	while ((c = getopt_long(argc, argv, "d:e:p:q:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
-				destination = optarg;
+				options.destination = optarg;
 				break;
 			case 'e':
-				event = optarg;
+				options.event = optarg;
 				break;
 			case 'p':
 				payload = optarg;
 				break;
 			case 'q':
-				qos = atoi(optarg);
+				options.qos = atoi(optarg);
 				break;
 			case 't':
-				timeout = atoi(optarg);
+				options.timeout = atoi(optarg);
 				break;
 			case 'h':
 				fprintf(stdout, "publish to a destination/event\n");
-				fprintf(stdout, "  -d, --destination: event destination to publish (default: %s)\n", destination);
-				fprintf(stdout, "  -e, --event      : event identifier to publish (default: %s)\n", event);
+				fprintf(stdout, "  -d, --destination: event destination to publish (default: %s)\n", options.destination);
+				fprintf(stdout, "  -e, --event      : event identifier to publish (default: %s)\n", options.event);
 				fprintf(stdout, "  -p, --payload    : event payload to publish (default: %s)\n", payload);
-				fprintf(stdout, "  -q, --qos        : event qos (default: %d)\n", qos);
-				fprintf(stdout, "  -t, --timeout    : publish timeout (default: %d)\n", timeout);
+				fprintf(stdout, "  -q, --qos        : event qos (default: %d)\n", options.qos);
+				fprintf(stdout, "  -t, --timeout    : publish timeout (default: %d)\n", options.timeout);
 				fprintf(stdout, "  -h, --help       : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -712,21 +710,22 @@ static int command_publish (int argc, char *argv[])
 		fprintf(stderr, "mbus client is invalid\n");
 		goto bail;
 	}
-	if (event == NULL) {
+	if (options.event == NULL) {
 		fprintf(stderr, "event is invalid\n");
 		goto bail;
 	}
 	if (payload != NULL) {
 		jpayload = mbus_json_parse(payload);
 		if (jpayload == NULL) {
-			fprintf(stderr, "payload is invalid\n");
+			fprintf(stderr, "payliad is invalid: '%s'\n", payload);
 			goto bail;
 		}
 	}
 
-	rc = mbus_client_publish_qos_to_timeout(g_mbus_client, destination, event, jpayload, qos, timeout);
+	options.payload = jpayload;
+	rc = mbus_client_publish_with_options(g_mbus_client, &options);
 	if (rc != 0) {
-		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", destination, event, payload);
+		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", options.destination, options.event, payload);
 		goto bail;
 	}
 

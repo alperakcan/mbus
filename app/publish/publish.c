@@ -97,10 +97,21 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 {
 	int p;
 	int rc;
-	struct arg *arg = context;
+	struct arg *arg;
+	struct mbus_client_publish_options publish_options;
+	arg = context;
 	if (status == mbus_client_connect_status_success) {
 		for (p = 0; p < arg->flood; p++) {
-			rc = mbus_client_publish_qos_to(client, arg->destination, arg->event, arg->payload, mbus_client_qos_at_least_once);
+			rc = mbus_client_publish_options_default(&publish_options);
+			if (rc != 0) {
+				fprintf(stderr, "can not get default publish options\n");
+				break;
+			}
+			publish_options.destination = arg->destination;
+			publish_options.event = arg->event;
+			publish_options.payload = arg->payload;
+			publish_options.qos = mbus_client_qos_at_least_once;
+			rc = mbus_client_publish_with_options(client, &publish_options);
 			if (rc != 0) {
 				break;
 			}
