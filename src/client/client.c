@@ -241,10 +241,6 @@ static struct routine * routine_create (const char *identifier, int (*callback) 
 		mbus_errorf("identifier is invalid");
 		goto bail;
 	}
-	if (callback == NULL) {
-		mbus_errorf("callback is invalid");
-		goto bail;
-	}
 	routine->identifier = strdup(identifier);
 	if (routine->identifier == NULL) {
 		mbus_errorf("can not allocate memory");
@@ -2476,6 +2472,7 @@ int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, 
 {
 	int rc;
 	struct routine *routine;
+	struct routine *nroutine;
 	struct mbus_json *payload;
 	routine = NULL;
 	payload = NULL;
@@ -2495,6 +2492,11 @@ int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, 
 		mbus_debugf("timeout is invalid, using: %d", client->options->register_timeout);
 		timeout = client->options->register_timeout;
 	}
+	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
+		    if (strcmp(routine_get_identifier(routine), command) == 0) {
+			goto out;
+		}
+	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create json object");
@@ -2505,12 +2507,10 @@ int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, 
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	if (callback != NULL) {
-		routine = routine_create(command, callback, context);
-		if (routine == NULL) {
-			mbus_errorf("can not create routine");
-			goto bail;
-		}
+	routine = routine_create(command, callback, context);
+	if (routine == NULL) {
+		mbus_errorf("can not create routine");
+		goto bail;
 	}
 	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
 	if (rc != 0) {
@@ -2518,7 +2518,7 @@ int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, 
 		goto bail;
 	}
 	mbus_json_delete(payload);
-	return 0;
+out:	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
