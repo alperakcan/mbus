@@ -355,17 +355,15 @@ class MBusClientRequest(object):
         request['timeout']     = self.timeout
         return json.dumps(request)
 
-class MBusClientMessageType(object):
-    Command = 0
-    Event   = 1
-    
-class MBusClientMessageEvent(object):
+class MBusClientMessageEvent (object):
     def __init__ (self, payload):
-        self.__type = MBusClientMessageType.Event
         self.__payload = payload
     
     def getSource (self):
         return self.__payload["source"]
+
+    def getDestination (self):
+        return self.__payload["destination"]
 
     def getIdentifier (self):
         return self.__payload["identifier"]
@@ -373,9 +371,8 @@ class MBusClientMessageEvent(object):
     def getPayload (self):
         return self.__payload["payload"]
 
-class MBusClientMessageCommand(object):
+class MBusClientMessageCommand (object):
     def __init__ (self, request, response):
-        self.__type = MBusClientMessageType.Command
         self.__request = request.getJson()
         self.__response = response
     
@@ -388,7 +385,7 @@ class MBusClientMessageCommand(object):
     def getResponsePayload (self):
         return self.__response["payload"]
 
-class MBusClient(object):
+class MBusClient (object):
     
     def __notifyPublish (self, request, status):
         if (self.__options.onPublish != None):
@@ -518,14 +515,24 @@ class MBusClient(object):
                 self.__subscriptions.append(subscription)
         else:
             cstatus = MBusClientSubscribeStatus.InternalError
-        if (self.__options.onSubscribe != None):
-            self.__options.onSubscribe(self, self.__options.onContext, message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+        self.__notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
     
     def __commandUnsubscribeResponse (self, this, context, message, status):
         raise ValueError("not implemented yet")
     
     def __commandEventResponse (self, this, context, message, status):
-        raise ValueError("not implemented yet")
+        if (status != MBusClientCommandStatus.Success):
+            if (status == MBusClientCommandStatus.InternalError):
+                cstatus = MBusClientPublishStatus.InternalError
+            elif (status == MBusClientCommandStatus.Timeout):
+                cstatus = MBusClientPublishStatus.Timeout
+            else:
+                cstatus = MBusClientPublishStatus.InternalError
+        elif (message.getResponseResult() == 0):
+            cstatus = MBusClientPublishStatus.Success
+        else:
+            cstatus = MBusClientPublishStatus.InternalError
+        self.__notifyPublish(message.getRequestPayload(), status)
     
     def __commandCreateResponse (self, this, context, message, status):
         if (status != MBusClientCommandStatus.Success):
@@ -855,7 +862,7 @@ class MBusClient(object):
             cpayload["destination"] = destination
             cpayload["identifier"] = event
             cpayload["payload"] = payload
-            self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, __commandEventResponse, None, timeout)
+            self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, self.__commandEventResponse, None, timeout)
         else:
             raise ValueError("qos: {} is invalid".format(qos))
         return 0
@@ -1098,7 +1105,7 @@ class MBusClient(object):
         for request in self.__requests:
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
-                continue;
+                continue
             if (request.type == MBUS_METHOD_TYPE_EVENT):
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):
@@ -1120,7 +1127,7 @@ class MBusClient(object):
         for request in self.__pendings:
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
-                continue;
+                continue
             if (request.type == MBUS_METHOD_TYPE_EVENT):
                 if (request.destination != MBUS_SERVER_IDENTIFIER and
                     request.identifier != MBUS_SERVER_EVENT_PING):

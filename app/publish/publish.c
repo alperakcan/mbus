@@ -57,10 +57,10 @@ static struct option longopts[] = {
 static void usage (void)
 {
 	fprintf(stdout, "mbus publish arguments:\n");
-	fprintf(stdout, "  --destination            : destination identifier\n");
-	fprintf(stdout, "  --event                  : event identifier\n");
-	fprintf(stdout, "  --payload                : payload json\n");
-	fprintf(stdout, "  --flood                  : flood event n times\n");
+	fprintf(stdout, "  --destination            : destination identifier (default: null)\n");
+	fprintf(stdout, "  --event                  : event identifier (default: null)\n");
+	fprintf(stdout, "  --payload                : payload json (default: null)\n");
+	fprintf(stdout, "  --flood                  : flood event n times (default: 1)\n");
 	fprintf(stdout, "  --help                   : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 	mbus_client_usage();
@@ -83,9 +83,9 @@ static void mbus_client_callback_publish (struct mbus_client *client, void *cont
 	(void) message;
 	arg->published += 1;
 	if (status == mbus_client_publish_status_success) {
-		arg->result = 0;
 		if (arg->published == arg->flood) {
 			arg->finished = 1;
+			arg->result = 0;
 		}
 	} else {
 		arg->result = -1;
