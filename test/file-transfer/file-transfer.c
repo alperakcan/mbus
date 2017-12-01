@@ -365,7 +365,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":m:p:i:s:d:t:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case 'm':
 				o_mode = mode_value(optarg);
