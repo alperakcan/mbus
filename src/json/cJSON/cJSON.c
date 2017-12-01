@@ -58,7 +58,7 @@ const char *mbus_cJSON_GetErrorPtr(void)
     return global_ep;
 }
 
-/* case insensitive strcmp */
+/* case sensitive strcmp */
 static int cJSON_strcmp(const char *s1, const char *s2)
 {
     if (!s1)
