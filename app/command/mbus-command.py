@@ -227,3 +227,5 @@ while (options.onContext.connected >= 0 and
     if (options.onContext.finished == 1 and
         client.hasPending() == 0):
         break;
+
+exit(options.onContext.result)

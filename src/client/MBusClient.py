@@ -1035,16 +1035,18 @@ class MBusClient (object):
         else:
             raise ValueError("client state: {} is invalid".format(self.__state))
 
-        rlist = [ self.__wakeupRead ]
-        wlist = [ ]
+        poll = select.poll();
+        poll.register(self.__wakeupRead, select.POLLIN)
         if (self.__socket != None):
+            event = 0
             if (self.__state == MBusClientState.Connecting and
                 self.__socketConnected == 0):
-                wlist.append(self.__socket)
+                event |= select.POLLOUT
             else:
-                rlist.append(self.__socket)
+                event |= select.POLLIN
                 if (len(self.__outgoing) > 0):
-                    wlist.append(self.__socket)
+                    event |= select.POLLOUT
+            poll.register(self.__socket.fileno(), event)
         
         ptimeout = self.getRunTimeout()
         if (ptimeout < 0 or
@@ -1053,66 +1055,33 @@ class MBusClient (object):
         else:
             ptimeout = min(ptimeout, timeout)
 
-        #print("rlist: {}, wlist: {}, ptimeout: {}".format(rlist, wlist, ptimeout))
         try:
-            socklist = select.select(rlist, wlist, [], float(ptimeout) / float(1000))
+            ready = poll.poll(ptimeout)
         except TypeError:
-            raise ValueError("select failed")
+            raise ValueError("poll failed")
         except ValueError:
-            raise ValueError("select failed")
+            raise ValueError("poll failed")
         except KeyboardInterrupt:
-            raise ValueError("select failed")
+            raise ValueError("poll failed")
+        except select.error, error:
+            if (error.errno != errno.EINTR): 
+                raise ValueError("poll failed")
         except:
-            raise ValueError("select failed")
+            raise ValueError("poll failed")
 
-        if (self.__wakeupRead in socklist[0]):
-            buffer = os.read(self.__wakeupRead, 4)
-            if (len(buffer) != 4):
-                raise ValueError("wakeup read failed")
-            reason, = struct.unpack("I", buffer)
-
-        if (self.__socket != None):
-            if (self.__socket in socklist[0]):
-                dlen = 0
-                try:
-                    data = self.__socket.recv(4096)
-                except socket.error as error:
-                    if error.errno == errno.EAGAIN:
-                        pass
-                    if error.errno == errno.EINTR:
-                        pass
-                    if error.errno == errno.EWOULDBLOCK:
-                        pass
-                    raise ValueError("recv failed")
-                if (len(data) == 0):
-                    self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
-                    self.__reset()
-                    self.__state = MBusClientState.Disconnected
-                    return 0
-                self.__incoming += data
+        for fd, event in ready:
+            if (fd == self.__wakeupRead):
+                if (event & select.POLLIN):
+                    buffer = os.read(self.__wakeupRead, 4)
+                    if (len(buffer) != 4):
+                        raise ValueError("wakeup read failed")
+                    reason, = struct.unpack("I", buffer)
             
-            if (self.__socket in socklist[1]):
-                if (self.__state == MBusClientState.Connecting and
-                    self.__socketConnected == 0):
-                    rc = self.__socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                    if (rc == 0):
-                        self.__socketConnected = 1
-                        self.__commandCreateRequest()
-                    elif (rc == errno.ECONNREFUSED):
-                        self.__notifyConnect(MBusClientConnectStatus.ConnectionRefused)
-                        self.__reset()
-                        if (self.__options.connectInterval > 0):
-                            self.__state = MBusClientState.Connecting
-                        else:
-                            self.__state = MBusClientState.Disconnected
-                        return 0
-                    else:
-                        self.__notifyConnect(MBusClientConnectStatus.InternalError)
-                        raise ValueError("can not connect to server")
-                elif (len(self.__outgoing) > 0):
+            if (fd == self.__socket.fileno()):
+                if (event & select.POLLIN):
                     dlen = 0
                     try:
-                        dlen = self.__socket.send(self.__outgoing)
+                        data = self.__socket.recv(4096)
                     except socket.error as error:
                         if error.errno == errno.EAGAIN:
                             pass
@@ -1120,9 +1089,46 @@ class MBusClient (object):
                             pass
                         if error.errno == errno.EWOULDBLOCK:
                             pass
-                        raise ValueError("send failed")
-                    if (dlen > 0):
-                        self.__outgoing = self.__outgoing[dlen:]
+                        raise ValueError("recv failed")
+                    if (len(data) == 0):
+                        self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
+                        self.__reset()
+                        self.__state = MBusClientState.Disconnected
+                        return 0
+                    self.__incoming += data
+            
+                if (event & select.POLLOUT):
+                    if (self.__state == MBusClientState.Connecting and
+                        self.__socketConnected == 0):
+                        rc = self.__socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                        if (rc == 0):
+                            self.__socketConnected = 1
+                            self.__commandCreateRequest()
+                        elif (rc == errno.ECONNREFUSED):
+                            self.__notifyConnect(MBusClientConnectStatus.ConnectionRefused)
+                            self.__reset()
+                            if (self.__options.connectInterval > 0):
+                                self.__state = MBusClientState.Connecting
+                            else:
+                                self.__state = MBusClientState.Disconnected
+                            return 0
+                        else:
+                            self.__notifyConnect(MBusClientConnectStatus.InternalError)
+                            raise ValueError("can not connect to server")
+                    elif (len(self.__outgoing) > 0):
+                        dlen = 0
+                        try:
+                            dlen = self.__socket.send(self.__outgoing)
+                        except socket.error as error:
+                            if error.errno == errno.EAGAIN:
+                                pass
+                            if error.errno == errno.EINTR:
+                                pass
+                            if error.errno == errno.EWOULDBLOCK:
+                                pass
+                            raise ValueError("send failed")
+                        if (dlen > 0):
+                            self.__outgoing = self.__outgoing[dlen:]
         
         current = mbus_clock_get()
 
