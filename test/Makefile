@@ -1,8 +1,8 @@
 
-subdir-y = \
+subdir-y += \
 	file-transfer
 
-subdir-n = \
+subdir-y += \
 	execute-command
 
 include ../Makefile.lib

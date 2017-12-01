@@ -42,7 +42,7 @@
 #include "base64.h"
 
 #define DEFAULT_MODE		mode_receiver
-#define DEFAULT_IDENTIFIER		"org.mbus.client.file-transfer"
+#define DEFAULT_IDENTIFIER	"org.mbus.client.file-transfer"
 #define DEFAULT_PREFIX		"./"
 #define DEFAULT_TIMEOUT		30000
 
@@ -298,7 +298,15 @@ static void mbus_client_sender_callback_connect (struct mbus_client *client, voi
 		fprintf(stderr, "can not create request\n");
 		goto bail;
 	}
-	rc = mbus_client_command(client, param->identifier, "command.put", request, mbus_client_sender_callback_command_put_result, param);
+	struct mbus_client_command_options command_options;
+	mbus_client_command_options_default(&command_options);
+	command_options.destination = param->identifier;
+	command_options.command = "command.put";
+	command_options.payload = request;
+	command_options.callback = mbus_client_sender_callback_command_put_result;
+	command_options.context = param;
+	command_options.timeout = param->timeout;
+	rc = mbus_client_command_with_options(client, &command_options);
 	if (rc != 0) {
 		fprintf(stderr, "can not execute command\n");
 		goto bail;
@@ -454,6 +462,9 @@ int main (int argc, char *argv[])
 			    mbus_client_has_pending(mbus_client) == 0) {
 				break;
 			}
+		}
+		if (mbus_client_get_state(mbus_client) == mbus_client_state_disconnected) {
+			break;
 		}
 	}
 
