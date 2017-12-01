@@ -502,6 +502,11 @@ static int command_get_state (int argc, char *argv[])
 static int command_subscribe (int argc, char *argv[])
 {
 	int rc;
+	const char *source;
+	const char *event;
+	enum mbus_client_qos qos;
+	int callback;
+	int timeout;
 	struct mbus_client_subscribe_options options;
 
 	int c;
@@ -509,44 +514,43 @@ static int command_subscribe (int argc, char *argv[])
 		{ "help",	no_argument,		0,	'h' },
 		{ "source",	required_argument,	0,	's' },
 		{ "event",	required_argument,	0,	'e' },
+		{ "qos",		required_argument,	0,	'q' },
 		{ "callback",	required_argument,	0,	'c' },
 		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
 
-	rc = mbus_client_subscribe_options_default(&options);
-	if (rc != 0) {
-		fprintf(stderr, "can not get subscribe default options\n");
-		return -1;
-	}
+	source = NULL;
+	event = NULL;
+	qos = mbus_client_qos_at_most_once;
+	callback = 0;
+	timeout = -1;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "s:e:c:t:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "s:e:q:c:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 's':
-				options.source = optarg;
+				source = optarg;
 				break;
 			case 'e':
-				options.event = optarg;
+				event = optarg;
+				break;
+			case 'q':
+				qos = atoi(optarg);
 				break;
 			case 'c':
-				if (!!atoi(optarg)) {
-					options.callback = mbus_client_callback_message_callback;
-					options.context = NULL;
-				} else {
-					options.callback = NULL;
-					options.context = NULL;
-				}
+				callback = atoi(optarg);
 				break;
 			case 't':
-				options.timeout = atoi(optarg);
+				timeout = atoi(optarg);
 				break;
 			case 'h':
 				fprintf(stdout, "subscribe to source/event\n");
-				fprintf(stdout, "  -s, --source  : event source to subscribe (default: %s)\n", options.source);
-				fprintf(stdout, "  -e, --event   : event identifier to subscribe (default: %s)\n", options.event);
-				fprintf(stdout, "  -c, --callback: subscribe with callback (default: %d)\n", (options.callback == NULL) ? 0 : 1);
-				fprintf(stdout, "  -t, --timeout : subscribe timeout (default: %d)\n", options.timeout);
+				fprintf(stdout, "  -s, --source  : event source to subscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e, --event   : event identifier to subscribe (default: %s)\n", event);
+				fprintf(stdout, "  -q, --qos     : event qos (default: %d)\n", qos);
+				fprintf(stdout, "  -c, --callback: subscribe with callback (default: %d)\n", callback);
+				fprintf(stdout, "  -t, --timeout : subscribe timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h, --help    : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -563,14 +567,27 @@ static int command_subscribe (int argc, char *argv[])
 		fprintf(stderr, "mbus client is invalid\n");
 		return -1;
 	}
-	if (options.event == NULL) {
+	if (event == NULL) {
 		fprintf(stderr, "event is invalid\n");
 		return -1;
 	}
 
+	rc = mbus_client_subscribe_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default subscribe options\n");
+		return -1;
+	}
+	options.source = source;
+	options.event = event;
+	options.qos = qos;
+	if (callback != 0) {
+		options.callback = mbus_client_callback_message_callback;
+		options.context = NULL;
+	}
+	options.timeout = timeout;
 	rc = mbus_client_subscribe_with_options(g_mbus_client, &options);
 	if (rc != 0) {
-		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", options.source, options.event);
+		fprintf(stderr, "can not subscribe to source: %s, event: %s\n", source, event);
 		return -1;
 	}
 	return 0;
@@ -579,6 +596,9 @@ static int command_subscribe (int argc, char *argv[])
 static int command_unsubscribe (int argc, char *argv[])
 {
 	int rc;
+	const char *source;
+	const char *event;
+	int timeout;
 	struct mbus_client_unsubscribe_options options;
 
 	int c;
@@ -590,29 +610,27 @@ static int command_unsubscribe (int argc, char *argv[])
 		{ NULL,		0,			NULL,	0 }
 	};
 
-	rc = mbus_client_unsubscribe_options_default(&options);
-	if (rc != 0) {
-		fprintf(stderr, "can not get unsubscribe default options\n");
-		return -1;
-	}
+	source = NULL;
+	event = NULL;
+	timeout = -1;
 
 	optind = 0;
 	while ((c = getopt_long(argc, argv, "s:e:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 's':
-				options.source = optarg;
+				source = optarg;
 				break;
 			case 'e':
-				options.event = optarg;
+				event = optarg;
 				break;
 			case 't':
-				options.timeout = atoi(optarg);
+				timeout = atoi(optarg);
 				break;
 			case 'h':
 				fprintf(stdout, "unsubscribe from source/event\n");
-				fprintf(stdout, "  -s, --source : event source to unsubscribe (default: %s)\n", options.source);
-				fprintf(stdout, "  -e, --event  : event identifier to unsubscribe (default: %s)\n", options.event);
-				fprintf(stdout, "  -t, --timeout: unsubscribe timeout (default: %d)\n", options.timeout);
+				fprintf(stdout, "  -s, --source : event source to unsubscribe (default: %s)\n", source);
+				fprintf(stdout, "  -e, --event  : event identifier to unsubscribe (default: %s)\n", event);
+				fprintf(stdout, "  -t, --timeout: unsubscribe timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h, --help   : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -629,14 +647,22 @@ static int command_unsubscribe (int argc, char *argv[])
 		fprintf(stderr, "mbus client is invalid\n");
 		return -1;
 	}
-	if (options.event == NULL) {
+	if (event == NULL) {
 		fprintf(stderr, "event is invalid\n");
 		return -1;
 	}
 
+	rc = mbus_client_unsubscribe_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default unsubscribe options\n");
+		return -1;
+	}
+	options.source = source;
+	options.event = event;
+	options.timeout = timeout;
 	rc = mbus_client_unsubscribe_with_options(g_mbus_client, &options);
 	if (rc != 0) {
-		fprintf(stderr, "can not unsubscribe from source: %s, event: %s\n", options.source, options.event);
+		fprintf(stderr, "can not unsubscribe from source: %s, event: %s\n", source, event);
 		return -1;
 	}
 	return 0;
@@ -645,8 +671,13 @@ static int command_unsubscribe (int argc, char *argv[])
 static int command_publish (int argc, char *argv[])
 {
 	int rc;
+	const char *destination;
+	const char *event;
 	const char *payload;
+	int qos;
+	int timeout;
 	struct mbus_json *jpayload;
+
 	struct mbus_client_publish_options options;
 
 	int c;
@@ -660,40 +691,39 @@ static int command_publish (int argc, char *argv[])
 		{ NULL,		0,			NULL,	0 }
 	};
 
-	rc = mbus_client_publish_options_default(&options);
-	if (rc != 0) {
-		fprintf(stderr, "can not get publish default options\n");
-		return -1;
-	}
-
+	destination = NULL;
+	event = NULL;
 	payload = NULL;
+	qos = mbus_client_qos_at_most_once;
+	timeout = -1;
+
 	jpayload = NULL;
 
 	optind = 0;
 	while ((c = getopt_long(argc, argv, "d:e:p:q:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
-				options.destination = optarg;
+				destination = optarg;
 				break;
 			case 'e':
-				options.event = optarg;
+				event = optarg;
 				break;
 			case 'p':
 				payload = optarg;
 				break;
 			case 'q':
-				options.qos = atoi(optarg);
+				qos = atoi(optarg);
 				break;
 			case 't':
-				options.timeout = atoi(optarg);
+				timeout = atoi(optarg);
 				break;
 			case 'h':
 				fprintf(stdout, "publish to a destination/event\n");
-				fprintf(stdout, "  -d, --destination: event destination to publish (default: %s)\n", options.destination);
-				fprintf(stdout, "  -e, --event      : event identifier to publish (default: %s)\n", options.event);
+				fprintf(stdout, "  -d, --destination: event destination to publish (default: %s)\n", destination);
+				fprintf(stdout, "  -e, --event      : event identifier to publish (default: %s)\n", event);
 				fprintf(stdout, "  -p, --payload    : event payload to publish (default: %s)\n", payload);
-				fprintf(stdout, "  -q, --qos        : event qos (default: %d)\n", options.qos);
-				fprintf(stdout, "  -t, --timeout    : publish timeout (default: %d)\n", options.timeout);
+				fprintf(stdout, "  -q, --qos        : event qos (default: %d)\n", qos);
+				fprintf(stdout, "  -t, --timeout    : publish timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h, --help       : this text\n");;
 				fprintf(stdout, "\n");
 				fprintf(stdout, "special identifiers\n");
@@ -710,22 +740,31 @@ static int command_publish (int argc, char *argv[])
 		fprintf(stderr, "mbus client is invalid\n");
 		goto bail;
 	}
-	if (options.event == NULL) {
+	if (event == NULL) {
 		fprintf(stderr, "event is invalid\n");
 		goto bail;
 	}
 	if (payload != NULL) {
 		jpayload = mbus_json_parse(payload);
 		if (jpayload == NULL) {
-			fprintf(stderr, "payliad is invalid: '%s'\n", payload);
+			fprintf(stderr, "payload is invalid\n");
 			goto bail;
 		}
 	}
 
+	rc = mbus_client_publish_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default publish options\n");
+		return -1;
+	}
+	options.destination = destination;
+	options.event = event;
 	options.payload = jpayload;
+	options.qos = qos;
+	options.timeout = timeout;
 	rc = mbus_client_publish_with_options(g_mbus_client, &options);
 	if (rc != 0) {
-		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", options.destination, options.event, payload);
+		fprintf(stderr, "can not publish to destination: %s, event: %s, payload: %s\n", destination, event, payload);
 		goto bail;
 	}
 
@@ -814,7 +853,19 @@ static int command_command (int argc, char *argv[])
 		}
 	}
 
-	rc = mbus_client_command_timeout(g_mbus_client, destination, command, jpayload, mbus_client_callback_command_callback, NULL, timeout);
+	struct mbus_client_command_options options;
+	rc = mbus_client_command_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default command options");
+		goto bail;
+	}
+	options.destination = destination;
+	options.command = command;
+	options.payload = jpayload;
+	options.callback = mbus_client_callback_command_callback;
+	options.context = NULL;
+	options.timeout = timeout;
+	rc = mbus_client_command_with_options_unlocked(g_mbus_client, &options);
 	if (rc != 0) {
 		fprintf(stderr, "can not execute destination: %s, command: %s, payload: %s\n", destination, command, payload);
 		goto bail;
@@ -836,6 +887,8 @@ static int command_register (int argc, char *argv[])
 	const char *command;
 	int callback;
 	int timeout;
+
+	struct mbus_client_register_options options;
 
 	int c;
 	struct option long_options[] = {
@@ -884,11 +937,18 @@ static int command_register (int argc, char *argv[])
 		goto bail;
 	}
 
-	if (callback == 0) {
-		rc = mbus_client_register_timeout(g_mbus_client, command, timeout);
-	} else {
-		rc = mbus_client_register_callback_timeout(g_mbus_client, command, mbus_client_callback_routine_callback, NULL, timeout);
+	rc = mbus_client_register_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default register options\n");
+		goto bail;
 	}
+	options.command = command;
+	if (callback != 0) {
+		options.callback = mbus_client_callback_routine_callback;
+		options.context = NULL;
+	}
+	options.timeout = timeout;
+	rc = mbus_client_register_with_options(g_mbus_client, &options);
 	if (rc != 0) {
 		fprintf(stderr, "can not register command: %s\n", command);
 		goto bail;
@@ -903,6 +963,8 @@ static int command_unregister (int argc, char *argv[])
 	int rc;
 	const char *command;
 	int timeout;
+
+	struct mbus_client_unregister_options options;
 
 	int c;
 	struct option long_options[] = {
@@ -945,7 +1007,14 @@ static int command_unregister (int argc, char *argv[])
 		goto bail;
 	}
 
-	rc = mbus_client_unregister_timeout(g_mbus_client, command, timeout);
+	rc = mbus_client_unregister_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get unregister default options\n");
+		goto bail;
+	}
+	options.command = command;
+	options.timeout = timeout;
+	rc = mbus_client_unregister_with_options(g_mbus_client, &options);
 	if (rc != 0) {
 		fprintf(stderr, "can not unregister command: %s\n", command);
 		goto bail;

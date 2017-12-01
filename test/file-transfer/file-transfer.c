@@ -202,7 +202,17 @@ static void mbus_client_receiver_callback_connect (struct mbus_client *client, v
 	int rc;
 	struct receiver_param *param = context;
 	if (status == mbus_client_connect_status_success) {
-		rc = mbus_client_register_callback(client, "command.put", mbus_client_receiver_callback_command_put, param);
+		struct mbus_client_register_options register_options;
+		rc = mbus_client_register_options_default(&register_options);
+		if (rc != 0) {
+			param->result = -1;
+			param->finished = 1;
+			return;
+		}
+		register_options.command = "command.put";
+		register_options.callback = mbus_client_receiver_callback_command_put;
+		register_options.context = param;
+		rc = mbus_client_register_with_options(client, &register_options);
 		if (rc != 0) {
 			param->result = -1;
 			param->finished = 1;

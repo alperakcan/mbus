@@ -745,7 +745,7 @@ static void mbus_client_command_register_response (struct mbus_client *client, v
 static void mbus_client_command_unregister_response (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
 {
 	enum mbus_client_unregister_status cstatus;
-	(void) context;
+	struct routine *routine = context;
 	mbus_client_lock(client);
 	if (status != mbus_client_command_status_success) {
 		if (status == mbus_client_command_status_internal_error) {
@@ -757,6 +757,10 @@ static void mbus_client_command_unregister_response (struct mbus_client *client,
 		}
 	} else if (mbus_client_message_command_response_result(message) == 0) {
 		cstatus = mbus_client_unregister_status_success;
+		if (routine != NULL) {
+			TAILQ_REMOVE(&client->routines, routine, routines);
+			routine_destroy(routine);
+		}
 	} else {
 		cstatus = mbus_client_unregister_status_internal_error;
 	}
@@ -2071,6 +2075,7 @@ int mbus_client_subscribe_with_options_unlocked (struct mbus_client *client, str
 	struct mbus_json *payload;
 	struct subscription *subscription;
 	struct subscription *nsubscription;
+	struct mbus_client_command_options command_options;
 	payload = NULL;
 	subscription = NULL;
 	if (client == NULL) {
@@ -2127,7 +2132,18 @@ int mbus_client_subscribe_with_options_unlocked (struct mbus_client *client, str
 		mbus_errorf("can not create subscription");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, mbus_client_command_subscribe_response, subscription, options->timeout);
+	rc = mbus_client_command_options_default(&command_options);
+	if (rc != 0) {
+		mbus_errorf("can not get default command options");
+		goto bail;
+	}
+	command_options.destination = MBUS_SERVER_IDENTIFIER;
+	command_options.command = MBUS_SERVER_COMMAND_SUBSCRIBE;
+	command_options.payload = payload;
+	command_options.callback = mbus_client_command_subscribe_response;
+	command_options.context = subscription;
+	command_options.timeout = options->timeout;
+	rc = mbus_client_command_with_options_unlocked(client, &command_options);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2224,6 +2240,7 @@ int mbus_client_unsubscribe_with_options_unlocked (struct mbus_client *client, s
 	struct mbus_json *payload;
 	struct subscription *subscription;
 	struct subscription *nsubscription;
+	struct mbus_client_command_options command_options;
 	payload = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
@@ -2274,7 +2291,18 @@ int mbus_client_unsubscribe_with_options_unlocked (struct mbus_client *client, s
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, mbus_client_command_unsubscribe_response, subscription, options->timeout);
+	rc = mbus_client_command_options_default(&command_options);
+	if (rc != 0) {
+		mbus_errorf("can not get default command options");
+		goto bail;
+	}
+	command_options.destination = MBUS_SERVER_IDENTIFIER;
+	command_options.command = MBUS_SERVER_COMMAND_UNSUBSCRIBE;
+	command_options.payload = payload;
+	command_options.callback = mbus_client_command_unsubscribe_response;
+	command_options.context = subscription;
+	command_options.timeout = options->timeout;
+	rc = mbus_client_command_with_options_unlocked(client, &command_options);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2369,6 +2397,7 @@ int mbus_client_publish_with_options_unlocked (struct mbus_client *client, struc
 	struct request *request;
 	struct mbus_json *jdata;
 	struct mbus_json *jpayload;
+	struct mbus_client_command_options command_options;
 	jdata = NULL;
 	jpayload = NULL;
 	request = NULL;
@@ -2438,7 +2467,18 @@ int mbus_client_publish_with_options_unlocked (struct mbus_client *client, struc
 			goto bail;
 		}
 		jdata = NULL;
-		rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, jpayload, mbus_client_command_event_response, NULL, options->timeout);
+		rc = mbus_client_command_options_default(&command_options);
+		if (rc != 0) {
+			mbus_errorf("can not get default command options");
+			goto bail;
+		}
+		command_options.destination = MBUS_SERVER_IDENTIFIER;
+		command_options.command = MBUS_SERVER_COMMAND_EVENT;
+		command_options.payload = jpayload;
+		command_options.callback = mbus_client_command_event_response;
+		command_options.context = NULL;
+		command_options.timeout = options->timeout;
+		rc = mbus_client_command_with_options_unlocked(client, &command_options);
 		if (rc != 0) {
 			mbus_errorf("can mot execute command");
 		}
@@ -2464,43 +2504,17 @@ bail:	if (jpayload != NULL) {
 
 int mbus_client_register (struct mbus_client *client, const char *command)
 {
-	return mbus_client_register_timeout(client, command, client->options->register_timeout);
-}
-
-int mbus_client_register_unlocked (struct mbus_client *client, const char *command)
-{
-	return mbus_client_register_timeout_unlocked(client, command, client->options->register_timeout);
-}
-
-int mbus_client_register_timeout (struct mbus_client *client, const char *command, int timeout)
-{
-	return mbus_client_register_callback_timeout(client, command, NULL, NULL, timeout);
-}
-
-int mbus_client_register_timeout_unlocked (struct mbus_client *client, const char *command, int timeout)
-{
-	return mbus_client_register_callback_timeout_unlocked(client, command, NULL, NULL, timeout);
-}
-
-int mbus_client_register_callback (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_routine *message), void *context)
-{
-	return mbus_client_register_callback_timeout(client, command, callback, context, client->options->register_timeout);
-}
-
-int mbus_client_register_callback_unlocked (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_routine *message), void *context)
-{
-	return mbus_client_register_callback_timeout_unlocked(client, command, callback, context, client->options->register_timeout);
-}
-
-int mbus_client_register_callback_timeout (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_routine *message), void *context, int timeout)
-{
 	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
 	mbus_client_lock(client);
-	rc = mbus_client_register_callback_timeout_unlocked(client, command, callback, context, timeout);
+	rc = mbus_client_register_unlocked(client, command);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2509,57 +2523,131 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_register_callback_timeout_unlocked (struct mbus_client *client, const char *command, int (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_routine *message), void *context, int timeout)
+int mbus_client_register_unlocked (struct mbus_client *client, const char *command)
 {
 	int rc;
-	struct routine *routine;
-	struct routine *nroutine;
-	struct mbus_json *payload;
-	routine = NULL;
-	payload = NULL;
+	struct mbus_client_register_options options;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (client->state != mbus_client_state_connected) {
-		mbus_errorf("client is not connected");
 		goto bail;
 	}
 	if (command == NULL) {
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
-	if (timeout < 0) {
+	rc = mbus_client_register_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	options.command = command;
+	return mbus_client_register_with_options_unlocked(client, &options);
+bail:	return -1;
+}
+
+int mbus_client_register_options_default (struct mbus_client_register_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_register_options));
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_register_with_options (struct mbus_client *client, struct mbus_client_register_options *options)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_register_with_options_unlocked(client, options);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_register_with_options_unlocked (struct mbus_client *client, struct mbus_client_register_options *options)
+{
+	int rc;
+	struct routine *routine;
+	struct routine *nroutine;
+	struct mbus_json *payload;
+	struct mbus_client_command_options command_options;
+	routine = NULL;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
+	if (options->command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (options->timeout <= 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->register_timeout);
-		timeout = client->options->register_timeout;
+		options->timeout = client->options->register_timeout;
 	}
 	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
-		    if (strcmp(routine_get_identifier(routine), command) == 0) {
-			goto out;
+		if (strcmp(routine_get_identifier(routine), options->command) == 0) {
+			break;
 		}
+	}
+	if (routine != NULL) {
+		mbus_errorf("already registered command: %s", options->command);
+		goto bail;
 	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "command", command);
+	rc = mbus_json_add_string_to_object_cs(payload, "command", options->command);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	routine = routine_create(command, callback, context);
+	routine = routine_create(options->command, options->callback, options->context);
 	if (routine == NULL) {
 		mbus_errorf("can not create routine");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_REGISTER, payload, mbus_client_command_register_response, routine, timeout);
+	rc = mbus_client_command_options_default(&command_options);
+	if (rc != 0) {
+		mbus_errorf("can not get default command options");
+		goto bail;
+	}
+	command_options.destination = MBUS_SERVER_IDENTIFIER;
+	command_options.command = MBUS_SERVER_COMMAND_REGISTER;
+	command_options.payload = payload;
+	command_options.callback = mbus_client_command_register_response;
+	command_options.context = routine;
+	command_options.timeout = options->timeout;
+	rc = mbus_client_command_with_options_unlocked(client, &command_options);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
 	}
 	mbus_json_delete(payload);
-out:	return 0;
+	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
@@ -2571,23 +2659,17 @@ bail:	if (payload != NULL) {
 
 int mbus_client_unregister (struct mbus_client *client, const char *command)
 {
-	return mbus_client_unregister_timeout(client, command, client->options->register_timeout);
-}
-
-int mbus_client_unregister_unlocked (struct mbus_client *client, const char *command)
-{
-	return mbus_client_unregister_timeout_unlocked(client, command, client->options->register_timeout);
-}
-
-int mbus_client_unregister_timeout (struct mbus_client *client, const char *command, int timeout)
-{
 	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
+	if (command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
 	mbus_client_lock(client);
-	rc = mbus_client_unregister_timeout_unlocked(client, command, timeout);
+	rc = mbus_client_unregister_unlocked(client, command);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2596,46 +2678,120 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_unregister_timeout_unlocked (struct mbus_client *client, const char *command, int timeout)
+int mbus_client_unregister_unlocked (struct mbus_client *client, const char *command)
 {
 	int rc;
-	struct mbus_json *payload;
-	struct routine *routine;
-	struct routine *nroutine;
-	payload = NULL;
+	struct mbus_client_unregister_options options;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	if (client->state != mbus_client_state_connected) {
-		mbus_errorf("client is not connected");
 		goto bail;
 	}
 	if (command == NULL) {
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
-	if (timeout < 0) {
+	rc = mbus_client_unregister_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	options.command = command;
+	return mbus_client_unregister_with_options_unlocked(client, &options);
+bail:	return -1;
+}
+
+int mbus_client_unregister_options_default (struct mbus_client_unregister_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_unregister_options));
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_unregister_with_options (struct mbus_client *client, struct mbus_client_unregister_options *options)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_unregister_with_options_unlocked(client, options);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_unregister_with_options_unlocked (struct mbus_client *client, struct mbus_client_unregister_options *options)
+{
+	int rc;
+	struct routine *routine;
+	struct routine *nroutine;
+	struct mbus_json *payload;
+	struct mbus_client_command_options command_options;
+	routine = NULL;
+	payload = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	if (client->state != mbus_client_state_connected) {
+		mbus_errorf("client is not connected");
+		goto bail;
+	}
+	if (options->command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (options->timeout <= 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->register_timeout);
-		timeout = client->options->register_timeout;
+		options->timeout = client->options->register_timeout;
 	}
 	TAILQ_FOREACH_SAFE(routine, &client->routines, routines, nroutine) {
-		if (strcmp(routine_get_identifier(routine), command) == 0) {
-			TAILQ_REMOVE(&client->routines, routine, routines);
-			routine_destroy(routine);
+		if (strcmp(routine_get_identifier(routine), options->command) == 0) {
+			break;
 		}
+	}
+	if (routine == NULL) {
+		mbus_errorf("command: %s is not registered", options->command);
+		goto bail;
 	}
 	payload = mbus_json_create_object();
 	if (payload == NULL) {
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(payload, "command", command);
+	rc = mbus_json_add_string_to_object_cs(payload, "command", options->command);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_client_command_timeout_unlocked(client, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNREGISTER, payload, mbus_client_command_unregister_response, NULL, timeout);
+	rc = mbus_client_command_options_default(&command_options);
+	if (rc != 0) {
+		mbus_errorf("can not get default command options");
+		goto bail;
+	}
+	command_options.destination = MBUS_SERVER_IDENTIFIER;
+	command_options.command = MBUS_SERVER_COMMAND_UNREGISTER;
+	command_options.payload = payload;
+	command_options.callback = mbus_client_command_unregister_response;
+	command_options.context = routine;
+	command_options.timeout = options->timeout;
+	rc = mbus_client_command_with_options_unlocked(client, &command_options);
 	if (rc != 0) {
 		mbus_errorf("can not execute command");
 		goto bail;
@@ -2650,35 +2806,7 @@ bail:	if (payload != NULL) {
 
 int mbus_client_command (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status), void *context)
 {
-	return mbus_client_command_timeout(client, destination, command, payload, callback, context, client->options->command_timeout);
-}
-
-int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status), void *context)
-{
-	return mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, client->options->command_timeout);
-}
-
-int mbus_client_command_timeout (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status), void *context, int timeout)
-{
 	int rc;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	mbus_client_lock(client);
-	rc = mbus_client_command_timeout_unlocked(client, destination, command, payload, callback, context, timeout);
-	mbus_client_unlock(client);
-	return rc;
-bail:	if (client != NULL) {
-		mbus_client_unlock(client);
-	}
-	return -1;
-}
-
-int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status), void *context, int timeout)
-{
-	struct request *request;
-	request = NULL;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
@@ -2691,7 +2819,99 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 		mbus_errorf("command is invalid");
 		goto bail;
 	}
-	if (strcmp(command, MBUS_SERVER_COMMAND_CREATE) == 0) {
+	mbus_client_lock(client);
+	rc = mbus_client_command_unlocked(client, destination, command, payload, callback, context);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_command_unlocked (struct mbus_client *client, const char *destination, const char *command, const struct mbus_json *payload, void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status), void *context)
+{
+	int rc;
+	struct mbus_client_command_options options;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (destination == NULL) {
+		mbus_errorf("destination is invalid");
+		goto bail;
+	}
+	if (command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	rc = mbus_client_command_options_default(&options);
+	if (rc != 0) {
+		mbus_errorf("can not get default options");
+		goto bail;
+	}
+	options.destination = destination;
+	options.command = command;
+	options.payload = payload;
+	options.callback = callback;
+	options.context = context;
+	return mbus_client_command_with_options_unlocked(client, &options);
+bail:	return -1;
+}
+
+int mbus_client_command_options_default (struct mbus_client_command_options *options)
+{
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	memset(options, 0, sizeof(struct mbus_client_command_options));
+	return 0;
+bail:	return -1;
+}
+
+int mbus_client_command_with_options (struct mbus_client *client, struct mbus_client_command_options *options)
+{
+	int rc;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	rc = mbus_client_command_with_options_unlocked(client, options);
+	mbus_client_unlock(client);
+	return rc;
+bail:	if (client != NULL) {
+		mbus_client_unlock(client);
+	}
+	return -1;
+}
+
+int mbus_client_command_with_options_unlocked (struct mbus_client *client, struct mbus_client_command_options *options)
+{
+	struct request *request;
+	request = NULL;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	if (options == NULL) {
+		mbus_errorf("options is invalid");
+		goto bail;
+	}
+	if (options->destination == NULL) {
+		mbus_errorf("destination is invalid");
+		goto bail;
+	}
+	if (options->command == NULL) {
+		mbus_errorf("command is invalid");
+		goto bail;
+	}
+	if (strcmp(options->command, MBUS_SERVER_COMMAND_CREATE) == 0) {
 		if (client->state != mbus_client_state_connecting) {
 			mbus_errorf("client state is not connecting: %d", client->state);
 			goto bail;
@@ -2702,11 +2922,11 @@ int mbus_client_command_timeout_unlocked (struct mbus_client *client, const char
 			goto bail;
 		}
 	}
-	if (timeout < 0) {
+	if (options->timeout <= 0) {
 		mbus_debugf("timeout is invalid, using: %d", client->options->command_timeout);
-		timeout = client->options->command_timeout;
+		options->timeout = client->options->command_timeout;
 	}
-	request = request_create(MBUS_METHOD_TYPE_COMMAND, destination, command, client->sequence, payload, callback, context, timeout);
+	request = request_create(MBUS_METHOD_TYPE_COMMAND, options->destination, options->command, client->sequence, options->payload, options->callback, options->context, options->timeout);
 	if (request == NULL) {
 		mbus_errorf("can not create request");
 		goto bail;
