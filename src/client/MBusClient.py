@@ -544,7 +544,21 @@ class MBusClient (object):
         self.__notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
     
     def __commandUnsubscribeResponse (self, this, context, message, status):
-        raise ValueError("not implemented yet")
+        subscription = context
+        if (status != MBusClientCommandStatus.Success):
+            if (status == MBusClientCommandStatus.InternalError):
+                cstatus = MBusClientUnsubscribeStatus.InternalError;
+            elif (status == MBusClientCommandStatus.Timeout):
+                cstatus = MBusClientUnsubscribeStatus.Timeout;
+            else:
+                cstatus = MBusClientUnsubscribeStatus.InternalError;
+        elif (message.getResponseResult() == 0):
+            cstatus = MBusClientUnsubscribeStatus.Success;
+            if (subscription != None):
+                self.__subscriptions.remove(subscription)
+        else:
+            cstatus = MBusClientUnsubscribeStatus.InternalError
+        self.__notifyUnsubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
     
     def __commandEventResponse (self, this, context, message, status):
         if (status != MBusClientCommandStatus.Success):
@@ -861,8 +875,28 @@ class MBusClient (object):
         return 0
 
     def unsubscribe (self, event, source = None, timeout = None):
-        raise ValueError("not implemented yet")
-    
+        if (self.__state != MBusClientState.Connected):
+            raise ValueError("client state is not connected: {}".format(self.__state))
+        if (source == None):
+            source = MBUS_METHOD_EVENT_SOURCE_ALL
+        if (event == None):
+            raise ValueError("event is invalid")
+        subscription = None
+        for s in self.__subscriptions:
+            if (s.source == source and
+                s.identifier == event):
+                subscription = s
+                break
+        if (subscription != None):
+            raise ValueError("can not find subscription for source: {}, event: {}".format(source, event))
+        payload = {}
+        payload["source"] = source
+        payload["event"] = event
+        rc = self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, self.__commandUnsubscribeResponse, subscription, timeout)
+        if (rc != 0):
+            raise ValueError("can not call unsubscribe command")
+        return 0
+
     def publish (self, event, payload = None, qos = None, destination = None, timeout = None):
         if (self.__state != MBusClientState.Connected):
             raise ValueError("client state is not connected: {}".format(self.__state))
