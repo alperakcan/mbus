@@ -325,14 +325,29 @@ static int command_create (int argc, char *argv[])
 	int rc;
 	struct mbus_client_options options;
 
+	int _argc;
+	char **_argv;
+
 	int c;
 	struct option long_options[] = {
 		{ "help",	no_argument,	0,	'h' },
 		{ NULL,		0,		NULL,	0 }
 	};
 
+	_argc = 0;
+	_argv = NULL;
+
+	_argv = malloc(sizeof(char *) * argc);
+	if (_argv == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
+		goto bail;
+	}
+	for (_argc = 0; _argc < argc; _argc++) {
+		_argv[_argc] = argv[_argc];
+	}
+
 	optind = 0;
-	while ((c = getopt_long(argc, argv, ":h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'h':
 				fprintf(stdout, "create mbus client\n");
@@ -365,8 +380,13 @@ static int command_create (int argc, char *argv[])
 		fprintf(stderr, "can not create client\n");
 		goto bail;
 	}
+
+	free(_argv);
 	return 0;
-bail:	return -1;
+bail:	if (_argv != NULL) {
+		free(_argv);
+	}
+	return -1;
 }
 
 static int command_destroy (int argc, char *argv[])

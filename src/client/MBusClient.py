@@ -295,30 +295,30 @@ class MBusClientOptions:
     def __str__ (self):
         options = {}
         
-        options['identifier']       = self.identifier
-        options['serverProtocol']   = self.serverProtocol
-        options['serverAddress']    = self.serverAddress
-        options['serverPort']       = self.serverPort
-        options['connectTimeout']   = self.connectTimeout
-        options['connectInterval']  = self.connectInterval
-        options['subscribeTimeout'] = self.subscribeTimeout
-        options['registerTimeout']  = self.registerTimeout
-        options['commandTimeout']   = self.commandTimeout
-        options['publishTimeout']   = self.publishTimeout
-        options['pingInterval']     = self.pingInterval
-        options['pingTimeout']      = self.pingTimeout
-        options['pingThreshold']    = self.pingThreshold
+        options["identifier"]       = self.identifier
+        options["serverProtocol"]   = self.serverProtocol
+        options["serverAddress"]    = self.serverAddress
+        options["serverPort"]       = self.serverPort
+        options["connectTimeout"]   = self.connectTimeout
+        options["connectInterval"]  = self.connectInterval
+        options["subscribeTimeout"] = self.subscribeTimeout
+        options["registerTimeout"]  = self.registerTimeout
+        options["commandTimeout"]   = self.commandTimeout
+        options["publishTimeout"]   = self.publishTimeout
+        options["pingInterval"]     = self.pingInterval
+        options["pingTimeout"]      = self.pingTimeout
+        options["pingThreshold"]    = self.pingThreshold
 
-        options['onConnect']        = self.onConnect
-        options['onDisconnect']     = self.onDisconnect
-        options['onMessage']        = self.onMessage
-        options['onRoutine']        = self.onRoutine
-        options['onPublish']        = self.onPublish
-        options['onSubscribe']      = self.onSubscribe
-        options['onUnsubscribe']    = self.onUnsubscribe
-        options['onRegistered']     = self.onRegistered
-        options['onUnregistered']   = self.onUnregistered
-        options['onContext']        = self.onContext
+        options["onConnect"]        = self.onConnect
+        options["onDisconnect"]     = self.onDisconnect
+        options["onMessage"]        = self.onMessage
+        options["onRoutine"]        = self.onRoutine
+        options["onPublish"]        = self.onPublish
+        options["onSubscribe"]      = self.onSubscribe
+        options["onUnsubscribe"]    = self.onUnsubscribe
+        options["onRegistered"]     = self.onRegistered
+        options["onUnregistered"]   = self.onUnregistered
+        options["onContext"]        = self.onContext
 
         return json.dumps(options)
 
@@ -331,9 +331,9 @@ class MBusClientRoutine(object):
 
     def __str__ (self):
         routine = {}
-        routine['identifier'] = self.identifier
-        routine['callback']   = self.callback
-        routine['context']    = self.context
+        routine["identifier"] = self.identifier
+        routine["callback"]   = self.callback
+        routine["context"]    = self.context
         return json.dumps(routine)
 
 class MBusClientSubscription(object):
@@ -346,10 +346,10 @@ class MBusClientSubscription(object):
 
     def __str__ (self):
         subscription = {}
-        subscription['source']     = self.source
-        subscription['identifier'] = self.identifier
-        subscription['callback']   = self.callback
-        subscription['context']    = self.context
+        subscription["source"]     = self.source
+        subscription["identifier"] = self.identifier
+        subscription["callback"]   = self.callback
+        subscription["context"]    = self.context
         return json.dumps(subscription)
 
 class MBusClientRequest(object):
@@ -373,12 +373,12 @@ class MBusClientRequest(object):
     
     def __str__ (self):
         request = {}
-        request['type']        = self.type
-        request['destination'] = self.destination
-        request['identifier']  = self.identifier
-        request['sequence']    = self.sequence
-        request['payload']     = self.payload
-        request['timeout']     = self.timeout
+        request["type"]        = self.type
+        request["destination"] = self.destination
+        request["identifier"]  = self.identifier
+        request["sequence"]    = self.sequence
+        request["payload"]     = self.payload
+        request["timeout"]     = self.timeout
         return json.dumps(request)
 
 class MBusClientMessageEvent (object):
@@ -602,24 +602,24 @@ class MBusClient (object):
             this.__reset()
             this.__state = MBusClientState.Disconnected
             return
-        this.__pingInterval = payload['ping']['interval']
-        this.__pingTimeout = payload['ping']['timeout']
-        this.__pingThreshold = payload['ping']['threshold']
-        this.__compression = payload['compression']
+        this.__pingInterval = payload["ping"]["interval"]
+        this.__pingTimeout = payload["ping"]["timeout"]
+        this.__pingThreshold = payload["ping"]["threshold"]
+        this.__compression = payload["compression"]
         this.__state = MBusClientState.Connected
         this.__notifyConnect(MBusClientConnectStatus.Success)
 
     def __commandCreateRequest (self):
         payload = {}
         if (self.__options.identifier != None):
-            payload['identifier'] = self._options.identifier
+            payload["identifier"] = self._options.identifier
         if (self.__options.pingInterval > 0):
-            payload['ping'] = {}
-            payload['ping']['interval'] = self.__options.pingInterval
-            payload['ping']['timeout'] = self.__options.pingTimeout
-            payload['ping']['threshold'] = self.__options.pingThreshold
-        payload['compressions'] = []
-        payload['compressions'].append("none")
+            payload["ping"] = {}
+            payload["ping"]["interval"] = self.__options.pingInterval
+            payload["ping"]["timeout"] = self.__options.pingTimeout
+            payload["ping"]["threshold"] = self.__options.pingThreshold
+        payload["compressions"] = []
+        payload["compressions"].append("none")
         rc = self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, self.__commandCreateResponse)
         if (rc != 0):
             return -1
@@ -1125,12 +1125,12 @@ class MBusClient (object):
             self.__incoming = self.__incoming[4 + dlen:]
             #print("recv: {}".format(slice))
             object = json.loads(slice)
-            if (object['type'] == MBUS_METHOD_TYPE_RESULT):
+            if (object["type"] == MBUS_METHOD_TYPE_RESULT):
                 self.__handleResult(object)
-            elif (object['type'] == MBUS_METHOD_TYPE_EVENT):
+            elif (object["type"] == MBUS_METHOD_TYPE_EVENT):
                 self.__handleEvent(object)
             else:
-                raise ValueError("unknown type: {}", object['type'])
+                raise ValueError("unknown type: {}", object["type"])
 
         if (self.__state == MBusClientState.Connecting and
             self.__socket != None and
