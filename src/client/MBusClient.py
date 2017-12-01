@@ -35,6 +35,10 @@ import json
 import collections
 import select
 import struct
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
 MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"

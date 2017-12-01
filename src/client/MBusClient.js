@@ -4,10 +4,10 @@
 //module.exports = MBusClient
 
 const MBUS_METHOD_TYPE_COMMAND					= "org.mbus.method.type.command";
-const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
+const MBUS_METHOD_TYPE_EVENT					= "org.mbus.method.type.event";
 const MBUS_METHOD_TYPE_RESULT					= "org.mbus.method.type.result";
 
-const MBUS_METHOD_SEQUENCE_START					= 1;
+const MBUS_METHOD_SEQUENCE_START				= 1;
 const MBUS_METHOD_SEQUENCE_END					= 9999;
 
 const MBUS_METHOD_EVENT_SOURCE_ALL				= "org.mbus.method.event.source.all";
@@ -17,12 +17,12 @@ const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS	= "org.mbus.method.event.destina
 
 const MBUS_METHOD_EVENT_IDENTIFIER_ALL			= "org.mbus.method.event.identifier.all";
 
-const MBUS_SERVER_IDENTIFIER							= "org.mbus.server";
+const MBUS_SERVER_IDENTIFIER					= "org.mbus.server";
 
-const MBUS_SERVER_COMMAND_CREATE					= "command.create";
+const MBUS_SERVER_COMMAND_CREATE				= "command.create";
 const MBUS_SERVER_COMMAND_EVENT					= "command.event";
-const MBUS_SERVER_COMMAND_RESULT					= "command.result";
-const MBUS_SERVER_COMMAND_STATUS					= "command.status";
+const MBUS_SERVER_COMMAND_RESULT				= "command.result";
+const MBUS_SERVER_COMMAND_STATUS				= "command.status";
 const MBUS_SERVER_COMMAND_CLIENT				= "command.client";
 const MBUS_SERVER_COMMAND_CLIENTS				= "command.clients";
 const MBUS_SERVER_COMMAND_SUBSCRIBE				= "command.subscribe";
@@ -30,13 +30,13 @@ const MBUS_SERVER_COMMAND_REGISTER				= "command.register";
 const MBUS_SERVER_COMMAND_UNSUBSCRIBE			= "command.unsubscribe";
 const MBUS_SERVER_COMMAND_CLOSE					= "command.close";
 
-const MBUS_SERVER_EVENT_CONNECTED				= "event.connected";
-const MBUS_SERVER_EVENT_DISCONNECTED				= "event.disconnected";
-const MBUS_SERVER_EVENT_SUBSCRIBED				= "event.subscribed";
-const MBUS_SERVER_EVENT_UNSUBSCRIBED				= "event.unsubscribed";
+const MBUS_SERVER_EVENT_CONNECTED				= "org.mbus.server.event.connected";
+const MBUS_SERVER_EVENT_DISCONNECTED			= "org.mbus.server.event.disconnected";
+const MBUS_SERVER_EVENT_SUBSCRIBED				= "org.mbus.server.event.subscribed";
+const MBUS_SERVER_EVENT_UNSUBSCRIBED			= "org.mbus.server.event.unsubscribed";
 
-const MBUS_SERVER_EVENT_PING						= "event.ping";
-const MBUS_SERVER_EVENT_PONG						= "event.pong";
+const MBUS_SERVER_EVENT_PING					= "org.mbus.server.event.ping";
+const MBUS_SERVER_EVENT_PONG					= "org.mbus.server.event.pong";
 
 function MBusClientRequest (type, destination, identifier, sequence, payload, callback, context)
 {
