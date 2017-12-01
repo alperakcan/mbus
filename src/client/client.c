@@ -727,7 +727,7 @@ static void mbus_client_command_register_response (struct mbus_client *client, v
 		if (routine != NULL) {
 			routine_destroy(routine);
 		}
-	} else if (mbus_client_message_command_response_result(message) == 0) {
+	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_register_status_success;
 		if (routine != NULL) {
 			TAILQ_INSERT_TAIL(&client->routines, routine, routines);
@@ -757,7 +757,7 @@ static void mbus_client_command_unregister_response (struct mbus_client *client,
 		} else {
 			cstatus = mbus_client_unregister_status_internal_error;
 		}
-	} else if (mbus_client_message_command_response_result(message) == 0) {
+	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_unregister_status_success;
 		if (routine != NULL) {
 			TAILQ_REMOVE(&client->routines, routine, routines);
@@ -788,7 +788,7 @@ static void mbus_client_command_subscribe_response (struct mbus_client *client, 
 		if (subscription != NULL) {
 			subscription_destroy(subscription);
 		}
-	} else if (mbus_client_message_command_response_result(message) == 0) {
+	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_subscribe_status_success;
 		if (subscription != NULL) {
 			TAILQ_INSERT_TAIL(&client->subscriptions, subscription, subscriptions);
@@ -819,7 +819,7 @@ static void mbus_client_command_unsubscribe_response (struct mbus_client *client
 		} else {
 			cstatus = mbus_client_unsubscribe_status_internal_error;
 		}
-	} else if (mbus_client_message_command_response_result(message) == 0) {
+	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_unsubscribe_status_success;
 		if (subscription != NULL) {
 			TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
@@ -848,7 +848,7 @@ static void mbus_client_command_event_response (struct mbus_client *client, void
 		} else {
 			cstatus = mbus_client_publish_status_internal_error;
 		}
-	} else if (mbus_client_message_command_response_result(message) == 0) {
+	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_publish_status_success;
 	} else {
 		cstatus = mbus_client_publish_status_internal_error;
@@ -875,7 +875,7 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
-	if (mbus_client_message_command_response_result(message) != 0) {
+	if (mbus_client_message_command_response_status(message) != 0) {
 		mbus_errorf("client command create failed");
 		mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
 		mbus_client_reset(client);
@@ -1332,7 +1332,7 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 				mbus_errorf("can not add sequence to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_RETURN, rc);
+			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_STATUS, rc);
 			if (rc != 0) {
 				mbus_errorf("can not add return to payload");
 				goto bail;
@@ -3637,13 +3637,13 @@ const struct mbus_json * mbus_client_message_command_response_payload (struct mb
 bail:	return NULL;
 }
 
-int mbus_client_message_command_response_result (struct mbus_client_message_command *message)
+int mbus_client_message_command_response_status (struct mbus_client_message_command *message)
 {
 	if (message == NULL) {
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_int_value(message->response, MBUS_METHOD_TAG_RETURN, -1);
+	return mbus_json_get_int_value(message->response, MBUS_METHOD_TAG_STATUS, -1);
 bail:	return -1;
 }
 

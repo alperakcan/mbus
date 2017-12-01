@@ -592,7 +592,7 @@ static int method_set_result_code (struct method *method, int code)
 	if (method == NULL) {
 		return -1;
 	}
-	mbus_json_add_number_to_object_cs(method->result.json, MBUS_METHOD_TAG_RETURN, code);
+	mbus_json_add_number_to_object_cs(method->result.json, MBUS_METHOD_TAG_STATUS, code);
 	return 0;
 }
 
@@ -1902,7 +1902,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 			    strlen(identifier) == 0) {
 				mbus_infof("empty identifier, creating a random identifier for client");
 				while (1) {
-					snprintf(ridentifier, sizeof(ridentifier), "org.mbus.client.%08x", rand());
+					snprintf(ridentifier, sizeof(ridentifier), "%s%08x", MBUS_SERVER_CLIENT_IDENTIFIER_PREFIX, rand());
 					client = server_find_client_by_identifier(server, ridentifier);
 					if (client == NULL) {
 						break;
@@ -2453,7 +2453,7 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
-	rc = mbus_json_get_int_value(method_get_request_payload(method), MBUS_METHOD_TAG_RETURN, -1);
+	rc = mbus_json_get_int_value(method_get_request_payload(method), MBUS_METHOD_TAG_STATUS, -1);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_identifier(client) == NULL) {
 			continue;

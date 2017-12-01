@@ -66,7 +66,7 @@ struct sender_param {
 	const char *identifier;
 	const char *command;
 	int timeout;
-	int result;
+	int status;
 	int finished;
 };
 
@@ -338,8 +338,8 @@ static void mbus_client_sender_callback_command_execute_result (struct mbus_clie
 	struct sender_param *param = context;
 	(void) client;
 	(void) status;
-	param->result = mbus_client_message_command_response_result(message);
-	if (param->result == 0) {
+	param->status = mbus_client_message_command_response_status(message);
+	if (param->status == 0) {
 		fprintf(stdout, "%s\n", mbus_json_get_string_value(mbus_client_message_command_response_payload(message), "output", ""));
 	}
 	param->finished = 1;
@@ -375,7 +375,7 @@ static void mbus_client_sender_callback_connect (struct mbus_client *client, voi
 bail:	if (request != NULL) {
 		mbus_json_delete(request);
 	}
-	param->result = -1;
+	param->status = -1;
 	param->finished = 1;
 	return;
 }
@@ -515,7 +515,7 @@ int main (int argc, char *argv[])
 		return receiver_param.result;
 	}
 	if (o_mode == mode_sender) {
-		return sender_param.result;
+		return sender_param.status;
 	}
 	return 0;
 bail:	if (_argv != NULL) {

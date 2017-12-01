@@ -154,14 +154,14 @@ class onParam(object):
         self.flood = 1
         self.published = 0
         self.finished = 0
-        self.result = -1
+        self.status = -1
         self.connected = 0
         self.disconnected = 0
     
 def onCommandCallback (client, context, message, status):
-    if (message.getResponseResult() == 0):
+    if (message.getResponseStatus() == 0):
         print("{}".format(json.dumps(message.getResponsePayload())))
-    context.result = message.getResponseResult()
+    context.status = message.getResponseStatus()
     context.finished = 1
 
 def onConnect (client, context, status):
@@ -228,4 +228,4 @@ while (options.onContext.connected >= 0 and
         client.hasPending() == 0):
         break;
 
-exit(options.onContext.result)
+exit(options.onContext.status)

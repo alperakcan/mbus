@@ -59,7 +59,7 @@ MBUS_METHOD_TAG_IDENTIFIER                  = "org.mbus.method.tag.identifier"
 MBUS_METHOD_TAG_SEQUENCE                    = "org.mbus.method.tag.sequence"
 MBUS_METHOD_TAG_TIMEOUT                     = "org.mbus.method.tag.timeout"
 MBUS_METHOD_TAG_PAYLOAD                     = "org.mbus.method.tag.payload"
-MBUS_METHOD_TAG_RETURN                      = "org.mbus.method.tag.return"
+MBUS_METHOD_TAG_STATUS                      = "org.mbus.method.tag.status"
 
 MBUS_SERVER_IDENTIFIER                      = "org.mbus.server"
 
@@ -279,7 +279,7 @@ class MBusClientWakeUpReason:
     Connect    = 1
     Disconnect = 2
 
-class MBusClientOptions:
+class MBusClientOptions (object):
     
     def __init__ (self):
         self.identifier       = None
@@ -420,8 +420,8 @@ class MBusClientMessageCommand (object):
     def getRequestPayload (self):
         return self.__request[MBUS_METHOD_TAG_PAYLOAD]
 
-    def getResponseResult (self):
-        return self.__response[MBUS_METHOD_TAG_RETURN]
+    def getResponseStatus (self):
+        return self.__response[MBUS_METHOD_TAG_STATUS]
 
     def getResponsePayload (self):
         return self.__response[MBUS_METHOD_TAG_PAYLOAD]
@@ -550,7 +550,7 @@ class MBusClient (object):
                 cstatus = MBusClientSubscribeStatus.Timeout
             else:
                 cstatus = MBusClientSubscribeStatus.InternalError
-        elif (message.getResponseResult() == 0):
+        elif (message.getResponseStatus() == 0):
             cstatus = MBusClientSubscribeStatus.Success
             if (subscription != None):
                 self.__subscriptions.append(subscription)
@@ -567,7 +567,7 @@ class MBusClient (object):
                 cstatus = MBusClientUnsubscribeStatus.Timeout
             else:
                 cstatus = MBusClientUnsubscribeStatus.InternalError
-        elif (message.getResponseResult() == 0):
+        elif (message.getResponseStatus() == 0):
             cstatus = MBusClientUnsubscribeStatus.Success
             if (subscription != None):
                 self.__subscriptions.remove(subscription)
@@ -583,7 +583,7 @@ class MBusClient (object):
                 cstatus = MBusClientPublishStatus.Timeout
             else:
                 cstatus = MBusClientPublishStatus.InternalError
-        elif (message.getResponseResult() == 0):
+        elif (message.getResponseStatus() == 0):
             cstatus = MBusClientPublishStatus.Success
         else:
             cstatus = MBusClientPublishStatus.InternalError
@@ -600,7 +600,7 @@ class MBusClient (object):
             this.__reset()
             this.__state = MBusClientState.Disconnected
             return
-        if (message.getResponseResult() != 0):
+        if (message.getResponseStatus() != 0):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
             this.__state = MBusClientState.Disconnected
@@ -1044,7 +1044,7 @@ class MBusClient (object):
         else:
             raise ValueError("client state: {} is invalid".format(self.__state))
 
-        poll = select.poll();
+        poll = select.poll()
         poll.register(self.__wakeupRead, select.POLLIN)
         if (self.__socket != None):
             event = 0

@@ -68,7 +68,7 @@ struct arg {
 	const char *command;
 	struct mbus_json *payload;
 	int finished;
-	int result;
+	int status;
 };
 
 static void mbus_client_callback_command (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
@@ -77,7 +77,7 @@ static void mbus_client_callback_command (struct mbus_client *client, void *cont
 	char *string;
 	(void) client;
 	(void) status;
-	if (mbus_client_message_command_response_result(message) == 0) {
+	if (mbus_client_message_command_response_status(message) == 0) {
 		string = mbus_json_print(mbus_client_message_command_response_payload(message));
 		if (string == NULL) {
 			return;
@@ -85,7 +85,7 @@ static void mbus_client_callback_command (struct mbus_client *client, void *cont
 		fprintf(stdout, "%s\n", string);
 		free(string);
 	}
-	arg->result = mbus_client_message_command_response_result(message);
+	arg->status = mbus_client_message_command_response_status(message);
 	arg->finished = 1;
 }
 
@@ -96,11 +96,11 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	if (status == mbus_client_connect_status_success) {
 		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, mbus_client_callback_command, arg);
 		if (rc != 0) {
-			arg->result = -1;
+			arg->status = -1;
 			arg->finished = 1;
 		}
 	} else {
-		arg->result = -1;
+		arg->status = -1;
 		arg->finished = 1;
 	}
 }
@@ -194,7 +194,7 @@ int main (int argc, char *argv[])
 	mbus_json_delete(arg.payload);
 	mbus_client_destroy(client);
 	free(_argv);
-	return arg.result;
+	return arg.status;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
 	}

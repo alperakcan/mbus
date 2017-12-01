@@ -63,7 +63,7 @@ struct sender_param {
 	const char *source;
 	const char *destination;
 	int timeout;
-	int result;
+	int status;
 	int finished;
 };
 
@@ -228,7 +228,7 @@ static void mbus_client_sender_callback_command_put_result (struct mbus_client *
 	struct sender_param *param = context;
 	(void) client;
 	(void) status;
-	param->result = mbus_client_message_command_response_result(message);
+	param->status = mbus_client_message_command_response_status(message);
 	param->finished = 1;
 }
 
@@ -324,7 +324,7 @@ bail:	if (request != NULL) {
 	if (buffer != NULL) {
 		free(buffer);
 	}
-	param->result = -1;
+	param->status = -1;
 	param->finished = 1;
 	return;
 }
@@ -474,7 +474,7 @@ int main (int argc, char *argv[])
 		return receiver_param.result;
 	}
 	if (o_mode == mode_sender) {
-		return sender_param.result;
+		return sender_param.status;
 	}
 	return 0;
 bail:	if (_argv != NULL) {

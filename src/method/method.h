@@ -47,7 +47,7 @@
 #define MBUS_METHOD_TAG_SEQUENCE				"org.mbus.method.tag.sequence"
 #define MBUS_METHOD_TAG_TIMEOUT					"org.mbus.method.tag.timeout"
 #define MBUS_METHOD_TAG_PAYLOAD					"org.mbus.method.tag.payload"
-#define MBUS_METHOD_TAG_RETURN					"org.mbus.method.tag.return"
+#define MBUS_METHOD_TAG_STATUS					"org.mbus.method.tag.status"
 
 /* event json model
  *

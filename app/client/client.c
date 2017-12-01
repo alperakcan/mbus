@@ -219,7 +219,7 @@ static void mbus_client_callback_command_callback (struct mbus_client *client, v
 	request_string = mbus_json_print(mbus_client_message_command_request_payload(message));
 	response_string = mbus_json_print(mbus_client_message_command_response_payload(message));
 	fprintf(stdout, "request: %s.%s: %s\n", mbus_client_message_command_request_destination(message), mbus_client_message_command_request_identifier(message), request_string);
-	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_result(message), response_string);
+	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_status(message), response_string);
 	free(request_string);
 	free(response_string);
 	rl_on_new_line();
