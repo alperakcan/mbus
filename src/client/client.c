@@ -342,7 +342,7 @@ static int request_get_sequence (const struct request *request)
 	if (request == NULL) {
 		return -1;
 	}
-	return mbus_json_get_int_value(request->json, "sequence", -1);
+	return mbus_json_get_int_value(request->json, MBUS_METHOD_TAG_SEQUENCE, -1);
 }
 
 static const char * request_get_type (const struct request *request)
@@ -350,7 +350,7 @@ static const char * request_get_type (const struct request *request)
 	if (request == NULL) {
 		return NULL;
 	}
-	return mbus_json_get_string_value(request->json, "type", NULL);
+	return mbus_json_get_string_value(request->json, MBUS_METHOD_TAG_TYPE, NULL);
 }
 
 static const char * request_get_destination (const struct request *request)
@@ -358,7 +358,7 @@ static const char * request_get_destination (const struct request *request)
 	if (request == NULL) {
 		return NULL;
 	}
-	return mbus_json_get_string_value(request->json, "destination", NULL);
+	return mbus_json_get_string_value(request->json, MBUS_METHOD_TAG_DESTINATION, NULL);
 }
 
 static const char * request_get_identifier (const struct request *request)
@@ -366,7 +366,7 @@ static const char * request_get_identifier (const struct request *request)
 	if (request == NULL) {
 		return NULL;
 	}
-	return mbus_json_get_string_value(request->json, "identifier", NULL);
+	return mbus_json_get_string_value(request->json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 }
 
 static const struct mbus_json * request_get_payload (const struct request *request)
@@ -374,7 +374,7 @@ static const struct mbus_json * request_get_payload (const struct request *reque
 	if (request == NULL) {
 		return NULL;
 	}
-	return mbus_json_get_object(request->json, "payload");
+	return mbus_json_get_object(request->json, MBUS_METHOD_TAG_PAYLOAD);
 }
 
 static const struct mbus_json * request_get_json (const struct request *request)
@@ -476,30 +476,32 @@ static struct request * request_create (const char *type, const char *destinatio
 		mbus_errorf("can not create json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(request->json, "type", type);
+	rc = mbus_json_add_string_to_object_cs(request->json, MBUS_METHOD_TAG_TYPE, type);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(request->json, "destination", destination);
+	rc = mbus_json_add_string_to_object_cs(request->json, MBUS_METHOD_TAG_DESTINATION, destination);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_string_to_object_cs(request->json, "identifier", identifier);
+	rc = mbus_json_add_string_to_object_cs(request->json, MBUS_METHOD_TAG_IDENTIFIER, identifier);
 	if (rc != 0) {
 		mbus_errorf("can not add string to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_number_to_object_cs(request->json, "sequence", sequence);
+	rc = mbus_json_add_number_to_object_cs(request->json, MBUS_METHOD_TAG_SEQUENCE, sequence);
 	if (rc != 0) {
 		mbus_errorf("can not add number to json object");
 		goto bail;
 	}
-	rc = mbus_json_add_number_to_object_cs(request->json, "timeout", timeout);
-	if (rc != 0) {
-		mbus_errorf("can not add number to json object");
-		goto bail;
+	if (strcmp(type, MBUS_METHOD_TYPE_COMMAND) == 0) {
+		rc = mbus_json_add_number_to_object_cs(request->json, MBUS_METHOD_TAG_TIMEOUT, timeout);
+		if (rc != 0) {
+			mbus_errorf("can not add number to json object");
+			goto bail;
+		}
 	}
 	if (payload != NULL) {
 		struct mbus_json *dup;
@@ -508,7 +510,7 @@ static struct request * request_create (const char *type, const char *destinatio
 			mbus_errorf("can not duplicate json object");
 			goto bail;
 		}
-		rc = mbus_json_add_item_to_object_cs(request->json, "payload", dup);
+		rc = mbus_json_add_item_to_object_cs(request->json, MBUS_METHOD_TAG_PAYLOAD, dup);
 		if (rc != 0) {
 			mbus_errorf("can not add item to json object");
 			goto bail;
@@ -520,7 +522,7 @@ static struct request * request_create (const char *type, const char *destinatio
 			mbus_errorf("can not duplicate json object");
 			goto bail;
 		}
-		rc = mbus_json_add_item_to_object_cs(request->json, "payload", dup);
+		rc = mbus_json_add_item_to_object_cs(request->json, MBUS_METHOD_TAG_PAYLOAD, dup);
 		if (rc != 0) {
 			mbus_errorf("can not add item to json object");
 			goto bail;
@@ -645,29 +647,29 @@ static void mbus_client_reset (struct mbus_client *client)
 	for (i = 0; i < (int) (sizeof(requests) / sizeof(requests[0])); i++) {
 		TAILQ_FOREACH_SAFE(request, requests[i], requests, nrequest) {
 			TAILQ_REMOVE(requests[i], request, requests);
-			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
-				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+			if (strcmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+				if (strcmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
+				    strcmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 					mbus_client_notify_publish(client, request_get_json(request), mbus_client_publish_status_canceled);
 				}
-			} else if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
-				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
+			} else if (strcmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
+				if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					mbus_client_notify_publish(client, request_get_payload(request), mbus_client_publish_status_canceled);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
 					mbus_client_notify_subscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_subscribe_status_canceled);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
 					mbus_client_notify_unsubscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_unsubscribe_status_canceled);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 					mbus_client_notify_registered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_register_status_canceled);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
 					mbus_client_notify_unregistered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_unregister_status_canceled);
@@ -765,7 +767,7 @@ static void mbus_client_command_unregister_response (struct mbus_client *client,
 		cstatus = mbus_client_unregister_status_internal_error;
 	}
 	mbus_client_notify_unregistered(client,
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "identifier", NULL),
+				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "command", NULL),
 				cstatus);
 	mbus_client_unlock(client);
 }
@@ -1186,7 +1188,7 @@ static int mbus_client_handle_result (struct mbus_client *client, const struct m
 	struct request *request;
 	struct request *nrequest;
 
-	sequence = mbus_json_get_int_value(json, "sequence", -1);
+	sequence = mbus_json_get_int_value(json, MBUS_METHOD_TAG_SEQUENCE, -1);
 
 	TAILQ_FOREACH_SAFE(request, &client->pendings, requests, nrequest) {
 		if (request_get_sequence(request) == sequence) {
@@ -1215,19 +1217,19 @@ static int mbus_client_handle_event (struct mbus_client *client, const struct mb
 	void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_event *message);
 	void *callback_context;
 
-	source = mbus_json_get_string_value(json, "source", NULL);
+	source = mbus_json_get_string_value(json, MBUS_METHOD_TAG_SOURCE, NULL);
 	if (source == NULL) {
 		mbus_errorf("source is invalid");
 		goto bail;
 	}
-	identifier = mbus_json_get_string_value(json, "identifier", NULL);
+	identifier = mbus_json_get_string_value(json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 	if (identifier == NULL) {
 		mbus_errorf("identifier is invalid");
 		goto bail;
 	}
 
-	if (strcasecmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
-	    strcasecmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
+	if (strcmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
+	    strcmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
 		client->pong_recv_tsms = mbus_clock_get();
 		client->pong_missed_count = 0;
@@ -1276,19 +1278,19 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 	result_payload = NULL;
 	memset(&message, 0, sizeof(struct mbus_client_message_routine));
 
-	source = mbus_json_get_string_value(json, "source", NULL);
+	source = mbus_json_get_string_value(json, MBUS_METHOD_TAG_SOURCE, NULL);
 	if (source == NULL) {
 		mbus_errorf("source is invalid");
 		goto bail;
 	}
-	identifier = mbus_json_get_string_value(json, "identifier", NULL);
+	identifier = mbus_json_get_string_value(json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 	if (identifier == NULL) {
 		mbus_errorf("identifier is invalid");
 		goto bail;
 	}
 
-	if (strcasecmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
-	    strcasecmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
+	if (strcmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
+	    strcmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
 		client->pong_recv_tsms = mbus_clock_get();
 		client->pong_missed_count = 0;
@@ -1315,28 +1317,28 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 				mbus_errorf("can not create result payload");
 				goto bail;
 			}
-			rc = mbus_json_add_string_to_object_cs(result_payload, "destination", mbus_json_get_string_value(json, "source", NULL));
+			rc = mbus_json_add_string_to_object_cs(result_payload, MBUS_METHOD_TAG_DESTINATION, mbus_json_get_string_value(json, MBUS_METHOD_TAG_SOURCE, NULL));
 			if (rc != 0) {
 				mbus_errorf("can not add destination to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_string_to_object_cs(result_payload, "identifier", mbus_json_get_string_value(json, "identifier", NULL));
+			rc = mbus_json_add_string_to_object_cs(result_payload, MBUS_METHOD_TAG_IDENTIFIER, mbus_json_get_string_value(json, MBUS_METHOD_TAG_IDENTIFIER, NULL));
 			if (rc != 0) {
 				mbus_errorf("can not add identifier to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_number_to_object_cs(result_payload, "sequence", mbus_json_get_int_value(json, "sequence", -1));
+			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_SEQUENCE, mbus_json_get_int_value(json, MBUS_METHOD_TAG_SEQUENCE, -1));
 			if (rc != 0) {
 				mbus_errorf("can not add sequence to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_number_to_object_cs(result_payload, "return", rc);
+			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_RETURN, rc);
 			if (rc != 0) {
 				mbus_errorf("can not add return to payload");
 				goto bail;
 			}
 			if (message.response != NULL) {
-				rc = mbus_json_add_item_to_object_cs(result_payload, "result", mbus_json_duplicate(message.response, 1));
+				rc = mbus_json_add_item_to_object_cs(result_payload, MBUS_METHOD_TAG_PAYLOAD, mbus_json_duplicate(message.response, 1));
 				if (rc != 0) {
 					mbus_errorf("can not add result to payload");
 					goto bail;
@@ -2448,17 +2450,17 @@ int mbus_client_publish_with_options_unlocked (struct mbus_client *client, struc
 			mbus_errorf("can not create command payload");
 			goto bail;
 		}
-		rc = mbus_json_add_string_to_object_cs(jpayload, "destination", options->destination);
+		rc = mbus_json_add_string_to_object_cs(jpayload, MBUS_METHOD_TAG_DESTINATION, options->destination);
 		if (rc != 0) {
 			mbus_errorf("can not add destination");
 			goto bail;
 		}
-		rc = mbus_json_add_string_to_object_cs(jpayload, "identifier", options->event);
+		rc = mbus_json_add_string_to_object_cs(jpayload, MBUS_METHOD_TAG_IDENTIFIER, options->event);
 		if (rc != 0) {
 			mbus_errorf("can not add identifier");
 			goto bail;
 		}
-		rc = mbus_json_add_item_to_object_cs(jpayload, "payload", jdata);
+		rc = mbus_json_add_item_to_object_cs(jpayload, MBUS_METHOD_TAG_PAYLOAD, jdata);
 		if (rc != 0) {
 			mbus_errorf("can not add payload");
 			goto bail;
@@ -3383,24 +3385,24 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				mbus_errorf("can not parse message: '%s'", string);
 				goto incoming_bail;
 			}
-			type = mbus_json_get_string_value(json, "type", NULL);
+			type = mbus_json_get_string_value(json, MBUS_METHOD_TAG_TYPE, NULL);
 			if (type == NULL) {
 				mbus_errorf("message type is invalid");
 				goto incoming_bail;
 			}
-			if (strcasecmp(type, MBUS_METHOD_TYPE_RESULT) == 0) {
+			if (strcmp(type, MBUS_METHOD_TYPE_RESULT) == 0) {
 				rc = mbus_client_handle_result(client, json);
 				if (rc != 0) {
 					mbus_errorf("can not handle message result");
 					goto incoming_bail;
 				}
-			} else if (strcasecmp(type, MBUS_METHOD_TYPE_EVENT) == 0) {
+			} else if (strcmp(type, MBUS_METHOD_TYPE_EVENT) == 0) {
 				rc = mbus_client_handle_event(client, json);
 				if (rc != 0) {
 					mbus_errorf("can not handle message event");
 					goto incoming_bail;
 				}
-			} else if (strcasecmp(type, MBUS_METHOD_TYPE_COMMAND) == 0) {
+			} else if (strcmp(type, MBUS_METHOD_TYPE_COMMAND) == 0) {
 				rc = mbus_client_handle_command(client, json);
 				if (rc != 0) {
 					mbus_errorf("can not handle message command");
@@ -3494,29 +3496,29 @@ out:
 			}
 			mbus_debugf("request timeout to server: %s, %s", mbus_compress_method_string(client->compression), request_get_string(request));
 			TAILQ_REMOVE(requests[i], request, requests);
-			if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-				if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
-				    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+			if (strcmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+				if (strcmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
+				    strcmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 					mbus_client_notify_publish(client, request_get_json(request), mbus_client_publish_status_timeout);
 				}
-			} else if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
-				if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
+			} else if (strcmp(request_get_type(request), MBUS_METHOD_TYPE_COMMAND) == 0) {
+				if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					mbus_client_notify_publish(client, request_get_payload(request), mbus_client_publish_status_timeout);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
 					mbus_client_notify_subscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_subscribe_status_timeout);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
 					mbus_client_notify_unsubscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_unsubscribe_status_timeout);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 					mbus_client_notify_registered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_register_status_timeout);
-				} else if (strcasecmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
 					mbus_client_notify_unregistered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_unregister_status_timeout);
@@ -3536,9 +3538,9 @@ out:
 			goto bail;
 		}
 		TAILQ_REMOVE(&client->requests, request, requests);
-		if (strcasecmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
-			if (strcasecmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
-			    strcasecmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
+		if (strcmp(request_get_type(request), MBUS_METHOD_TYPE_EVENT) == 0) {
+			if (strcmp(MBUS_SERVER_IDENTIFIER, request_get_destination(request)) != 0 &&
+			    strcmp(MBUS_SERVER_EVENT_PING, request_get_identifier(request)) != 0) {
 				mbus_client_notify_publish(client, request_get_json(request), mbus_client_publish_status_success);
 			}
 			request_destroy(request);
@@ -3561,7 +3563,7 @@ const char * mbus_client_message_event_source (struct mbus_client_message_event 
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->payload, "source", NULL);
+	return mbus_json_get_string_value(message->payload, MBUS_METHOD_TAG_SOURCE, NULL);
 bail:	return NULL;
 }
 
@@ -3571,7 +3573,7 @@ const char * mbus_client_message_event_destination (struct mbus_client_message_e
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->payload, "destination", NULL);
+	return mbus_json_get_string_value(message->payload, MBUS_METHOD_TAG_DESTINATION, NULL);
 bail:	return NULL;
 }
 
@@ -3581,7 +3583,7 @@ const char * mbus_client_message_event_identifier (struct mbus_client_message_ev
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->payload, "identifier", NULL);
+	return mbus_json_get_string_value(message->payload, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 bail:	return NULL;
 }
 
@@ -3591,7 +3593,7 @@ const struct mbus_json * mbus_client_message_event_payload (struct mbus_client_m
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_object(message->payload, "payload");
+	return mbus_json_get_object(message->payload, MBUS_METHOD_TAG_PAYLOAD);
 bail:	return NULL;
 }
 
@@ -3601,7 +3603,7 @@ const char * mbus_client_message_command_request_destination (struct mbus_client
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->request, "destination", NULL);
+	return mbus_json_get_string_value(message->request, MBUS_METHOD_TAG_DESTINATION, NULL);
 bail:	return NULL;
 }
 
@@ -3611,7 +3613,7 @@ const char * mbus_client_message_command_request_identifier (struct mbus_client_
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->request, "identifier", NULL);
+	return mbus_json_get_string_value(message->request, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 bail:	return NULL;
 }
 
@@ -3621,7 +3623,7 @@ const struct mbus_json * mbus_client_message_command_request_payload (struct mbu
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_object(message->request, "payload");
+	return mbus_json_get_object(message->request, MBUS_METHOD_TAG_PAYLOAD);
 bail:	return NULL;
 }
 
@@ -3631,7 +3633,7 @@ const struct mbus_json * mbus_client_message_command_response_payload (struct mb
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_object(message->response, "payload");
+	return mbus_json_get_object(message->response, MBUS_METHOD_TAG_PAYLOAD);
 bail:	return NULL;
 }
 
@@ -3641,7 +3643,7 @@ int mbus_client_message_command_response_result (struct mbus_client_message_comm
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_int_value(message->response, "result", -1);
+	return mbus_json_get_int_value(message->response, MBUS_METHOD_TAG_RETURN, -1);
 bail:	return -1;
 }
 
@@ -3651,7 +3653,7 @@ const char * mbus_client_message_routine_request_source (struct mbus_client_mess
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->request, "source", NULL);
+	return mbus_json_get_string_value(message->request, MBUS_METHOD_TAG_SOURCE, NULL);
 bail:	return NULL;
 }
 
@@ -3661,7 +3663,7 @@ const char * mbus_client_message_routine_request_identifier (struct mbus_client_
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_string_value(message->request, "identifier", NULL);
+	return mbus_json_get_string_value(message->request, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 bail:	return NULL;
 }
 
@@ -3671,7 +3673,7 @@ const struct mbus_json * mbus_client_message_routine_request_payload (struct mbu
 		mbus_errorf("message is invalid");
 		goto bail;
 	}
-	return mbus_json_get_object(message->request, "payload");
+	return mbus_json_get_object(message->request, MBUS_METHOD_TAG_PAYLOAD);
 bail:	return NULL;
 }
 

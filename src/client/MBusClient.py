@@ -52,6 +52,15 @@ MBUS_METHOD_EVENT_DESTINATION_ALL           = "org.mbus.method.event.destination
 MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS   = "org.mbus.method.event.destination.subscribers"
 MBUS_METHOD_EVENT_IDENTIFIER_ALL            = "org.mbus.method.event.identifier.all"
 
+MBUS_METHOD_TAG_TYPE                        = "org.mbus.method.tag.type"
+MBUS_METHOD_TAG_SOURCE                      = "org.mbus.method.tag.source"
+MBUS_METHOD_TAG_DESTINATION                 = "org.mbus.method.tag.destination"
+MBUS_METHOD_TAG_IDENTIFIER                  = "org.mbus.method.tag.identifier"
+MBUS_METHOD_TAG_SEQUENCE                    = "org.mbus.method.tag.sequence"
+MBUS_METHOD_TAG_TIMEOUT                     = "org.mbus.method.tag.timeout"
+MBUS_METHOD_TAG_PAYLOAD                     = "org.mbus.method.tag.payload"
+MBUS_METHOD_TAG_RETURN                      = "org.mbus.method.tag.return"
+
 MBUS_SERVER_IDENTIFIER                      = "org.mbus.server"
 
 MBUS_SERVER_COMMAND_CREATE                  = "command.create"
@@ -61,8 +70,9 @@ MBUS_SERVER_COMMAND_RESULT                  = "command.result"
 MBUS_SERVER_COMMAND_STATUS                  = "command.status"
 MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients"
 MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe"
-MBUS_SERVER_COMMAND_REGISTER                = "command.register"
 MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe"
+MBUS_SERVER_COMMAND_REGISTER                = "command.register"
+MBUS_SERVER_COMMAND_UNREGISTER              = "command.unregister"
 MBUS_SERVER_COMMAND_CLOSE                   = "command.close"
 
 MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected"
@@ -326,7 +336,7 @@ class MBusClientOptions:
 
         return json.dumps(options)
 
-class MBusClientRoutine(object):
+class MBusClientRoutine (object):
     
     def __init__ (self, identifier, callback, context):
         self.identifier = identifier
@@ -340,7 +350,7 @@ class MBusClientRoutine(object):
         routine["context"]    = self.context
         return json.dumps(routine)
 
-class MBusClientSubscription(object):
+class MBusClientSubscription (object):
     
     def __init__ (self, source, identifier, callback, context):
         self.source     = source
@@ -356,7 +366,7 @@ class MBusClientSubscription(object):
         subscription["context"]    = self.context
         return json.dumps(subscription)
 
-class MBusClientRequest(object):
+class MBusClientRequest (object):
 
     def __init__ (self, type, destination, identifier, sequence, payload, callback, context, timeout):
         self.type        = type
@@ -377,12 +387,12 @@ class MBusClientRequest(object):
     
     def __str__ (self):
         request = {}
-        request["type"]        = self.type
-        request["destination"] = self.destination
-        request["identifier"]  = self.identifier
-        request["sequence"]    = self.sequence
-        request["payload"]     = self.payload
-        request["timeout"]     = self.timeout
+        request[MBUS_METHOD_TAG_TYPE]        = self.type
+        request[MBUS_METHOD_TAG_DESTINATION] = self.destination
+        request[MBUS_METHOD_TAG_IDENTIFIER]  = self.identifier
+        request[MBUS_METHOD_TAG_SEQUENCE]    = self.sequence
+        request[MBUS_METHOD_TAG_PAYLOAD]     = self.payload
+        request[MBUS_METHOD_TAG_TIMEOUT]     = self.timeout
         return json.dumps(request)
 
 class MBusClientMessageEvent (object):
@@ -390,16 +400,16 @@ class MBusClientMessageEvent (object):
         self.__payload = payload
     
     def getSource (self):
-        return self.__payload["source"]
+        return self.__payload[MBUS_METHOD_TAG_SOURCE]
 
     def getDestination (self):
-        return self.__payload["destination"]
+        return self.__payload[MBUS_METHOD_TAG_DESTINATION]
 
     def getIdentifier (self):
-        return self.__payload["identifier"]
+        return self.__payload[MBUS_METHOD_TAG_IDENTIFIER]
     
     def getPayload (self):
-        return self.__payload["payload"]
+        return self.__payload[MBUS_METHOD_TAG_PAYLOAD]
 
 class MBusClientMessageCommand (object):
     def __init__ (self, request, response):
@@ -407,13 +417,13 @@ class MBusClientMessageCommand (object):
         self.__response = response
     
     def getRequestPayload (self):
-        return self.__request["payload"]
+        return self.__request[MBUS_METHOD_TAG_PAYLOAD]
 
     def getResponseResult (self):
-        return self.__response["result"]
+        return self.__response[MBUS_METHOD_TAG_RETURN]
 
     def getResponsePayload (self):
-        return self.__response["payload"]
+        return self.__response[MBUS_METHOD_TAG_PAYLOAD]
 
 class MBusClient (object):
     
@@ -671,7 +681,7 @@ class MBusClient (object):
     
     def __handleResult (self, object):
         pending = None
-        sequence = object["sequence"]
+        sequence = object[MBUS_METHOD_TAG_SEQUENCE]
         if (sequence == None):
             return -1
         for p in self.__pendings:
@@ -685,10 +695,10 @@ class MBusClient (object):
         return 0
 
     def __handleEvent (self, object):
-        source = object["source"]
+        source = object[MBUS_METHOD_TAG_SOURCE]
         if (source == None):
             return -1
-        identifier = object["identifier"]
+        identifier = object[MBUS_METHOD_TAG_IDENTIFIER]
         if (identifier == None):
             return -1
         if (source == MBUS_SERVER_IDENTIFIER and
@@ -924,9 +934,9 @@ class MBusClient (object):
             self.__requests.append(request)
         elif (qos == MBusClientQoS.AtLeastOnce):
             cpayload = {}
-            cpayload["destination"] = destination
-            cpayload["identifier"] = event
-            cpayload["payload"] = payload
+            cpayload[MBUS_METHOD_TAG_DESTINATION] = destination
+            cpayload[MBUS_METHOD_TAG_IDENTIFIER] = event
+            cpayload[MBUS_METHOD_TAG_PAYLOAD] = payload
             self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, self.__commandEventResponse, None, timeout)
         else:
             raise ValueError("qos: {} is invalid".format(qos))
@@ -1138,12 +1148,12 @@ class MBusClient (object):
             self.__incoming = self.__incoming[4 + dlen:]
             #print("recv: {}".format(slice))
             object = json.loads(slice)
-            if (object["type"] == MBUS_METHOD_TYPE_RESULT):
+            if (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_RESULT):
                 self.__handleResult(object)
-            elif (object["type"] == MBUS_METHOD_TYPE_EVENT):
+            elif (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_EVENT):
                 self.__handleEvent(object)
             else:
-                raise ValueError("unknown type: {}", object["type"])
+                raise ValueError("unknown type: {}", object[MBUS_METHOD_TAG_TYPE])
 
         if (self.__state == MBusClientState.Connecting and
             self.__socket != None and

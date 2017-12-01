@@ -40,6 +40,15 @@
 
 #define MBUS_METHOD_EVENT_IDENTIFIER_ALL			"org.mbus.method.event.identifier.all"
 
+#define MBUS_METHOD_TAG_TYPE					"org.mbus.method.tag.type"
+#define MBUS_METHOD_TAG_SOURCE					"org.mbus.method.tag.source"
+#define MBUS_METHOD_TAG_DESTINATION				"org.mbus.method.tag.destination"
+#define MBUS_METHOD_TAG_IDENTIFIER				"org.mbus.method.tag.identifier"
+#define MBUS_METHOD_TAG_SEQUENCE				"org.mbus.method.tag.sequence"
+#define MBUS_METHOD_TAG_TIMEOUT					"org.mbus.method.tag.timeout"
+#define MBUS_METHOD_TAG_PAYLOAD					"org.mbus.method.tag.payload"
+#define MBUS_METHOD_TAG_RETURN					"org.mbus.method.tag.return"
+
 /* event json model
  *
  * client  -- request --> server
@@ -82,13 +91,14 @@
  *   server  -- call    --> callee
  *   server <-- result  --  callee
  *
- * client <-- result  --  server
+ * client <-- response  --  server
  *
  * request: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
  *   "destination" : "unique identifier",
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
+ *   "timeout"     : command timeout,
  *   "payload"     : {
  *     "comment": "command specific data object goes here"
  *   }
@@ -114,9 +124,18 @@
  *     "identifier"  : "call identifier",
  *     "sequence"    : call sequence number,
  *     "return"      : integer return code,
- *     "result"      : {
+ *     "payload"     : {
  *       "comment": "result specific data object goes here"
  *     }
+ *   }
+ * }
+ *
+ * response: {
+ *   "type"        : MBUS_METHOD_TYPE_RESULT,
+ *   "sequence"    : call sequence number,
+ *   "return"      : integer return code,
+ *   "payload"     : {
+ *     "comment": "result specific data object goes here"
  *   }
  * }
  */
