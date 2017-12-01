@@ -279,6 +279,7 @@ const struct mbus_json * mbus_client_message_routine_request_payload (struct mbu
 int mbus_client_message_routine_set_response_payload (struct mbus_client_message_routine *message, const struct mbus_json *payload);
 
 const char * mbus_client_state_string (enum mbus_client_state state);
+const char * mbus_client_qos_string (enum mbus_client_qos qos);
 const char * mbus_client_connect_status_string (enum mbus_client_connect_status status);
 const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_status status);
 const char * mbus_client_publish_status_string (enum mbus_client_publish_status status);

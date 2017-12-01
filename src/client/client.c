@@ -3705,6 +3705,16 @@ const char * mbus_client_state_string (enum mbus_client_state state)
 	return "unknown";
 }
 
+const char * mbus_client_qos_string (enum mbus_client_qos qos)
+{
+	switch (qos) {
+		case mbus_client_qos_at_most_once:				return "at most once";
+		case mbus_client_qos_at_least_once:				return "at least once";
+		case mbus_client_qos_exactly_once:				return "exactly once";
+	}
+	return "unknown";
+}
+
 const char * mbus_client_connect_status_string (enum mbus_client_connect_status status)
 {
 	switch (status) {
