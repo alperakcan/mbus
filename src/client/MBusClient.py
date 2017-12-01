@@ -759,6 +759,8 @@ class MBusClient (object):
         if (options == None):
             self.__options = MBusClientOptions()
         else:
+            if (not isinstance(options, MBusClientOptions)):
+                raise ValueError("options is invalid")
             self.__options = options
         
         if (self.__options.identifier == None):
