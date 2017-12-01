@@ -2985,6 +2985,9 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 				}
 			}
 		}
+		if (mbus_buffer_get_length(client->incoming) > 0) {
+			timeout = 0;
+		}
 	} else if (client->state == mbus_client_state_disconnecting) {
 		timeout = 0;
 	} else if (client->state == mbus_client_state_disconnected) {

@@ -50,16 +50,16 @@ MBUS_METHOD_EVENT_IDENTIFIER_ALL            = "org.mbus.method.event.identifier.
 
 MBUS_SERVER_IDENTIFIER                      = "org.mbus.server"
 
-MBUS_SERVER_COMMAND_CREATE                  = "org.mbus.server.command.create"
-MBUS_SERVER_COMMAND_EVENT                   = "org.mbus.server.command.event"
-MBUS_SERVER_COMMAND_CALL                    = "org.mbus.server.command.call"
-MBUS_SERVER_COMMAND_RESULT                  = "org.mbus.server.command.result"
-MBUS_SERVER_COMMAND_STATUS                  = "org.mbus.server.command.status"
-MBUS_SERVER_COMMAND_CLIENTS                 = "org.mbus.server.command.clients"
-MBUS_SERVER_COMMAND_SUBSCRIBE               = "org.mbus.server.command.subscribe"
-MBUS_SERVER_COMMAND_REGISTER                = "org.mbus.server.command.register"
-MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "org.mbus.server.command.unsubscribe"
-MBUS_SERVER_COMMAND_CLOSE                   = "org.mbus.server.command.close"
+MBUS_SERVER_COMMAND_CREATE                  = "command.create"
+MBUS_SERVER_COMMAND_EVENT                   = "command.event"
+MBUS_SERVER_COMMAND_CALL                    = "command.call"
+MBUS_SERVER_COMMAND_RESULT                  = "command.result"
+MBUS_SERVER_COMMAND_STATUS                  = "command.status"
+MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients"
+MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe"
+MBUS_SERVER_COMMAND_REGISTER                = "command.register"
+MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe"
+MBUS_SERVER_COMMAND_CLOSE                   = "command.close"
 
 MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected"
 MBUS_SERVER_EVENT_DISCONNECTED              = "org.mbus.server.event.disconnected"
@@ -547,13 +547,13 @@ class MBusClient (object):
         subscription = context
         if (status != MBusClientCommandStatus.Success):
             if (status == MBusClientCommandStatus.InternalError):
-                cstatus = MBusClientUnsubscribeStatus.InternalError;
+                cstatus = MBusClientUnsubscribeStatus.InternalError
             elif (status == MBusClientCommandStatus.Timeout):
-                cstatus = MBusClientUnsubscribeStatus.Timeout;
+                cstatus = MBusClientUnsubscribeStatus.Timeout
             else:
-                cstatus = MBusClientUnsubscribeStatus.InternalError;
+                cstatus = MBusClientUnsubscribeStatus.InternalError
         elif (message.getResponseResult() == 0):
-            cstatus = MBusClientUnsubscribeStatus.Success;
+            cstatus = MBusClientUnsubscribeStatus.Success
             if (subscription != None):
                 self.__subscriptions.remove(subscription)
         else:
@@ -819,7 +819,9 @@ class MBusClient (object):
         return fd
     
     def getWakeUpFdEvents (self):
-        raise ValueError("not implemented yet")
+        rc = None
+        rc = select.POLLIN
+        return rc
     
     def getConnectionFd (self):
         fd = None
@@ -827,7 +829,12 @@ class MBusClient (object):
         return fd
     
     def getConnectionFdEvents (self):
-        raise ValueError("not implemented yet")
+        if (self.__socket == None):
+            return 0
+        rc = select.POLLIN
+        if (len(self.__outgoing) > 0):
+            rc |= select.POLLOUT
+        return rc
     
     def hasPending (self):
         rc = 0
@@ -988,6 +995,8 @@ class MBusClient (object):
                         timeout = 0
                     else:
                         timeout = min(timeout, (request.createdAt + request.timeout) - (current))
+            if (len(self.__incoming) > 0):
+                timeout = 0
         elif (self.__state == MBusClientState.Disconnecting):
             timeout = 0
         elif (self.__state == MBusClientState.Disconnected):
