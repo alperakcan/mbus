@@ -2153,9 +2153,6 @@ int mbus_client_subscribe_with_options_unlocked (struct mbus_client *client, str
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
 	}
-	if (subscription != NULL) {
-		subscription_destroy(subscription);
-	}
 	return -1;
 }
 
@@ -2650,9 +2647,6 @@ int mbus_client_register_with_options_unlocked (struct mbus_client *client, stru
 	return 0;
 bail:	if (payload != NULL) {
 		mbus_json_delete(payload);
-	}
-	if (routine != NULL) {
-		routine_destroy(routine);
 	}
 	return -1;
 }
