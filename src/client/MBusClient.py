@@ -94,6 +94,7 @@ def mbus_clock_after (a, b):
         return 1
     else:
         return 0
+
 def mbus_clock_before (a, b):
     return mbus_clock_after(b, a)
 
