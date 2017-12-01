@@ -76,7 +76,7 @@
  *   "comment": "create specific json object goes here"
  * }
  */
-#define MBUS_SERVER_COMMAND_CREATE		"org.mbus.server.command.create"
+#define MBUS_SERVER_COMMAND_CREATE		"command.create"
 
 /* command event
  *
@@ -84,7 +84,7 @@
  *   "comment": "event specific json object goes here"
  * }
  */
-#define MBUS_SERVER_COMMAND_EVENT		"org.mbus.server.command.event"
+#define MBUS_SERVER_COMMAND_EVENT		"command.event"
 
 /* command result
  *
@@ -92,7 +92,7 @@
  *   "comment": "result specific json object goes here"
  * }
  */
-#define MBUS_SERVER_COMMAND_RESULT		"org.mbus.server.command.result"
+#define MBUS_SERVER_COMMAND_RESULT		"command.result"
 
 /* command status
  *
@@ -126,7 +126,7 @@
  *   ]
  * }
  */
-#define MBUS_SERVER_COMMAND_STATUS		"org.mbus.server.command.status"
+#define MBUS_SERVER_COMMAND_STATUS		"command.status"
 
 /* command status
  *
@@ -143,7 +143,7 @@
  *   ]
  * }
  */
-#define MBUS_SERVER_COMMAND_CLIENTS		"org.mbus.server.command.clients"
+#define MBUS_SERVER_COMMAND_CLIENTS		"command.clients"
 
 /* command status
  *
@@ -172,7 +172,7 @@
  *   ]
  * }
  */
-#define MBUS_SERVER_COMMAND_CLIENT		"org.mbus.server.command.client"
+#define MBUS_SERVER_COMMAND_CLIENT		"command.client"
 
 /* command subscribe
  *
@@ -181,7 +181,7 @@
  *     "event" : "event name"
  * }
  */
-#define MBUS_SERVER_COMMAND_SUBSCRIBE		"org.mbus.server.command.subscribe"
+#define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
 
 /* command unsubscribe
  *
@@ -190,7 +190,7 @@
  *     "event" : "event name"
  * }
  */
-#define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"org.mbus.server.command.unsubscribe"
+#define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
 
 /* command register
  *
@@ -198,7 +198,7 @@
  *     "command" : "command name"
  * }
  */
-#define MBUS_SERVER_COMMAND_REGISTER		"org.mbus.server.command.register"
+#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
 
 /* command unregister
  *
@@ -206,7 +206,7 @@
  *     "command" : "command name"
  * }
  */
-#define MBUS_SERVER_COMMAND_UNREGISTER		"org.mbus.server.command.unregister"
+#define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
 
 /* command close
  *
@@ -219,7 +219,7 @@
  * {
  * }
  */
-#define MBUS_SERVER_COMMAND_CLOSE		"org.mbus.server.command.close"
+#define MBUS_SERVER_COMMAND_CLOSE		"command.close"
 
 /* event ping
  *
