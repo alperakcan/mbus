@@ -123,9 +123,9 @@ class MBusClientDefaults:
     PingThreshold     = 2
 
 class MBusClientQoS:
-    AtMostOnce         = 0
-    AtLeastOnce        = 1
-    ExactlyOnce        = 2
+    AtMostOnce  = 0
+    AtLeastOnce = 1
+    ExactlyOnce = 2
 
 class MBusClientState:
     Unknown       = 0
