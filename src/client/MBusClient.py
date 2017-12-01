@@ -792,12 +792,6 @@ class MBusClient (object):
         else:
             raise ValueError("invalid server protocol: {}".format(self.__options.serverProtocol))
     
-    def lock (self):
-        pass
-    
-    def unlock (self):
-        pass
-    
     def getOptions (self):
         options = None
         options = self.__options
