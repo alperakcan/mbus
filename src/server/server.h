@@ -73,24 +73,65 @@
 
 /* command create
  *
+ * input:
  * {
- *   "comment": "create specific json object goes here"
+ *   "identifier": "identifier",
+ *   "ping": {
+ *     "interval": interval
+ *     "timeout": timeout
+ *     "threshold": threshold
+ *   },
+ *   "compressions": {
+ *     "none",
+ *     "zlib"
+ *   }
+ * }
+ *
+ * output:
+ * {
+ *   "identifier": "identifier",
+ *   "ping": {
+ *     "interval": interval
+ *     "timeout": timeout
+ *     "threshold": threshold
+ *   },
+ *   "compression": compression
  * }
  */
 #define MBUS_SERVER_COMMAND_CREATE		"command.create"
 
 /* command event
  *
+ * input:
  * {
- *   "comment": "event specific json object goes here"
+ *   "destination": "destination",
+ *   "identifier": "identifier",
+ *   "payload"     : {
+ *     "comment": "event specific data object goes here"
+ *   }
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_EVENT		"command.event"
 
 /* command result
  *
+ * input:
  * {
- *   "comment": "result specific json object goes here"
+ *   "destination": "destination",
+ *   "identifier": "identifier",
+ *   "sequence": sequence,
+ *   "status": status
+ *   "payload"     : {
+ *     "comment": "command specific data object goes here"
+ *   }
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_RESULT		"command.result"
