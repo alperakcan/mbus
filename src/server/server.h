@@ -218,34 +218,54 @@
 
 /* command subscribe
  *
+ * input:
  * {
  *     "source": "application name",
  *     "event" : "event name"
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
 
 /* command unsubscribe
  *
+ * input:
  * {
  *     "source": "application name",
  *     "event" : "event name"
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
 
 /* command register
  *
+ * input:
  * {
  *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_REGISTER		"command.register"
 
 /* command unregister
  *
+ * input:
  * {
  *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
