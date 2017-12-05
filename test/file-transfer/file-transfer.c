@@ -403,6 +403,11 @@ int main (int argc, char *argv[])
 		}
 	}
 
+	rc = mbus_client_options_default(&mbus_options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default options\n");
+		goto bail;
+	}
 	rc = mbus_client_options_from_argv(&mbus_options, argc, argv);
 	if (rc != 0) {
 		fprintf(stderr, "can not parse options\n");

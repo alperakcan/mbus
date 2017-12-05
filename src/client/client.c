@@ -1499,7 +1499,6 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 		mbus_errorf("options is invalid");
 		goto bail;
 	}
-	mbus_client_options_default(options);
 
 	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);

@@ -248,6 +248,11 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
+	rc = mbus_client_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default options\n");
+		goto bail;
+	}
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
 		fprintf(stderr, "can not parse options\n");
@@ -259,6 +264,7 @@ int main (int argc, char *argv[])
 	options.callbacks.message = mbus_client_callback_message;
 	arg.subscriptions = &subscriptions;
 	options.callbacks.context = &arg;
+
 	client = mbus_client_create(&options);
 	if (client == NULL) {
 		fprintf(stderr, "can not create client\n");

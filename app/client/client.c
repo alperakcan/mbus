@@ -361,6 +361,12 @@ static int command_create (int argc, char *argv[])
 		fprintf(stderr, "mbus client already exists\n");
 		goto bail;
 	}
+
+	rc = mbus_client_options_default(&options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default options\n");
+		goto bail;
+	}
 	rc = mbus_client_options_from_argv(&options, argc, argv);
 	if (rc != 0) {
 		fprintf(stderr, "can not parse options\n");
@@ -375,6 +381,7 @@ static int command_create (int argc, char *argv[])
 	options.callbacks.unsubscribe = mbus_client_callback_unsubscribe;
 	options.callbacks.registered  = mbus_client_callback_registered;
 	options.callbacks.unregistered= mbus_client_callback_unregistered;
+
 	g_mbus_client = mbus_client_create(&options);
 	if (g_mbus_client == NULL) {
 		fprintf(stderr, "can not create client\n");
