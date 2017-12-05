@@ -79,11 +79,10 @@ static void mbus_client_callback_command (struct mbus_client *client, void *cont
 	(void) status;
 	if (mbus_client_message_command_response_status(message) == 0) {
 		string = mbus_json_print(mbus_client_message_command_response_payload(message));
-		if (string == NULL) {
-			return;
+		if (string != NULL) {
+			fprintf(stdout, "%s\n", string);
+			free(string);
 		}
-		fprintf(stdout, "%s\n", string);
-		free(string);
 	}
 	arg->status = mbus_client_message_command_response_status(message);
 	arg->finished = 1;
