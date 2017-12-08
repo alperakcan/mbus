@@ -1922,14 +1922,13 @@ bail:	if (client != NULL) {
 	return 0;
 }
 
-int mbus_client_has_pending (struct mbus_client *client)
+int mbus_client_has_pending_unlocked (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
-	mbus_client_lock(client);
 	if (client->requests.count > 0 ||
 	    client->pendings.count > 0 ||
 	    mbus_buffer_get_length(client->incoming) > 0 ||
@@ -1938,8 +1937,22 @@ int mbus_client_has_pending (struct mbus_client *client)
 	} else {
 		rc = 0;
 	}
-	mbus_client_unlock(client);
 	return rc;
+bail:	return -1;
+}
+
+int mbus_client_has_pending (struct mbus_client *client)
+{
+	int pending;
+	pending = -1;
+	if (client == NULL) {
+		mbus_errorf("client is invalid");
+		goto bail;
+	}
+	mbus_client_lock(client);
+	pending = mbus_client_has_pending_unlocked(client);
+	mbus_client_unlock(client);
+	return pending;
 bail:	if (client != NULL) {
 		mbus_client_unlock(client);
 	}
@@ -2986,9 +2999,6 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 				}
 			}
 		}
-		if (mbus_buffer_get_length(client->incoming) > 0) {
-			timeout = 0;
-		}
 	} else if (client->state == mbus_client_state_disconnecting) {
 		timeout = 0;
 	} else if (client->state == mbus_client_state_disconnected) {
@@ -2999,6 +3009,9 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_interval) - (current)));
 			}
 		}
+	}
+	if (mbus_client_has_pending_unlocked(client) > 0) {
+		timeout = 0;
 	}
 	return timeout;
 bail:	return -1;

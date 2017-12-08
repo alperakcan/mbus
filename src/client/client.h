@@ -210,7 +210,9 @@ int mbus_client_get_wakeup_fd (struct mbus_client *client);
 int mbus_client_get_wakeup_fd_events (struct mbus_client *client);
 int mbus_client_get_connection_fd (struct mbus_client *client);
 int mbus_client_get_connection_fd_events (struct mbus_client *client);
+
 int mbus_client_has_pending (struct mbus_client *client);
+int mbus_client_has_pending_unlocked (struct mbus_client *client);
 
 int mbus_client_connect (struct mbus_client *client);
 int mbus_client_disconnect (struct mbus_client *client);
