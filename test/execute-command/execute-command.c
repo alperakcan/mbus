@@ -1,14 +1,42 @@
 
-#define _GNU_SOURCE
+/*
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the <Alper Akcan> nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #include <unistd.h>
-
-#include <poll.h>
 #include <signal.h>
+#include <poll.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <mbus/debug.h>
 #include <mbus/client.h>
@@ -17,33 +45,90 @@
 #include "clock.h"
 #include "exec.h"
 
-static struct option options[] = {
-	{"reader"		, no_argument		, 0, 'r' },
-	{"writer"		, no_argument		, 0, 'w' },
+#define DEFAULT_MODE		mode_receiver
+#define DEFAULT_IDENTIFIER	"org.mbus.client.execute-command"
+#define DEFAULT_PREFIX		"./"
+#define DEFAULT_TIMEOUT		30000
+
+enum mode {
+	mode_unknown,
+	mode_receiver,
+	mode_sender,
+};
+
+struct receiver_param {
+	const char *prefix;
+	int result;
+	int finished;
+};
+
+struct sender_param {
+	const char *identifier;
+	const char *command;
+	int timeout;
+	int status;
+	int finished;
+};
+
+static enum mode mode_value (const char *mode)
+{
+	if (strcasecmp(mode, "receiver") == 0) {
+		return mode_receiver;
+	}
+	if (strcasecmp(mode, "r") == 0) {
+		return mode_receiver;
+	}
+	if (strcasecmp(mode, "sender") == 0) {
+		return mode_sender;
+	}
+	if (strcasecmp(mode, "s") == 0) {
+		return mode_sender;
+	}
+	return mode_unknown;
+}
+
+static const char * mode_string (enum mode mode)
+{
+	if (mode == mode_receiver) {
+		return "receiver";
+	}
+	if (mode == mode_sender) {
+		return "sender";
+	}
+	return "unknown";
+}
+
+static struct option longopts[] = {
+	{"mode"			, required_argument	, 0, 'm' },
 	{"identifier"		, required_argument	, 0, 'i' },
-	{"reconnect"		, required_argument	, 0, 'l' },
 	{"command"		, required_argument	, 0, 'c' },
 	{"timeout"		, required_argument	, 0, 't' },
 	{"help"			, no_argument	   	, 0, 'h' },
 	{0			, 0                	, 0, 0 }
 };
 
-static void print_help (const char *name)
+static void usage (const char *name)
 {
-	fprintf(stdout, "%s options command\n", name);
-	fprintf(stdout, "  -r / --reader     : mode reader\n");
-	fprintf(stdout, "  -w / --writer     : mode writer\n");
-	fprintf(stdout, "  -i / --identifier : mbus identifier\n");
-	fprintf(stdout, "  -l / --reconnect  : reconnect on error\n");
-	fprintf(stdout, "  -c / --command    : request command\n");
-	fprintf(stdout, "  -t / --timeout    : request timeout milliseconds\n");
+	fprintf(stdout, "%s options:\n", name);
+	fprintf(stdout, "\n");
+	fprintf(stdout, "%s --mode receiver --identifier identifier\n", name);
+	fprintf(stdout, "%s --mode sender --identifier identifier --command command [--timeout timeout]\n", name);
+	fprintf(stdout, "\n");
+	fprintf(stdout, "  -m, --mode: running mode (default: %s)\n", mode_string(DEFAULT_MODE));
+	fprintf(stdout, "  modes:\n");
+	fprintf(stdout, "    receiver\n");
+	fprintf(stdout, "      -i, --identifier : application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
+	fprintf(stdout, "    sender\n");
+	fprintf(stdout, "      -i, --identifier : receiver application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
+	fprintf(stdout, "      -c, --command    : command to execute\n");
+	fprintf(stdout, "      -t, --timeout    : request timeout milliseconds (default: %d)\n", DEFAULT_TIMEOUT);
 	fprintf(stdout, "example:\n");
-	fprintf(stdout, "  %s -r -i org.mbus.client.execute-command -c 1\n", name);
-	fprintf(stdout, "  %s -w -i org.mbus.client.execute-command -t 60000 -c 'ls -al'\n", name);
+	fprintf(stdout, "  %s --mode receiver --identifier org.mbus.client.execute-command\n", name);
+	fprintf(stdout, "  %s --mode sender --identifier org.mbus.client.execute-command --command 'ls -al' --timeout 30000\n", name);
 	mbus_client_usage();
 }
 
-static int command_execute (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data)
+static int mbus_client_receiver_callback_command_execute (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
 
@@ -51,7 +136,7 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 	int length;
 	char *buffer;
 
-	const char *shell;
+	const char *command;
 	int timeout;
 
 	struct pollfd pollfd[2];
@@ -64,10 +149,11 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 	char *argv[4];
 	int status;
 
+	struct mbus_json *result;
+
 	(void) client;
-	(void) source;
-	(void) command;
-	(void) data;
+	(void) context;
+	(void) message;
 
 	pid = -1;
 	io[0] = -1;
@@ -77,19 +163,20 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 	size = 0;
 	length = 0;
 	buffer = NULL;
+	result = NULL;
 
-	shell = mbus_json_get_string_value(payload, "command", NULL);
-	if (shell == NULL) {
+	command = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "command", NULL);
+	if (command == NULL) {
 		mbus_errorf("invalid command");
 		goto bail;
 	}
-	mbus_debugf("shell: %s", shell);
-	timeout = mbus_json_get_int_value(payload, "timeout", 5000);
+	mbus_debugf("command: %s", command);
+	timeout = mbus_json_get_int_value(mbus_client_message_routine_request_payload(message), "timeout", 5000);
 	mbus_debugf("timeout: %d", timeout);
 
 	argv[0] = "/bin/sh";
 	argv[1] = "-c";
-	argv[2] = (char *) shell;
+	argv[2] = (char *) command;
 	argv[3] = NULL;
 
 	pid = command_exec(argv, io);
@@ -144,6 +231,12 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 		buffer[length] = '\0';
 	}
 
+	result = mbus_json_create_object();
+	if (result == NULL) {
+		mbus_errorf("can not create json object");
+		goto bail;
+	}
+
 	timeout = 1000;
 	stopped_time = command_clock_monotonic();
 	while (1) {
@@ -190,6 +283,8 @@ static int command_execute (struct mbus_client *client, const char *source, cons
 	if (buffer != NULL) {
 		free(buffer);
 	}
+	mbus_client_message_routine_set_response_payload(message, result);
+	mbus_json_delete(result);
 	return 0;
 bail:	if (pid >= 0) {
 		command_kill(pid, SIGKILL);
@@ -206,57 +301,141 @@ bail:	if (pid >= 0) {
 	if (buffer != NULL) {
 		free(buffer);
 	}
+	if (result != NULL) {
+		mbus_json_delete(result);
+	}
 	return -1;
+}
+
+static void mbus_client_receiver_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+{
+	int rc;
+	struct receiver_param *param = context;
+	if (status == mbus_client_connect_status_success) {
+		struct mbus_client_register_options register_options;
+		rc = mbus_client_register_options_default(&register_options);
+		if (rc != 0) {
+			param->result = -1;
+			param->finished = 1;
+			return;
+		}
+		register_options.command = "command.execute";
+		register_options.callback = mbus_client_receiver_callback_command_execute;
+		register_options.context = param;
+		rc = mbus_client_register_with_options(client, &register_options);
+		if (rc != 0) {
+			param->result = -1;
+			param->finished = 1;
+		}
+	} else {
+		param->result = -1;
+		param->finished = 1;
+	}
+}
+
+static void mbus_client_sender_callback_command_execute_result (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
+{
+	struct sender_param *param = context;
+	(void) client;
+	(void) status;
+	param->status = mbus_client_message_command_response_status(message);
+	if (param->status == 0) {
+		fprintf(stdout, "%s\n", mbus_json_get_string_value(mbus_client_message_command_response_payload(message), "output", ""));
+	}
+	param->finished = 1;
+}
+
+static void mbus_client_sender_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+{
+	int rc;
+	struct mbus_json *request;
+	struct sender_param *param = context;
+	struct mbus_client_command_options command_options;
+	request = NULL;
+	if (status != mbus_client_connect_status_success) {
+		goto bail;
+	}
+	request = mbus_json_create_object();
+	mbus_json_add_string_to_object_cs(request, "command", param->command);
+	mbus_json_add_number_to_object_cs(request, "timeout", param->timeout);
+	mbus_client_command_options_default(&command_options);
+	command_options.destination = param->identifier;
+	command_options.command = "command.execute";
+	command_options.payload = request;
+	command_options.callback = mbus_client_sender_callback_command_execute_result;
+	command_options.context = param;
+	command_options.timeout = param->timeout;
+	rc = mbus_client_command_with_options(client, &command_options);
+	if (rc != 0) {
+		fprintf(stderr, "can not execute command\n");
+		goto bail;
+	}
+	mbus_json_delete(request);
+	return;
+bail:	if (request != NULL) {
+		mbus_json_delete(request);
+	}
+	param->status = -1;
+	param->finished = 1;
+	return;
 }
 
 int main (int argc, char *argv[])
 {
-	int c;
-	int i;
-	int l;
 	int rc;
 
-	struct mbus_json *request;
-	struct mbus_json *response;
+	int c;
+	int _argc;
+	char **_argv;
+
+	enum mode o_mode;
+	const char *o_prefix;
+	const char *o_identifier;
+	const char *o_command;
+	int o_timeout;
+
 	struct mbus_client *mbus_client;
-	struct mbus_client_options mbus_client_options;
+	struct mbus_client_options mbus_options;
 
-	static int o_reader;
-	static int o_writer;
-	static const char *o_identifier;
-	static int o_reconnect;
-	static const char *o_command;
-	static int o_timeout;
+	struct receiver_param receiver_param;
+	struct sender_param sender_param;
 
-	o_reader = 0;
-	o_writer = 0;
-	o_identifier = NULL;
-	o_reconnect = 1;
+	o_mode = DEFAULT_MODE;
+	o_prefix = DEFAULT_PREFIX;
+	o_identifier = DEFAULT_IDENTIFIER;
 	o_command = NULL;
-	o_timeout = 10000;
+	o_timeout = DEFAULT_TIMEOUT;
 
-	request = NULL;
-	response = NULL;
+	_argc = 0;
+	_argv = NULL;
 
+	memset(&receiver_param, 0, sizeof(struct receiver_param));
+	memset(&sender_param, 0, sizeof(struct sender_param));
 	mbus_client = NULL;
-	mbus_client_options_from_argv(&mbus_client_options, argc, argv);
 
-	while ((c = getopt_long(argc, argv, ":rwi:l:c:t:", options, NULL)) != -1) {
+	_argv = malloc(sizeof(char *) * argc);
+	if (_argv == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
+		goto bail;
+	}
+	for (_argc = 0; _argc < argc; _argc++) {
+		_argv[_argc] = argv[_argc];
+	}
+
+	while ((c = getopt_long(_argc, _argv, ":m:p:i:c:t:h", longopts, NULL)) != -1) {
 		switch (c) {
-			case 'h':
-				print_help(argv[0]);
-				return 0;
-			case 'r':
-				o_reader = 1;
+			case 'm':
+				o_mode = mode_value(optarg);
+				if (o_mode == mode_unknown) {
+					fprintf(stderr, "invalid mode: %s\n", optarg);
+					goto bail;
+				}
 				break;
-			case 'w':
-				o_writer = 1;
+			case 'p':
+				o_prefix = optarg;
 				break;
 			case 'i':
 				o_identifier = optarg;
-				break;
-			case 'l':
-				o_reconnect = atoi(optarg);
 				break;
 			case 'c':
 				o_command = optarg;
@@ -264,126 +443,91 @@ int main (int argc, char *argv[])
 			case 't':
 				o_timeout = atoi(optarg);
 				break;
+			case 'h':
+				usage(argv[0]);
+				goto bail;
 		}
 	}
-	if (o_reader == 0 && o_writer == 0) {
-		fprintf(stderr, "invalid mode\n");
+
+	rc = mbus_client_options_default(&mbus_options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default options\n");
 		goto bail;
 	}
-	if (o_reader == 1 && o_writer == 1) {
-		fprintf(stderr, "invalid mode\n");
+	rc = mbus_client_options_from_argv(&mbus_options, argc, argv);
+	if (rc != 0) {
+		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
-	if (o_identifier == NULL) {
-		fprintf(stderr, "invalid identifier\n");
-		goto bail;
-	}
-	if (o_writer == 1) {
+	if (o_mode == mode_receiver) {
+		memset(&receiver_param, 0, sizeof(struct receiver_param));
+		receiver_param.prefix = o_prefix;
+		mbus_options.identifier = (char *) o_identifier;
+		mbus_options.callbacks.connect = mbus_client_receiver_callback_connect;
+		mbus_options.callbacks.context = &receiver_param;
+	} else if (o_mode == mode_sender) {
 		if (o_command == NULL) {
-			fprintf(stderr, "invalid command\n");
+			fprintf(stderr, "source is invalid\n");
 			goto bail;
 		}
+		memset(&sender_param, 0, sizeof(struct sender_param));
+		sender_param.identifier = o_identifier;
+		sender_param.command = o_command;
+		sender_param.timeout = o_timeout;
+		mbus_options.callbacks.connect = mbus_client_sender_callback_connect;
+		mbus_options.callbacks.context = &sender_param;
+	} else {
+		fprintf(stderr, "invalid mode: %d\n", o_mode);
+		goto bail;
 	}
 
-	if (o_reader == 1) {
-		while (1) {
-			if (mbus_client == NULL) {
-				mbus_client_options.client.name = o_identifier;
-				mbus_client = mbus_client_create_with_options(&mbus_client_options);
-				if (mbus_client == NULL) {
-					fprintf(stderr, "can not create mbus client\n");
-					if (o_reconnect > 0) {
-						usleep(o_reconnect * 1000);
-						continue;
-					} else {
-						goto bail;
-					}
-				} else {
-					rc = mbus_client_register(mbus_client, "command.execute", command_execute, NULL);
-					if (rc != 0) {
-						fprintf(stderr, "can not register command\n");
-						if (o_reconnect  > 0) {
-							mbus_client_destroy(mbus_client);
-							mbus_client = NULL;
-							usleep(o_reconnect * 1000);
-							continue;
-						} else {
-							goto bail;
-						}
-					}
-				}
-			}
-			rc = mbus_client_run_timeout(mbus_client, MBUS_CLIENT_DEFAULT_TIMEOUT);
-			if (rc < 0) {
-				fprintf(stderr, "client run failed: %d\n", rc);
-				if (o_reconnect > 0) {
-					mbus_client_destroy(mbus_client);
-					mbus_client = NULL;
-					usleep(o_reconnect * 1000);
-					continue;
-				} else {
-					goto bail;
-				}
-			}
-			if (rc > 1) {
-				fprintf(stderr, "client run exited: %d\n", rc);
-				if (o_reconnect > 0) {
-					mbus_client_destroy(mbus_client);
-					mbus_client = NULL;
-					usleep(o_reconnect * 1000);
-					continue;
-				} else {
-					goto bail;
-				}
-			}
-		}
+	mbus_client = mbus_client_create(&mbus_options);
+	if (mbus_client == NULL) {
+		fprintf(stderr, "can not create client\n");
+		goto bail;
 	}
-	if (o_writer == 1) {
-		l = 0;
-		for (i = 0; i < argc; i++) {
-			l += strlen(argv[i]);
-			l += 1;
-		}
-		fprintf(stdout, "executing command: '%s'\n", o_command);
-		mbus_client = mbus_client_create_with_options(&mbus_client_options);
-		if (mbus_client == NULL) {
-			fprintf(stderr, "can not create mbus client\n");
-			goto bail;
-		}
-		request = mbus_json_create_object();
-		mbus_json_add_string_to_object_cs(request, "command", o_command);
-		mbus_json_add_number_to_object_cs(request, "timeout", o_timeout);
-		rc = mbus_client_command_timeout(mbus_client, o_identifier, "command.execute", request, &response, o_timeout);
+	rc = mbus_client_connect(mbus_client);
+	if (rc != 0) {
+		fprintf(stderr, "can not connect client\n");
+		goto bail;
+	}
+
+	while (1) {
+		rc = mbus_client_run(mbus_client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
-			fprintf(stderr, "can not execute command\n");
+			fprintf(stderr, "client run failed\n");
 			goto bail;
 		}
-		if (response != NULL) {
-			int status;
-			const char *output;
-			status = mbus_json_get_int_value(response, "status", -1);
-			if (status != 0) {
-				fprintf(stdout, "can not execute command\n");
-			} else {
-				output = mbus_json_get_string_value(response, "output", "can not execute command");
-				fprintf(stdout, "%s\n", output);
+		if (o_mode == mode_receiver) {
+			if (receiver_param.finished == 1 &&
+			    mbus_client_has_pending(mbus_client) == 0) {
+				break;
+			}
+		} else if (o_mode == mode_sender) {
+			if (sender_param.finished == 1 &&
+			    mbus_client_has_pending(mbus_client) == 0) {
+				break;
 			}
 		}
-		mbus_client_destroy(mbus_client);
-		mbus_client = NULL;
+		if (mbus_client_get_state(mbus_client) == mbus_client_state_disconnected) {
+			break;
+		}
 	}
 
-	rc = 0;
-out:	if (mbus_client != NULL) {
+	mbus_client_destroy(mbus_client);
+	free(_argv);
+	if (o_mode == mode_receiver) {
+		return receiver_param.result;
+	}
+	if (o_mode == mode_sender) {
+		return sender_param.status;
+	}
+	return 0;
+bail:	if (_argv != NULL) {
+		free(_argv);
+	}
+	if (mbus_client != NULL) {
 		mbus_client_destroy(mbus_client);
 	}
-	if (request != NULL) {
-		mbus_json_delete(request);
-	}
-	if (response != NULL) {
-		mbus_json_delete(response);
-	}
-	return rc;
-bail:	rc = -1;
-	goto out;
+	return -1;
 }

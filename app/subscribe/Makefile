@@ -2,18 +2,18 @@
 include ../../Makefile.conf
 
 target-y = \
-	mbus-event
+	mbus-subscribe
 
-mbus-event_includes-y = \
+mbus-subscribe_includes-y = \
 	../../dist/include
 
-mbus-event_libraries-y = \
+mbus-subscribe_libraries-y = \
 	../../dist/lib
 
-mbus-event_files-y = \
-	event.c
+mbus-subscribe_files-y = \
+	subscribe.c
 
-mbus-event_ldflags-y = \
+mbus-subscribe_ldflags-y = \
 	-lmbus-client \
 	-lmbus-socket \
 	-lmbus-json \
@@ -24,13 +24,13 @@ mbus-event_ldflags-y = \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-event_ldflags-${SSL_ENABLE} += \
+mbus-subscribe_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-event_ldflags-${ZLIB_ENABLE} += \
+mbus-subscribe_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-event_ldflags-y += \
+mbus-subscribe_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
@@ -38,7 +38,7 @@ mbus-event_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-event \
-	mbus-event.py
+	mbus-subscribe \
+	mbus-subscribe.py
 
 include ../../Makefile.lib

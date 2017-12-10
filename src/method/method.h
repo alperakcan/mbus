@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,6 @@
  */
 
 #define MBUS_METHOD_TYPE_COMMAND				"org.mbus.method.type.command"
-#define MBUS_METHOD_TYPE_STATUS					"org.mbus.method.type.status"
 #define MBUS_METHOD_TYPE_EVENT					"org.mbus.method.type.event"
 #define MBUS_METHOD_TYPE_RESULT					"org.mbus.method.type.result"
 
@@ -41,23 +40,14 @@
 
 #define MBUS_METHOD_EVENT_IDENTIFIER_ALL			"org.mbus.method.event.identifier.all"
 
-#define MBUS_METHOD_STATUS_IDENTIFIER_ALL			"org.mbus.method.event.status.all"
-
-/* status json model
- *
- * server -- status --> client
- *
- * status: {
- *   "type"        : MBUS_METHOD_TYPE_STATUS,
- *   "source"      : MBUS_SERVER_NAME,
- *   "destination" : "unique identifier",
- *   "identifier"  : "unique identifier",
- *   "sequence"    : sequence number,
- *   "payload"     : {
- *     "comment": "event specific data object goes here"
- *   }
- * }
- */
+#define MBUS_METHOD_TAG_TYPE					"org.mbus.method.tag.type"
+#define MBUS_METHOD_TAG_SOURCE					"org.mbus.method.tag.source"
+#define MBUS_METHOD_TAG_DESTINATION				"org.mbus.method.tag.destination"
+#define MBUS_METHOD_TAG_IDENTIFIER				"org.mbus.method.tag.identifier"
+#define MBUS_METHOD_TAG_SEQUENCE				"org.mbus.method.tag.sequence"
+#define MBUS_METHOD_TAG_TIMEOUT					"org.mbus.method.tag.timeout"
+#define MBUS_METHOD_TAG_PAYLOAD					"org.mbus.method.tag.payload"
+#define MBUS_METHOD_TAG_STATUS					"org.mbus.method.tag.status"
 
 /* event json model
  *
@@ -89,7 +79,7 @@
  * client  -- request --> server
  *
  * server:
- *   if destination is MBUS_SERVER_NAME
+ *   if destination is MBUS_SERVER_IDENTIFIER
  *     process command
  *   else
  *     for each client
@@ -97,17 +87,18 @@
  *          client has registered command with identifier
  *         push call to client queue
  *
- * if destination is not MBUS_SERVER_NAME
+ * if destination is not MBUS_SERVER_IDENTIFIER
  *   server  -- call    --> callee
  *   server <-- result  --  callee
  *
- * client <-- result  --  server
+ * client <-- response  --  server
  *
  * request: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
  *   "destination" : "unique identifier",
  *   "identifier"  : "unique identifier",
  *   "sequence"    : sequence number,
+ *   "timeout"     : command timeout,
  *   "payload"     : {
  *     "comment": "command specific data object goes here"
  *   }
@@ -125,7 +116,7 @@
  *
  * result: {
  *   "type"        : MBUS_METHOD_TYPE_COMMAND,
- *   "destination" : MBUS_SERVER_NAME,
+ *   "destination" : MBUS_SERVER_IDENTIFIER,
  *   "identifier"  : MBUS_SERVER_COMMAND_RESULT,
  *   "sequence"    : sequence number,
  *   "payload"     : {
@@ -133,9 +124,18 @@
  *     "identifier"  : "call identifier",
  *     "sequence"    : call sequence number,
  *     "return"      : integer return code,
- *     "result"      : {
+ *     "payload"     : {
  *       "comment": "result specific data object goes here"
  *     }
+ *   }
+ * }
+ *
+ * response: {
+ *   "type"        : MBUS_METHOD_TYPE_RESULT,
+ *   "sequence"    : call sequence number,
+ *   "return"      : integer return code,
+ *   "payload"     : {
+ *     "comment": "result specific data object goes here"
  *   }
  * }
  */

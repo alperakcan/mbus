@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,28 +68,70 @@
 
 #define MBUS_SERVER_DEFAULT_TIMEOUT		10000
 
-#define MBUS_SERVER_NAME			"org.mbus.server"
+#define MBUS_SERVER_IDENTIFIER			"org.mbus.server"
+#define MBUS_SERVER_CLIENT_IDENTIFIER_PREFIX	"org.mbus.client."
 
 /* command create
  *
+ * input:
  * {
- *   "comment": "create specific json object goes here"
+ *   "identifier": "identifier",
+ *   "ping": {
+ *     "interval": interval
+ *     "timeout": timeout
+ *     "threshold": threshold
+ *   },
+ *   "compressions": {
+ *     "none",
+ *     "zlib"
+ *   }
+ * }
+ *
+ * output:
+ * {
+ *   "identifier": "identifier",
+ *   "ping": {
+ *     "interval": interval
+ *     "timeout": timeout
+ *     "threshold": threshold
+ *   },
+ *   "compression": compression
  * }
  */
 #define MBUS_SERVER_COMMAND_CREATE		"command.create"
 
 /* command event
  *
+ * input:
  * {
- *   "comment": "event specific json object goes here"
+ *   "destination": "destination",
+ *   "identifier": "identifier",
+ *   "payload"     : {
+ *     "comment": "event specific data object goes here"
+ *   }
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_EVENT		"command.event"
 
 /* command result
  *
+ * input:
  * {
- *   "comment": "result specific json object goes here"
+ *   "destination": "destination",
+ *   "identifier": "identifier",
+ *   "sequence": sequence,
+ *   "status": status
+ *   "payload"     : {
+ *     "comment": "command specific data object goes here"
+ *   }
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_RESULT		"command.result"
@@ -176,29 +218,57 @@
 
 /* command subscribe
  *
+ * input:
  * {
  *     "source": "application name",
  *     "event" : "event name"
+ * }
+ *
+ * output:
+ * {
  * }
  */
 #define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
 
-/* command register
- *
- * {
- *     "command" : "command name"
- * }
- */
-#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
-
 /* command unsubscribe
  *
+ * input:
  * {
  *     "source": "application name",
  *     "event" : "event name"
  * }
+ *
+ * output:
+ * {
+ * }
  */
 #define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
+
+/* command register
+ *
+ * input:
+ * {
+ *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
+
+/* command unregister
+ *
+ * input:
+ * {
+ *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
 
 /* command close
  *
@@ -213,57 +283,13 @@
  */
 #define MBUS_SERVER_COMMAND_CLOSE		"command.close"
 
-/* status connected
- *
- * {
- *   "source": "application name"
- * }
- */
-#define MBUS_SERVER_STATUS_CONNECTED		"status.connected"
-
-/* status disconnected
- *
- * {
- *   "source": "application name"
- * }
- */
-#define MBUS_SERVER_STATUS_DISCONNECTED		"status.disconnected"
-
-/* status subscribed
- *
- * {
- *   "destination" : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_SUBSCRIBED		"status.subscribed"
-
-/* status subscriber
- *
- * {
- *   "source"      : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_SUBSCRIBER		"status.subscriber"
-
-/* status unsubscribed
- *
- * {
- *   "source"      : "application name",
- *   "destination" : "application name",
- *   "identifier"  : "status name"
- * }
- */
-#define MBUS_SERVER_STATUS_UNSUBSCRIBED		"status.unsubscribed"
-
 /* event ping
  *
  * {
  *   "source"      : "application name",
  * }
  */
-#define MBUS_SERVER_EVENT_PING			"event.ping"
+#define MBUS_SERVER_EVENT_PING			"org.mbus.server.event.ping"
 
 /* event pong
  *
@@ -271,7 +297,7 @@
  *   "source"      : "application name",
  * }
  */
-#define MBUS_SERVER_EVENT_PONG			"event.pong"
+#define MBUS_SERVER_EVENT_PONG			"org.mbus.server.event.pong"
 
 /* event connected
  *
@@ -279,7 +305,7 @@
  *   "source": "application name"
  * }
  */
-#define MBUS_SERVER_EVENT_CONNECTED		"event.connected"
+#define MBUS_SERVER_EVENT_CONNECTED		"org.mbus.server.event.connected"
 
 /* event disconnected
  *
@@ -287,7 +313,7 @@
  *   "source": "application name"
  * }
  */
-#define MBUS_SERVER_EVENT_DISCONNECTED		"event.disconnected"
+#define MBUS_SERVER_EVENT_DISCONNECTED		"org.mbus.server.event.disconnected"
 
 /* event subscribed
  *
@@ -297,7 +323,7 @@
  *   "identifier"  : "event name"
  * }
  */
-#define MBUS_SERVER_EVENT_SUBSCRIBED		"event.subscribed"
+#define MBUS_SERVER_EVENT_SUBSCRIBED		"org.mbus.server.event.subscribed"
 
 /* event unsubscribed
  *
@@ -307,7 +333,7 @@
  *   "identifier"  : "event name"
  * }
  */
-#define MBUS_SERVER_EVENT_UNSUBSCRIBED		"event.unsubscribed"
+#define MBUS_SERVER_EVENT_UNSUBSCRIBED		"org.mbus.server.event.unsubscribed"
 
 struct mbus_server;
 

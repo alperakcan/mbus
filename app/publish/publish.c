@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MBUS_DEBUG_NAME	"app-command"
+#define MBUS_DEBUG_NAME	"app-publish"
 
 #include "mbus/debug.h"
 #include "mbus/json.h"
@@ -42,22 +42,25 @@
 
 #define OPTION_HELP		'h'
 #define OPTION_DESTINATION	'd'
-#define OPTION_COMMAND		'c'
+#define OPTION_EVENT		'e'
 #define OPTION_PAYLOAD		'p'
+#define OPTION_FLOOD		'f'
 static struct option longopts[] = {
-	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "destination",		required_argument,	NULL,	OPTION_DESTINATION },
-	{ "command",			required_argument,	NULL,	OPTION_COMMAND },
-	{ "payload",			required_argument,	NULL,	OPTION_PAYLOAD },
-	{ NULL,				0,			NULL,	0 },
+	{ "help",		no_argument,		NULL,	OPTION_HELP },
+	{ "destination",	required_argument,	NULL,	OPTION_DESTINATION },
+	{ "event",		required_argument,	NULL,	OPTION_EVENT },
+	{ "payload",		required_argument,	NULL,	OPTION_PAYLOAD },
+	{ "flood",		required_argument,	NULL,	OPTION_FLOOD },
+	{ NULL,			0,			NULL,	0 },
 };
 
 static void usage (void)
 {
-	fprintf(stdout, "mbus command arguments:\n");
-	fprintf(stdout, "  -d, --destination        : destination identifier\n");
-	fprintf(stdout, "  -c, --command            : command identifier\n");
-	fprintf(stdout, "  -p, --payload            : payload json\n");
+	fprintf(stdout, "mbus publish arguments:\n");
+	fprintf(stdout, "  -d, --destination        : destination identifier (default: null)\n");
+	fprintf(stdout, "  -e, --event              : event identifier (default: null)\n");
+	fprintf(stdout, "  -p, --payload            : payload json (default: null)\n");
+	fprintf(stdout, "  -f, --flood              : flood event n times (default: 1)\n");
 	fprintf(stdout, "  -h, --help               : this text\n");
 	fprintf(stdout, "  --mbus-help              : mbus help text\n");
 	mbus_client_usage();
@@ -65,50 +68,69 @@ static void usage (void)
 
 struct arg {
 	const char *destination;
-	const char *command;
+	const char *event;
 	struct mbus_json *payload;
+	int flood;
+	int published;
 	int finished;
-	int status;
+	int result;
 };
 
-static void mbus_client_callback_command (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
+static void mbus_client_callback_publish (struct mbus_client *client, void *context, struct mbus_client_message_event *message, enum mbus_client_publish_status status)
 {
 	struct arg *arg = context;
-	char *string;
 	(void) client;
-	(void) status;
-	if (mbus_client_message_command_response_status(message) == 0) {
-		string = mbus_json_print(mbus_client_message_command_response_payload(message));
-		if (string != NULL) {
-			fprintf(stdout, "%s\n", string);
-			free(string);
+	(void) message;
+	arg->published += 1;
+	if (status == mbus_client_publish_status_success) {
+		if (arg->published == arg->flood) {
+			arg->finished = 1;
+			arg->result = 0;
 		}
+	} else {
+		arg->result = -1;
+		arg->finished = 1;
 	}
-	arg->status = mbus_client_message_command_response_status(message);
-	arg->finished = 1;
 }
 
 static void mbus_client_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
+	int p;
 	int rc;
-	struct arg *arg = context;
+	struct arg *arg;
+	struct mbus_client_publish_options publish_options;
+	arg = context;
 	if (status == mbus_client_connect_status_success) {
-		rc = mbus_client_command(client, arg->destination, arg->command, arg->payload, mbus_client_callback_command, arg);
+		for (p = 0; p < arg->flood; p++) {
+			rc = mbus_client_publish_options_default(&publish_options);
+			if (rc != 0) {
+				fprintf(stderr, "can not get default publish options\n");
+				break;
+			}
+			publish_options.destination = arg->destination;
+			publish_options.event = arg->event;
+			publish_options.payload = arg->payload;
+			publish_options.qos = mbus_client_qos_at_least_once;
+			rc = mbus_client_publish_with_options(client, &publish_options);
+			if (rc != 0) {
+				break;
+			}
+		}
 		if (rc != 0) {
-			arg->status = -1;
+			arg->result = rc;
 			arg->finished = 1;
 		}
 	} else {
-		arg->status = -1;
+		arg->result = 0;
 		arg->finished = 1;
 	}
 }
 
 int main (int argc, char *argv[])
 {
+	int c;
 	int rc;
 
-	int c;
 	int _argc;
 	char **_argv;
 
@@ -117,7 +139,10 @@ int main (int argc, char *argv[])
 	struct mbus_client_options options;
 
 	client = NULL;
+
 	memset(&arg, 0, sizeof(struct arg));
+	arg.destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS;
+	arg.flood = 1;
 
 	_argc = 0;
 	_argv = NULL;
@@ -131,18 +156,25 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":d:c:p:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":d:e:p:f:", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_DESTINATION:
 				arg.destination = optarg;
 				break;
-			case OPTION_COMMAND:
-				arg.command = optarg;
+			case OPTION_EVENT:
+				arg.event = optarg;
 				break;
 			case OPTION_PAYLOAD:
 				arg.payload = mbus_json_parse(optarg);
 				if (arg.payload == NULL) {
-					fprintf(stderr, "invalid payload: '%s'\n", optarg);
+					fprintf(stderr, "invalid payload\n");
+					goto bail;
+				}
+				break;
+			case OPTION_FLOOD:
+				arg.flood = atoi(optarg);
+				if (arg.flood <= 0) {
+					fprintf(stderr, "invalid flood\n");
 					goto bail;
 				}
 				break;
@@ -155,8 +187,8 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "destination is invalid\n");
 		goto bail;
 	}
-	if (arg.command == NULL) {
-		fprintf(stderr, "command is invalid\n");
+	if (arg.event == NULL) {
+		fprintf(stderr, "event is invalid\n");
 		goto bail;
 	}
 
@@ -171,6 +203,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	options.callbacks.connect = mbus_client_callback_connect;
+	options.callbacks.publish = mbus_client_callback_publish;
 	options.callbacks.context = &arg;
 
 	client = mbus_client_create(&options);
@@ -199,7 +232,7 @@ int main (int argc, char *argv[])
 	mbus_json_delete(arg.payload);
 	mbus_client_destroy(client);
 	free(_argv);
-	return arg.status;
+	return arg.result;
 bail:	if (client != NULL) {
 		mbus_client_destroy(client);
 	}

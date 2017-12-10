@@ -34,8 +34,9 @@ import json
 import MBusClient as MBusClient
 
 o_destination = None
-o_command     = None
+o_event       = None
 o_payload     = None
+o_flood       = 1
 
 mbus_client_identifier        = None
 mbus_client_server_protocol   = None
@@ -52,9 +53,9 @@ mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
 subscriptions = []
 
-options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:c:p:f:h', ['help',
+options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:e:p:f:h', ['help', 
                                                                  'destination=',
-                                                                 'command=',
+                                                                 'event=',
                                                                  'payload=',
                                                                  'flood=',
                                                                  'mbus-client-identifier=',
@@ -74,10 +75,11 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:c:p:f:h', ['help',
 
 for opt, arg in options:
     if opt in ('-h', '--help'):
-        print("command usage:\n" \
-              "  -d, --destination              : command destination identifier (default: {})\n" \
-              "  -c, --command                  : command identifier (default: {})\n" \
-              "  -p, --payload                  : command payload (default: {})\n" \
+        print("publish usage:\n" \
+              "  -d, --destination              : publish destination identifier (default: {})\n" \
+              "  -e, --event                    : publish event identifier (default: {})\n" \
+              "  -p, --payload                  : publish payload (default: {})\n" \
+              "  -f, --flood                    : publish event n timed (default: {})\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
@@ -95,8 +97,9 @@ for opt, arg in options:
               "  --help                         : this text" \
               .format( \
                        o_destination, \
-                       o_command, \
+                       o_event, \
                        o_payload, \
+                       o_flood, \
                        MBusClient.MBusClientDefaults.ClientIdentifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
@@ -115,10 +118,12 @@ for opt, arg in options:
         exit(0)
     elif opt in ('-d', '--destination'):
         o_destination = arg
-    elif opt in ('-c', '--command'):
-        o_command = arg
+    elif opt in ('-e', '--event'):
+        o_event = arg
     elif opt in ('-p', '--payload'):
         o_payload = json.loads(arg)
+    elif opt in ('-f', '--flood'):
+        o_flood = int(arg)
     elif opt == '--mbus-client-identifier':
         mbus_client_identifier = arg
     elif opt == '--mbus-client-server-protocol':
@@ -149,32 +154,45 @@ for opt, arg in options:
 class onParam(object):
     def __init__ (self):
         self.destination = None
-        self.command = None
+        self.event = None
         self.payload = None
         self.flood = 1
         self.published = 0
         self.finished = 0
-        self.status = -1
+        self.result = -1
         self.connected = 0
         self.disconnected = 0
     
-def onCommandCallback (client, context, message, status):
-    if (message.getResponseStatus() == 0):
-        print("{}".format(json.dumps(message.getResponsePayload())))
-    context.status = message.getResponseStatus()
-    context.finished = 1
-
 def onConnect (client, context, status):
+    print("connect: {}, {}".format(status, MBusClient.MBusClientConnectStatusString(status)))
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
-        client.command(context.destination, context.command, context.payload, onCommandCallback, context)
+        for p in xrange(0, context.flood):
+            client.publish(context.event, context.payload, MBusClient.MBusClientQoS.AtLeastOnce)
     else:
         if (client.getOptions().connectInterval <= 0):
             context.connected = -1
 
 def onDisconnect (client, context, status):
+    print("disconnect: {}, {}".format(status, MBusClient.MBusClientDisconnectStatusString(status)))
     if (client.getOptions().connectInterval <= 0):
         context.disconnected = 1
+
+def onPublish (client, context, message, status):
+    print("publish: {}, {}, source: {}, event: {}, payload: {}".format(
+        status, MBusClient.MBusClientPublishStatusString(status), \
+        message.getDestination(), \
+        message.getIdentifier(), \
+        json.dumps(message.getPayload()) \
+        ))
+    context.published += 1
+    if (status == MBusClient.MBusClientPublishStatus.Success):
+        if (context.published == context.flood):
+            context.finished = 1
+            context.result = 0
+    else:
+        context.finished = 1
+        context.result = -1
 
 options = MBusClient.MBusClientOptions()
 
@@ -205,17 +223,17 @@ if (mbus_client_ping_timeout != None):
 if (mbus_client_ping_threshold != None):
     options.pingThreshold = int(mbus_client_ping_threshold)
 
-if (o_destination == None):
-    raise ValueError("destination is invalid")
-if (o_command == None):
-    raise ValueError("command is invalid")
+if (o_event == None):
+    raise ValueError("event is invalid")
 
 options.onConnect    = onConnect
 options.onDisconnect = onDisconnect
+options.onPublish    = onPublish
 options.onContext    = onParam()
 options.onContext.destination = o_destination
-options.onContext.command     = o_command
+options.onContext.event       = o_event
 options.onContext.payload     = o_payload
+options.onContext.flood       = o_flood
 
 client = MBusClient.MBusClient(options)
 
@@ -227,5 +245,3 @@ while (options.onContext.connected >= 0 and
     if (options.onContext.finished == 1 and
         client.hasPending() == 0):
         break;
-
-exit(options.onContext.status)

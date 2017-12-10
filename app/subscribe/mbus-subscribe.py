@@ -33,10 +33,6 @@ import getopt
 import json
 import MBusClient as MBusClient
 
-o_destination = None
-o_command     = None
-o_payload     = None
-
 mbus_client_identifier        = None
 mbus_client_server_protocol   = None
 mbus_client_server_address    = None
@@ -52,32 +48,27 @@ mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
 subscriptions = []
 
-options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:c:p:f:h', ['help',
-                                                                 'destination=',
-                                                                 'command=',
-                                                                 'payload=',
-                                                                 'flood=',
-                                                                 'mbus-client-identifier=',
-                                                                 'mbus-client-server-protocol=',
-                                                                 'mbus-client-server-address=',
-                                                                 'mbus-client-server-port=',
-                                                                 'mbus-client-connect-timeout=',
-                                                                 'mbus-client-connect-interval=',
-                                                                 'mbus-client-subscribe-timeout=',
-                                                                 'mbus-client-register-timeout=',
-                                                                 'mbus-client-command-timeout=',
-                                                                 'mbus-client-publish-timeout=',
-                                                                 'mbus-client-ping-interval=',
-                                                                 'mbus-client-ping-timeout=',
-                                                                 'mbus-client-ping-threshold=',
-                                                                 ])
+options, remainder = getopt.gnu_getopt(sys.argv[1:], 'e:h', ['help', 
+                                                             'event=',
+                                                             'mbus-client-identifier=',
+                                                             'mbus-client-server-protocol=',
+                                                             'mbus-client-server-address=',
+                                                             'mbus-client-server-port=',
+                                                             'mbus-client-connect-timeout=',
+                                                             'mbus-client-connect-interval=',
+                                                             'mbus-client-subscribe-timeout=',
+                                                             'mbus-client-register-timeout=',
+                                                             'mbus-client-command-timeout=',
+                                                             'mbus-client-publish-timeout=',
+                                                             'mbus-client-ping-interval=',
+                                                             'mbus-client-ping-timeout=',
+                                                             'mbus-client-ping-threshold=',
+                                                             ])
 
 for opt, arg in options:
     if opt in ('-h', '--help'):
-        print("command usage:\n" \
-              "  -d, --destination              : command destination identifier (default: {})\n" \
-              "  -c, --command                  : command identifier (default: {})\n" \
-              "  -p, --payload                  : command payload (default: {})\n" \
+        print("subscribe usage:\n" \
+              "  -e, --event                    : subscribe to an event identifier\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
@@ -94,9 +85,6 @@ for opt, arg in options:
               "  --mbus-client-ping-threshold   : ping threshold (default: {})\n" \
               "  --help                         : this text" \
               .format( \
-                       o_destination, \
-                       o_command, \
-                       o_payload, \
                        MBusClient.MBusClientDefaults.ClientIdentifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
@@ -113,12 +101,8 @@ for opt, arg in options:
                     )
               )
         exit(0)
-    elif opt in ('-d', '--destination'):
-        o_destination = arg
-    elif opt in ('-c', '--command'):
-        o_command = arg
-    elif opt in ('-p', '--payload'):
-        o_payload = json.loads(arg)
+    elif opt in ('-e', '--event'):
+        subscriptions.append(arg)
     elif opt == '--mbus-client-identifier':
         mbus_client_identifier = arg
     elif opt == '--mbus-client-server-protocol':
@@ -148,33 +132,32 @@ for opt, arg in options:
 
 class onParam(object):
     def __init__ (self):
-        self.destination = None
-        self.command = None
-        self.payload = None
-        self.flood = 1
-        self.published = 0
-        self.finished = 0
-        self.status = -1
         self.connected = 0
         self.disconnected = 0
     
-def onCommandCallback (client, context, message, status):
-    if (message.getResponseStatus() == 0):
-        print("{}".format(json.dumps(message.getResponsePayload())))
-    context.status = message.getResponseStatus()
-    context.finished = 1
-
 def onConnect (client, context, status):
+    print("connect: {}, {}".format(status, MBusClient.MBusClientConnectStatusString(status)))
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
-        client.command(context.destination, context.command, context.payload, onCommandCallback, context)
+        if (len(subscriptions) == 0):
+            client.subscribe(MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL)
+        else:
+            for s in subscriptions:
+                client.subscribe(s)
     else:
         if (client.getOptions().connectInterval <= 0):
             context.connected = -1
 
 def onDisconnect (client, context, status):
+    print("disconnect: {}, {}".format(status, MBusClient.MBusClientDisconnectStatusString(status)))
     if (client.getOptions().connectInterval <= 0):
         context.disconnected = 1
+    
+def onSubscribe (client, context, source, event, status):
+    print("subscribe: {}, {}, source: {}, event: {}".format(status, MBusClient.MBusClientSubscribeStatusString(status), source, event))
+
+def onMessage (client, context, message):
+    print("{}.{}.{}".format(message.getSource(), message.getIdentifier(), json.dumps(message.getPayload())))
 
 options = MBusClient.MBusClientOptions()
 
@@ -205,17 +188,11 @@ if (mbus_client_ping_timeout != None):
 if (mbus_client_ping_threshold != None):
     options.pingThreshold = int(mbus_client_ping_threshold)
 
-if (o_destination == None):
-    raise ValueError("destination is invalid")
-if (o_command == None):
-    raise ValueError("command is invalid")
-
 options.onConnect    = onConnect
 options.onDisconnect = onDisconnect
+options.onSubscribe  = onSubscribe
+options.onMessage    = onMessage
 options.onContext    = onParam()
-options.onContext.destination = o_destination
-options.onContext.command     = o_command
-options.onContext.payload     = o_payload
 
 client = MBusClient.MBusClient(options)
 
@@ -224,8 +201,3 @@ client.connect()
 while (options.onContext.connected >= 0 and
        options.onContext.disconnected == 0):
     client.run()
-    if (options.onContext.finished == 1 and
-        client.hasPending() == 0):
-        break;
-
-exit(options.onContext.status)

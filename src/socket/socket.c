@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,15 +121,25 @@ void mbus_socket_destroy (struct mbus_socket *socket)
 	free(socket);
 }
 
-void mbus_socket_close (struct mbus_socket *socket)
+int mbus_socket_shutdown (struct mbus_socket *socket, enum mbus_socket_shutdown _shutdown)
 {
+	int how;
 	if (socket == NULL) {
-		return;
+		return -1;
 	}
-	if (socket->fd >= 0) {
-		close(socket->fd);
-		socket->fd = -1;
+	if (_shutdown == mbus_socket_shutdown_rd) {
+		how = SHUT_RD;
+	} else if (_shutdown == mbus_socket_shutdown_wr) {
+		how = SHUT_WR;
+	} else if (_shutdown == mbus_socket_shutdown_rdwr) {
+		how = SHUT_RDWR;
+	} else {
+		return -1;
 	}
+	if (socket->fd < 0) {
+		return -1;
+	}
+	return shutdown(socket->fd, how);
 }
 
 int mbus_socket_get_fd (struct mbus_socket *socket)
@@ -138,6 +148,25 @@ int mbus_socket_get_fd (struct mbus_socket *socket)
 		return -1;
 	}
 	return socket->fd;
+}
+
+int mbus_socket_get_error (struct mbus_socket *socket)
+{
+	int rc;
+	int error;
+	socklen_t len;
+	len = sizeof(error);
+	if (socket == NULL) {
+		return -EINVAL;
+	}
+	rc = getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, &error, &len);
+	if (rc != 0) {
+		return -EINVAL;
+	}
+	if (error == 0) {
+		return 0;
+	}
+	return -error;
 }
 
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on)
@@ -374,9 +403,11 @@ int mbus_socket_get_keepintvl (struct mbus_socket *socket)
 int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsigned short port)
 {
 	int rc;
+	rc = 0;
 	if (address == NULL) {
 		mbus_errorf("address is null");
-		return -1;
+		rc = -EINVAL;
+		goto bail;
 	}
 	if (socket->domain == AF_INET) {
 		struct addrinfo hints;
@@ -388,6 +419,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		rc = getaddrinfo(address, NULL, &hints, &result);
 		if (rc != 0) {
 			mbus_errorf("getaddrinfo failed for: %s", address);
+			rc = -EINVAL;
 			goto bail;
 		}
 		for (res = result; res; res = res->ai_next) {
@@ -402,8 +434,13 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 			sockaddr_in->sin_port = htons(port);
 			rc = connect(socket->fd, res->ai_addr, res->ai_addrlen);
 			if (rc != 0) {
-				continue;
+				if (errno != EINPROGRESS) {
+					continue;
+				} else {
+					rc = -errno;
+				}
 			}
+			break;
 		}
 		freeaddrinfo(result);
 	} else if (socket->domain == AF_UNIX) {
@@ -411,16 +448,22 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		sockaddr_un.sun_family = socket->domain;
 		snprintf(sockaddr_un.sun_path, sizeof(sockaddr_un.sun_path) - 1, "%s:%d", address, port);
 		rc = connect(socket->fd, (struct sockaddr *) &sockaddr_un , sizeof(sockaddr_un));
+		if (rc != 0) {
+			rc = -errno;
+			goto bail;
+		}
 	} else {
 		mbus_errorf("unknown socket domain");
 		goto bail;
 	}
-	if (rc < 0) {
-		mbus_errorf("connect failed");
+	if (rc != 0 &&
+	    rc != -EINPROGRESS &&
+	    rc != -EALREADY) {
+		mbus_errorf("connect failed: %s", strerror(rc));
 		goto bail;
 	}
-	return 0;
-bail:	return -1;
+	return rc;
+bail:	return rc;
 }
 
 int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned short port)
@@ -453,7 +496,7 @@ int mbus_socket_bind (struct mbus_socket *socket, const char *address, unsigned 
 		goto bail;
 	}
 	if (rc < 0) {
-		mbus_errorf("bind failed (%s)", strerror(errno));
+		mbus_errorf("can not bind to %s:%d (%s)", address, port, strerror(errno));
 		goto bail;
 	}
 	return 0;

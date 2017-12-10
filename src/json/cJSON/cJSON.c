@@ -58,8 +58,8 @@ const char *mbus_cJSON_GetErrorPtr(void)
     return global_ep;
 }
 
-/* case insensitive strcmp */
-static int cJSON_strcasecmp(const char *s1, const char *s2)
+/* case sensitive strcmp */
+static int cJSON_strcmp(const char *s1, const char *s2)
 {
     if (!s1)
     {
@@ -69,15 +69,7 @@ static int cJSON_strcasecmp(const char *s1, const char *s2)
     {
         return 1;
     }
-    for(; tolower(*(const unsigned char *)s1) == tolower(*(const unsigned char *)s2); ++s1, ++s2)
-    {
-        if (*s1 == '\0')
-        {
-            return 0;
-        }
-    }
-
-    return tolower(*(const unsigned char *)s1) - tolower(*(const unsigned char *)s2);
+    return strcmp(s1, s2);
 }
 
 static void *(*cJSON_malloc)(size_t sz) = malloc;
@@ -1691,7 +1683,7 @@ mbus_cJSON *mbus_cJSON_GetArrayItem(const mbus_cJSON *array, int item)
 mbus_cJSON *mbus_cJSON_GetObjectItem(const mbus_cJSON *object, const char *string)
 {
     mbus_cJSON *c = object ? object->child : NULL;
-    while (c && cJSON_strcasecmp(c->string, string))
+    while (c && cJSON_strcmp(c->string, string))
     {
         c = c->next;
     }
@@ -1833,7 +1825,7 @@ mbus_cJSON *mbus_cJSON_DetachItemFromObject(mbus_cJSON *object, const char *stri
 {
     int i = 0;
     mbus_cJSON *c = object->child;
-    while (c && cJSON_strcasecmp(c->string,string))
+    while (c && cJSON_strcmp(c->string,string))
     {
         i++;
         c = c->next;
@@ -1912,7 +1904,7 @@ void mbus_cJSON_ReplaceItemInObject(mbus_cJSON *object, const char *string, mbus
 {
     int i = 0;
     mbus_cJSON *c = object->child;
-    while(c && cJSON_strcasecmp(c->string, string))
+    while(c && cJSON_strcmp(c->string, string))
     {
         i++;
         c = c->next;

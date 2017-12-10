@@ -16,11 +16,11 @@ install: app src test
 	install -d ${DESTDIR}/usr/local/bin
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
 	install -m 0755 dist/bin/mbus-command.py ${DESTDIR}/usr/local/bin/mbus-command.py
-	install -m 0755 dist/bin/mbus-controller ${DESTDIR}/usr/local/bin/mbus-controller
-	install -m 0755 dist/bin/mbus-event ${DESTDIR}/usr/local/bin/mbus-event
-	install -m 0755 dist/bin/mbus-event.py ${DESTDIR}/usr/local/bin/mbus-event.py
-	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
-	install -m 0755 dist/bin/mbus-listener.py ${DESTDIR}/usr/local/bin/mbus-listener.py
+	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
+	install -m 0755 dist/bin/mbus-publish ${DESTDIR}/usr/local/bin/mbus-publish
+	install -m 0755 dist/bin/mbus-publish.py ${DESTDIR}/usr/local/bin/mbus-publish.py
+	install -m 0755 dist/bin/mbus-subscribe ${DESTDIR}/usr/local/bin/mbus-subscribe
+	install -m 0755 dist/bin/mbus-subscribe.py ${DESTDIR}/usr/local/bin/mbus-subscribe.py
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
@@ -66,7 +66,7 @@ install: app src test
 
 	install -d ${DESTDIR}/var/www/html/mbus
 	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
-	install -m 0644 app/listener/mbus-listener.html ${DESTDIR}/var/www/html/mbus/mbus-listener.html
+	install -m 0644 app/subscribe/mbus-subscribe.html ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
 
 	install -d ${DESTDIR}/usr/local/bin
 	install -m 0755 test/execute-command/mbus-execute-command ${DESTDIR}/usr/local/bin/mbus-execute-command
@@ -84,11 +84,11 @@ install: app src test
 uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command.py
-	rm -f ${DESTDIR}/usr/local/bin/mbus-controller
-	rm -f ${DESTDIR}/usr/local/bin/mbus-event
-	rm -f ${DESTDIR}/usr/local/bin/mbus-event.py
-	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
-	rm -f ${DESTDIR}/usr/local/bin/mbus-listener.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe
+	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe.py
 	rm -f ${DESTDIR}/usr/local/bin/mbus-version
 	
 	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h
@@ -137,5 +137,5 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-file-transfer
 	
 	rm -f ${DESTDIR}/var/www/html/mbus/MBusClient.js
-	rm -f ${DESTDIR}/var/www/html/mbus/mbus-listener.html
+	rm -f ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
 	rm -f ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html

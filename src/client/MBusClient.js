@@ -4,11 +4,10 @@
 //module.exports = MBusClient
 
 const MBUS_METHOD_TYPE_COMMAND					= "org.mbus.method.type.command";
-const MBUS_METHOD_TYPE_STATUS					= "org.mbus.method.type.status";
-const MBUS_METHOD_TYPE_EVENT						= "org.mbus.method.type.event";
+const MBUS_METHOD_TYPE_EVENT					= "org.mbus.method.type.event";
 const MBUS_METHOD_TYPE_RESULT					= "org.mbus.method.type.result";
 
-const MBUS_METHOD_SEQUENCE_START					= 1;
+const MBUS_METHOD_SEQUENCE_START				= 1;
 const MBUS_METHOD_SEQUENCE_END					= 9999;
 
 const MBUS_METHOD_EVENT_SOURCE_ALL				= "org.mbus.method.event.source.all";
@@ -18,14 +17,12 @@ const MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS	= "org.mbus.method.event.destina
 
 const MBUS_METHOD_EVENT_IDENTIFIER_ALL			= "org.mbus.method.event.identifier.all";
 
-const MBUS_METHOD_STATUS_IDENTIFIER_ALL			= "org.mbus.method.event.status.all";
+const MBUS_SERVER_IDENTIFIER					= "org.mbus.server";
 
-const MBUS_SERVER_NAME							= "org.mbus.server";
-
-const MBUS_SERVER_COMMAND_CREATE					= "command.create";
+const MBUS_SERVER_COMMAND_CREATE				= "command.create";
 const MBUS_SERVER_COMMAND_EVENT					= "command.event";
-const MBUS_SERVER_COMMAND_RESULT					= "command.result";
-const MBUS_SERVER_COMMAND_STATUS					= "command.status";
+const MBUS_SERVER_COMMAND_RESULT				= "command.result";
+const MBUS_SERVER_COMMAND_STATUS				= "command.status";
 const MBUS_SERVER_COMMAND_CLIENT				= "command.client";
 const MBUS_SERVER_COMMAND_CLIENTS				= "command.clients";
 const MBUS_SERVER_COMMAND_SUBSCRIBE				= "command.subscribe";
@@ -33,19 +30,13 @@ const MBUS_SERVER_COMMAND_REGISTER				= "command.register";
 const MBUS_SERVER_COMMAND_UNSUBSCRIBE			= "command.unsubscribe";
 const MBUS_SERVER_COMMAND_CLOSE					= "command.close";
 
-const MBUS_SERVER_STATUS_CONNECTED				= "status.connected";
-const MBUS_SERVER_STATUS_DISCONNECTED			= "status.disconnected";
-const MBUS_SERVER_STATUS_SUBSCRIBED				= "status.subscribed";
-const MBUS_SERVER_STATUS_SUBSCRIBER				= "status.subscriber";
-const MBUS_SERVER_STATUS_UNSUBSCRIBED			= "status.unsubscribed";
+const MBUS_SERVER_EVENT_CONNECTED				= "org.mbus.server.event.connected";
+const MBUS_SERVER_EVENT_DISCONNECTED			= "org.mbus.server.event.disconnected";
+const MBUS_SERVER_EVENT_SUBSCRIBED				= "org.mbus.server.event.subscribed";
+const MBUS_SERVER_EVENT_UNSUBSCRIBED			= "org.mbus.server.event.unsubscribed";
 
-const MBUS_SERVER_EVENT_CONNECTED				= "event.connected";
-const MBUS_SERVER_EVENT_DISCONNECTED				= "event.disconnected";
-const MBUS_SERVER_EVENT_SUBSCRIBED				= "event.subscribed";
-const MBUS_SERVER_EVENT_UNSUBSCRIBED				= "event.unsubscribed";
-
-const MBUS_SERVER_EVENT_PING						= "event.ping";
-const MBUS_SERVER_EVENT_PONG						= "event.pong";
+const MBUS_SERVER_EVENT_PING					= "org.mbus.server.event.ping";
+const MBUS_SERVER_EVENT_PONG					= "org.mbus.server.event.pong";
 
 function MBusClientRequest (type, destination, identifier, sequence, payload, callback, context)
 {
@@ -191,7 +182,7 @@ function MBusClient (name = "", options = {} ) {
 
 	this._pingSend = function (mbc) {
 		console.log("ping");
-		mbc.eventTo(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PING, null);
+		mbc.eventTo(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PING, null);
 		mbc._pingCheckTimer = setTimeout(mbc._pingCheck, mbc._ping['timeout'], mbc)
 	}
 
@@ -227,7 +218,7 @@ function MBusClient (name = "", options = {} ) {
 		request = this._pendings[index];
 		this._pendings.splice(index, 1);
 		if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-		    request._destination == MBUS_SERVER_NAME &&
+		    request._destination == MBUS_SERVER_IDENTIFIER &&
 		    request._identifier == MBUS_SERVER_COMMAND_CREATE) {
 		    this._name = object['payload']['name'];
 		    this._ping = object['payload']['ping'];
@@ -244,13 +235,13 @@ function MBusClient (name = "", options = {} ) {
 			if (this._ping !== undefined &&
 				this._ping !== null &&
 				this._ping['interval'] > 0) {
-				this.subscribe(MBUS_SERVER_NAME, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
+				this.subscribe(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_EVENT_PONG, this._pongRecv, this)
 				this._pingSend(this);
 				this._pingTimer = setInterval(this._pingSend, this._ping['interval'], this);
 			}
 			this.onConnected();
 		} else if (request._type == MBUS_METHOD_TYPE_COMMAND &&
-		    request._destination == MBUS_SERVER_NAME &&
+		    request._destination == MBUS_SERVER_IDENTIFIER &&
 		    request._identifier == MBUS_SERVER_COMMAND_SUBSCRIBE) {
 			this.onSubscribed(request._payload['source'], request._payload['event']);
 		} else {
@@ -285,20 +276,6 @@ function MBusClient (name = "", options = {} ) {
 		})
 	}
 	
-	this._handleStatus = function (object) {
-		this._callbacks.forEach(function (callback) {
-			if (object['source'] !== callback._source) {
-				return;
-			}
-			if (callback._event !== MBUS_METHOD_STATUS_IDENTIFIER_ALL) {
-				if (object['identifier'] !== callback._event) {
-					return;
-				}
-			}
-			callback._callback(object['source'], object['identifier'], object['payload']);
-		})
-	}
-	
 	this._handleIncoming = function () {
 		while (this._incoming.length >= 4) {
 			var slice;
@@ -319,8 +296,6 @@ function MBusClient (name = "", options = {} ) {
 				this._handleResult(object);
 			} else if (object['type'] == MBUS_METHOD_TYPE_EVENT) {
 				this._handleEvent(object);
-			} else if (object['type'] == MBUS_METHOD_TYPE_STATUS) {
-				this._handleStatus(object);
 			} else {
 				console.log('unknown type:', object['type']);
 			}
@@ -355,7 +330,7 @@ MBusClient.prototype.connect = function (address = "ws://127.0.0.1:9000") {
 		this._pingTimer = null;
 		this._pingCheckTimer = null;
 		this._compression = null;
-		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
+		request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, this._sequence, options);
 		this._sequence += 1;
 		if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 			this._sequence = MBUS_METHOD_SEQUENCE_START;
@@ -427,7 +402,7 @@ MBusClient.prototype.subscribe = function (source, event, callback, context) {
 		source: source,
 		event: event,
 	};
-	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_NAME, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
+	request = MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, this._sequence, payload);
 	this._sequence += 1;
 	if (this._sequence >= MBUS_METHOD_SEQUENCE_END) {
 		this._sequence = MBUS_METHOD_SEQUENCE_START;
