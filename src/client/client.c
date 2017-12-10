@@ -863,11 +863,13 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	(void) context;
 	mbus_client_lock(client);
 	if (status != mbus_client_command_status_success) {
-		mbus_errorf("client command create failed");
+		mbus_errorf("client command create failed: %s", mbus_client_command_status_string(status));
 		if (status == mbus_client_command_status_internal_error) {
 			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
 		} else if (status == mbus_client_command_status_timeout) {
 			mbus_client_notify_connect(client, mbus_client_connect_status_timeout);
+		} else if (status == mbus_client_command_status_canceled) {
+			mbus_client_notify_connect(client, mbus_client_connect_status_canceled);
 		} else {
 			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
 		}
@@ -3741,6 +3743,7 @@ const char * mbus_client_connect_status_string (enum mbus_client_connect_status 
 		case mbus_client_connect_status_connection_refused:		return "connection refused";
 		case mbus_client_connect_status_server_unavailable:		return "server unavailable";
 		case mbus_client_connect_status_timeout:			return "connection timeout";
+		case mbus_client_connect_status_canceled:			return "connection canceled";
 		case mbus_client_connect_status_invalid_protocol_version:	return "invalid protocol version";
 		case mbus_client_connect_status_invalid_client_identfier:	return "invalid client identifier";
 		case mbus_client_connect_status_server_error:			return "server error";
