@@ -807,18 +807,22 @@ function MBusClient (options = null) {
 
 MBusClient.prototype.command = function (destination, command, payload, callback = null, context = null, timeout = null) {
     if (destination == null) {
-        throw "destination is invalid";
+        console.log("destination is invalid");
+        return -1;
     }
     if (command == null) {
-        throw "command is invalid";
+        console.log("command is invalid");
+        return -1;
     }
     if (command == MBUS_SERVER_COMMAND_CREATE) {
         if (this.__state != MBusClientState.Connecting) {
-            throw "client state is not connecting: {0}".format(this.__state);
+            console.log("client state is not connecting: {0}".format(this.__state));
+            return -1;
         }
     } else {
         if (this.__state != MBusClientState.Connected) {
-            throw "client state is not connected: {0}".format(this.__state);
+            console.log("client state is not connected: {0}".format(this.__state));
+            return -1;
         }
     }
     if (timeout == null ||
@@ -827,7 +831,8 @@ MBusClient.prototype.command = function (destination, command, payload, callback
     }
     request = new MBusClientRequest(MBUS_METHOD_TYPE_COMMAND, destination, command, this.__sequence, payload, callback, context, timeout);
     if (request == null) {
-        throw "can not create request";
+        console.log("can not create request");
+        return -1;
     }
     this.__sequence += 1
     if (this.__sequence >= MBUS_METHOD_SEQUENCE_END) {
@@ -840,20 +845,23 @@ MBusClient.prototype.command = function (destination, command, payload, callback
 
 MBusClient.prototype.subscribe = function (event, callback = null, context = null, source = null, timeout = null) {
 	if (this.__state != MBusClientState.Connected) {
-		throw "client state is not connected: {}".format(this.__state);
+		console.log("client state is not connected: {}".format(this.__state));
+		return -1;
 	}
 	if (source == null) {
 		source = MBUS_METHOD_EVENT_SOURCE_ALL;
 	}
 	if (event == null) {
-		throw "event is invalid";
+		console.log("event is invalid");
+		return -1;
 	}
 	subscriptions = this.__subscriptions.filter(function (subscription) {
 		return subscription.source == source &&
 		       subscription.identifier == event;
 	});
 	if (subscriptions.length != 0) {
-    	throw "subscription already exists";
+    	console.log("subscription already exists");
+		return -1;
 	}
     if (timeout == null ||
         timeout < 0) {
@@ -861,34 +869,39 @@ MBusClient.prototype.subscribe = function (event, callback = null, context = nul
     }
     subscription = new MBusClientSubscription(source, event, callback, context);
     if (subscription == null) {
-        throw "can not create subscription";
+        console.log("can not create subscription");
+		return -1;
     }
     payload = {};
     payload["source"] = source;
     payload["event"] = event;
     rc = this.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, this.__commandSubscribeResponse, subscription, timeout);
     if (rc != 0) {
-        throw "can not call subscribe command";
+        console.log("can not call subscribe command");
+		return -1;
     }
     return 0;
 }
 
 MBusClient.prototype.unsubscribe = function (event, source = null, timeout = null) {
 	if (this.__state != MBusClientState.Connected) {
-		throw "client state is not connected: {}".format(this.__state);
+		console.log("client state is not connected: {}".format(this.__state));
+		return -1;
 	}
 	if (source == null) {
 		source = MBUS_METHOD_EVENT_SOURCE_ALL;
 	}
 	if (event == null) {
-		throw "event is invalid";
+		console.log("event is invalid");
+		return -1;
 	}
 	subscriptions = this.__subscription.filter(function (subscription) {
 		return subscription.source == source &&
 		       subscription.identifier == event;
 	});
 	if (subscriptions.length != 1) {
-    	throw "can not find subscription";
+    	console.log("can not find subscription");
+		return -1;
 	}
 	subscription = subscriptions[0];
     payload = {};
@@ -896,17 +909,20 @@ MBusClient.prototype.unsubscribe = function (event, source = null, timeout = nul
     payload["event"] = event;
     rc = this.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, this.__commandUnsubscribeResponse, subscription, timeout);
     if (rc != 0) {
-        throw "can not call unsubscribe command";
+        console.log("can not call unsubscribe command");
+		return -1;
     }
     return 0;
 }
 
 MBusClient.prototype.publish  = function (event, payload = null, qos = null, destination = null, timeout = null) {
 	if (this.__state != MBusClientState.Connected) {
-		throw "client state is not connected: {0}".format(this.__state);
+		console.log("client state is not connected: {0}".format(this.__state));
+		return -1;
 	}
 	if (event == null) {
-		throw "event is invalid";
+		console.log("event is invalid");
+		return -1;
 	}
 	if (qos == null) {
 		qos = MBusClientQoS.AtMostOnce
@@ -921,7 +937,8 @@ MBusClient.prototype.publish  = function (event, payload = null, qos = null, des
 	if (qos == MBusClientQoS.AtMostOnce) {
 		request = new MBusClientRequest(MBUS_METHOD_TYPE_EVENT, destination, event, this.__sequence, payload, null, null, timeout);
 		if (request == null) {
-			throw "can not create request";
+			console.log("can not create request");
+			return -1;
 		}
 		this.__sequence += 1;
 		if (this.__sequence >= MBUS_METHOD_SEQUENCE_END) {
@@ -936,7 +953,8 @@ MBusClient.prototype.publish  = function (event, payload = null, qos = null, des
 		cpayload[MBUS_METHOD_TAG_PAYLOAD] = payload;
 		this.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, this.__commandEventResponse, null, timeout);
 	} else {
-		throw "qos: {0} is invalid".format(qos);
+		console.log("qos: {0} is invalid".format(qos));
+		return -1;
 	}
 	return 0;
 }
