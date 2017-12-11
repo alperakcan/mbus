@@ -29,6 +29,7 @@
 				output = document.getElementById("output");
 				
 				mbcOptions = new MBusClientOptions();
+				mbcOptions.connectInterval = 1000;
 				mbcOptions.serverAddress = address;
 				mbcOptions.onConnect = function (client, context, status) {
 					console.log("connect status: {0}, {1}".format(status, MBusClientConnectStatusString(status)));

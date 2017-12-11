@@ -509,7 +509,8 @@ function MBusClient (options = null) {
 		}
 	}
 
-	this.__timer = setInterval(function __timerCallback(thiz) {
+	this.__connectTime = null;
+	this.__pingTimer = setInterval(function __pingTimerCallback(thiz) {
 		if (thiz.__state == MBusClientState.Connected &&
 			thiz.__pingInterval > 0) {
 			current = mbus_clock_get();
@@ -943,6 +944,8 @@ MBusClient.prototype.publish  = function (event, payload = null, qos = null, des
 MBusClient.prototype.connect = function () {
 	var address;
 	address = this.__options.serverProtocol + "://" + this.__options.serverAddress + ":" + this.__options.serverPort;
+
+	console.log("conecting: {0}".format(address));
 	
 	this.__reset();
 	this.__socket = new WebSocket(address, 'mbus');
@@ -990,6 +993,13 @@ MBusClient.prototype.connect = function () {
         }
         if (this.__options.connectInterval > 0) {
             this.__state = MBusClientState.Connecting;
+            if (this.__connectTimer != null) {
+            	clearTimeout(this.__connectTimer);
+            	this.__connectTimer = null;
+            }
+        	this.__connectTimer = setTimeout(function __connectTimerCallback(thiz) {
+        		thiz.connect();
+        	}, this.__options.connectInterval, this);
         } else {
         	this.__state = MBusClientState.Disconnected;
         }
