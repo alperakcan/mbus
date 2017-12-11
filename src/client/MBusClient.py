@@ -141,9 +141,10 @@ class MBusClientConnectStatus:
     ConnectionRefused       = 3
     ServerUnavailable       = 4
     Timeout                 = 5
-    InvalidProtocolVersion  = 6
-    InvalidClientIdentifier = 7
-    ServerError             = 8
+    Canceled                = 6
+    InvalidProtocolVersion  = 7
+    InvalidClientIdentifier = 8
+    ServerError             = 9
     
 def MBusClientConnectStatusString (status):
     if (status == MBusClientConnectStatus.Success):
@@ -157,7 +158,9 @@ def MBusClientConnectStatusString (status):
     if (status == MBusClientConnectStatus.ServerUnavailable):
         return "server unavailable"
     if (status == MBusClientConnectStatus.Timeout):
-        return "timeout"
+        return "connection timeout"
+    if (status == MBusClientConnectStatus.Canceled):
+        return "connection canceled"
     if (status == MBusClientConnectStatus.InvalidProtocolVersion):
         return "invalid protocol version"
     if (status == MBusClientConnectStatus.InvalidClientIdentifier):
@@ -595,6 +598,8 @@ class MBusClient (object):
                 this.__notifyConnect(MBusClientConnectStatus.ServerError)
             elif (status == MBusClientCommandStatus.Timeout):
                 this.__notifyConnect(MBusClientConnectStatus.Timeout)
+            elif (status == MBusClientCommandStatus.Canceled):
+                this.__notifyConnect(MBusClientConnectStatus.Canceled)
             else:
                 this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
