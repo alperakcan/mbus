@@ -1,3 +1,4 @@
+#!/usr/bin/python
 
 #
 # Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
@@ -25,8 +26,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
-#!/usr//bin/python
 
 import sys
 import getopt
@@ -160,7 +159,8 @@ class onParam(object):
     
 def onCommandCallback (client, context, message, status):
     if (message.getResponseStatus() == 0):
-        print("{}".format(json.dumps(message.getResponsePayload())))
+        if (message.getResponsePayload() != None):
+            print("{}".format(json.dumps(message.getResponsePayload())))
     context.status = message.getResponseStatus()
     context.finished = 1
 

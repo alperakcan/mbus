@@ -424,7 +424,7 @@ class MBusClientMessageCommand (object):
         return self.__response[MBUS_METHOD_TAG_STATUS]
 
     def getResponsePayload (self):
-        return self.__response[MBUS_METHOD_TAG_PAYLOAD]
+        return self.__response.get(MBUS_METHOD_TAG_PAYLOAD)
 
 class MBusClient (object):
     
