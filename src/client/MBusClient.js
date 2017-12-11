@@ -805,7 +805,7 @@ function MBusClient (options = null) {
 	}
 }
 
-MBusClient.prototype.command = function (destination, command, payload, callback, context = null, timeout = null) {
+MBusClient.prototype.command = function (destination, command, payload, callback = null, context = null, timeout = null) {
     if (destination == null) {
         throw "destination is invalid";
     }
