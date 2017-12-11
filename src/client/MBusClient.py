@@ -913,7 +913,7 @@ class MBusClient (object):
     def unregister (self, command):
         raise ValueError("not implemented yet")
     
-    def command (self, destination, command, payload, callback, context = None, timeout = None):
+    def command (self, destination, command, payload, callback = None, context = None, timeout = None):
         if (destination == None):
             raise ValueError("destination is invalid")
         if (command == None):
