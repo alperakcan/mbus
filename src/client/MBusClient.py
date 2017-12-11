@@ -472,8 +472,8 @@ class MBusClient (object):
             self.__socket.close()
             self.__socket = None
         
-        self.__incoming = ""
-        self.__outgoing = ""
+        self.__incoming = bytearray()
+        self.__outgoing = bytearray()
         
         for request in self.__requests:
             if (request.type == MBUS_METHOD_TYPE_EVENT):
@@ -1074,7 +1074,7 @@ class MBusClient (object):
             raise ValueError("poll failed")
         except KeyboardInterrupt:
             raise ValueError("poll failed")
-        except select.error, error:
+        except select.error as error:
             if (error.errno != errno.EINTR): 
                 raise ValueError("poll failed")
         except:
@@ -1144,13 +1144,13 @@ class MBusClient (object):
         current = mbus_clock_get()
 
         while len(self.__incoming) >= 4:
-            dlen, = struct.unpack("!I", str(self.__incoming[0:4]))
+            dlen, = struct.unpack("!I", self.__incoming[0:4])
             if (dlen > len(self.__incoming) - 4):
                 break
             slice = self.__incoming[4:4 + dlen]
             self.__incoming = self.__incoming[4 + dlen:]
-            #print("recv: {}".format(slice))
-            object = json.loads(slice)
+            #print("recv: {}".format(slice.decode("utf-8")))
+            object = json.loads(slice.decode("utf-8"))
             if (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_RESULT):
                 self.__handleResult(object)
             elif (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_EVENT):
@@ -1234,7 +1234,7 @@ class MBusClient (object):
 
         while (len(self.__requests) > 0):
             request = self.__requests.popleft()
-            data = request.__str__()
+            data = bytearray(request.__str__().encode())
             dlen = struct.pack("!I", len(data))
             self.__outgoing += dlen
             self.__outgoing += data
