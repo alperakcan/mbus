@@ -173,6 +173,7 @@ class MBusClientDisconnectStatus:
     Success          = 0
     InternalError    = 1
     ConnectionClosed = 2
+    Canceled         = 3
 
 def MBusClientDisconnectStatusString (status):
     if (status == MBusClientDisconnectStatus.Success):
@@ -563,23 +564,27 @@ class MBusClient (object):
                 this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
             this.__state = MBusClientState.Disconnected
+            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
             return
         if (message.getResponseStatus() != 0):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
             this.__state = MBusClientState.Disconnected
+            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
             return
         payload = message.getResponsePayload()
         if (payload == None):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
             this.__state = MBusClientState.Disconnected
+            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
             return
         this.__identifier = payload["identifier"]
         if (this.__identifier == None):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
             this.__state = MBusClientState.Disconnected
+            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
             return
         this.__pingInterval = payload["ping"]["interval"]
         this.__pingTimeout = payload["ping"]["timeout"]
@@ -638,6 +643,7 @@ class MBusClient (object):
                 self.__state = MBusClientState.Connecting
             else:
                 self.__state = MBusClientState.Disconnected
+                self.__notifyDisonnect(MBusClientDisconnectStatus.Canceled)
             return 0
         else:
             self.__notifyConnect(status)
@@ -998,8 +1004,8 @@ class MBusClient (object):
             pass
         elif (self.__state == MBusClientState.Disconnecting):
             self.__reset()
-            self.__notifyDisonnect(MBusClientDisconnectStatus.Success)
             self.__state = MBusClientState.Disconnected
+            self.__notifyDisonnect(MBusClientDisconnectStatus.Success)
             return 0
         elif (self.__state == MBusClientState.Disconnected):
             if (self.__options.connectInterval > 0):
@@ -1064,9 +1070,9 @@ class MBusClient (object):
                             pass
                         raise ValueError("recv failed")
                     if (len(data) == 0):
-                        self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
                         self.__reset()
                         self.__state = MBusClientState.Disconnected
+                        self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
                         return 0
                     self.__incoming += data
             
@@ -1084,6 +1090,7 @@ class MBusClient (object):
                                 self.__state = MBusClientState.Connecting
                             else:
                                 self.__state = MBusClientState.Disconnected
+                                self.__notifyDisonnect(MBusClientDisconnectStatus.Canceled)
                             return 0
                         else:
                             self.__notifyConnect(MBusClientConnectStatus.InternalError)

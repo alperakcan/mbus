@@ -22,6 +22,11 @@ install: app src test
 	install -m 0755 dist/bin/mbus-subscribe ${DESTDIR}/usr/local/bin/mbus-subscribe
 	install -m 0755 dist/bin/mbus-subscribe.py ${DESTDIR}/usr/local/bin/mbus-subscribe.py
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
+
+	install -m 0755 dist/bin/mbus-test-file-transfer ${DESTDIR}/usr/local/bin/mbus-test-file-transfer
+	install -m 0755 dist/bin/mbus-test-execute-command ${DESTDIR}/usr/local/bin/mbus-test-execute-command
+	install -m 0755 dist/bin/mbus-test-logger-publish ${DESTDIR}/usr/local/bin/mbus-test-logger-publish
+	install -m 0755 dist/bin/mbus-test-logger-subscribe ${DESTDIR}/usr/local/bin/mbus-test-logger-subscribe
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
 	install -m 0644 dist/include/mbus/buffer.h ${DESTDIR}/usr/local/include/mbus/buffer.h
@@ -68,14 +73,6 @@ install: app src test
 	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
 	install -m 0644 app/subscribe/mbus-subscribe.html ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
 
-	install -d ${DESTDIR}/usr/local/bin
-	install -m 0755 test/execute-command/mbus-execute-command ${DESTDIR}/usr/local/bin/mbus-execute-command
-
-	install -d ${DESTDIR}/usr/local/bin
-	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
-	install -m 0755 test/file-transfer/mbus-file-transfer ${DESTDIR}/usr/local/bin/mbus-file-transfer
-	install -m 0644 test/file-transfer/mbus-file-transfer.html ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html
-	
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-client.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-server.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
@@ -133,9 +130,10 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
 
-	rm -f ${DESTDIR}/usr/local/bin/mbus-execute-command
-	rm -f ${DESTDIR}/usr/local/bin/mbus-file-transfer
+	rm -f ${DESTDIR}/usr/local/bin/mbus-test-execute-command
+	rm -f ${DESTDIR}/usr/local/bin/mbus-test-file-transfer
+	rm -f ${DESTDIR}/usr/local/bin/mbus-test-logger-publish
+	rm -f ${DESTDIR}/usr/local/bin/mbus-test-logger-subscribe
 	
 	rm -f ${DESTDIR}/var/www/html/mbus/MBusClient.js
 	rm -f ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
-	rm -f ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html

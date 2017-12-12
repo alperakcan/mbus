@@ -2,17 +2,17 @@
 include ../../Makefile.conf
 
 target-y = \
-	mbus-execute-command
+	mbus-test-execute-command
 
-mbus-execute-command_files-y = \
+mbus-test-execute-command_files-y = \
 	clock.c \
 	exec.c \
 	execute-command.c
 
-mbus-execute-command_cflags-y = \
+mbus-test-execute-command_cflags-y = \
 	-I../../dist/include
 
-mbus-execute-command_ldflags-y = \
+mbus-test-execute-command_ldflags-y = \
 	-L../../dist/lib \
 	-lmbus-client \
 	-lmbus-socket \
@@ -24,15 +24,20 @@ mbus-execute-command_ldflags-y = \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-execute-command_ldflags-${SSL_ENABLE} += \
+mbus-test-execute-command_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-execute-command_ldflags-${ZLIB_ENABLE} += \
+mbus-test-execute-command_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-execute-command_ldflags-y += \
+mbus-test-execute-command_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
+
+distdir = ../../dist
+
+dist.bin-y = \
+	mbus-test-execute-command
 
 include ../../Makefile.lib

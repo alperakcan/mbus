@@ -2,16 +2,16 @@
 include ../../Makefile.conf
 
 target-y = \
-	mbus-file-transfer
+	mbus-test-file-transfer
 
-mbus-file-transfer_files-y = \
+mbus-test-file-transfer_files-y = \
 	base64.c \
 	file-transfer.c
 
-mbus-file-transfer_cflags-y = \
+mbus-test-file-transfer_cflags-y = \
 	-I../../dist/include
 
-mbus-file-transfer_ldflags-y = \
+mbus-test-file-transfer_ldflags-y = \
 	-L../../dist/lib \
 	-lmbus-client \
 	-lmbus-socket \
@@ -23,15 +23,20 @@ mbus-file-transfer_ldflags-y = \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-file-transfer_ldflags-${SSL_ENABLE} += \
+mbus-test-file-transfer_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-file-transfer_ldflags-${ZLIB_ENABLE} += \
+mbus-test-file-transfer_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-file-transfer_ldflags-y += \
+mbus-test-file-transfer_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
+
+distdir = ../../dist
+
+dist.bin-y = \
+	mbus-test-file-transfer
 
 include ../../Makefile.lib
