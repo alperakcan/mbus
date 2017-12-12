@@ -1,8 +1,7 @@
 
 subdir-y += \
-	file-transfer
-
-subdir-y += \
-	execute-command
+	file-transfer \
+	execute-command \
+	logger
 
 include ../Makefile.lib
