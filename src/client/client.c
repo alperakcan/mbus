@@ -873,23 +873,17 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		} else {
 			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
 		}
-		mbus_client_reset(client);
-		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
 	if (mbus_client_message_command_response_status(message) != 0) {
 		mbus_errorf("client command create failed");
 		mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
-		mbus_client_reset(client);
-		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
 	response = mbus_client_message_command_response_payload(message);
 	if (response == NULL) {
 		mbus_errorf("message response is invalid");
 		mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
-		mbus_client_reset(client);
-		client->state = mbus_client_state_disconnected;
 		goto bail;
 	}
 	{
@@ -897,8 +891,6 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		identifier = mbus_json_get_string_value(response, "identifier", NULL);
 		if (identifier == NULL) {
 			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
-			mbus_client_reset(client);
-			client->state = mbus_client_state_disconnected;
 			goto bail;
 		}
 		if (client->identifier != NULL) {
@@ -908,8 +900,6 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		if (client->identifier == NULL) {
 			mbus_errorf("can not allocate memory");
 			mbus_client_notify_connect(client, mbus_client_connect_status_internal_error);
-			mbus_client_reset(client);
-			client->state = mbus_client_state_disconnected;
 			goto bail;
 		}
 	}
@@ -934,7 +924,10 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	mbus_client_notify_connect(client, mbus_client_connect_status_success);
 	mbus_client_unlock(client);
 	return;
-bail:	mbus_client_unlock(client);
+bail:	mbus_client_reset(client);
+	client->state = mbus_client_state_disconnected;
+	mbus_client_notify_disconnect(client, mbus_client_disconnect_status_internal_error);
+	mbus_client_unlock(client);
 	return;
 }
 
@@ -1176,6 +1169,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 			client->state = mbus_client_state_connecting;
 		} else {
 			client->state = mbus_client_state_disconnected;
+			mbus_client_notify_disconnect(client, mbus_client_disconnect_status_canceled);
 		}
 	}
 	return 0;
@@ -2379,6 +2373,7 @@ int mbus_client_publish_options_default (struct mbus_client_publish_options *opt
 		goto bail;
 	}
 	memset(options, 0, sizeof(struct mbus_client_publish_options));
+	options->qos = mbus_client_qos_at_most_once;
 	return 0;
 bail:	return -1;
 }
@@ -3095,8 +3090,8 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	} else if (client->state == mbus_client_state_connected) {
 	} else if (client->state == mbus_client_state_disconnecting) {
 		mbus_client_reset(client);
-		mbus_client_notify_disconnect(client, mbus_client_disconnect_status_success);
 		client->state = mbus_client_state_disconnected;
+		mbus_client_notify_disconnect(client, mbus_client_disconnect_status_success);
 		goto out;
 	} else if (client->state == mbus_client_state_disconnected) {
 		if (client->options->connect_interval > 0) {
@@ -3217,9 +3212,9 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			} else if (errno == EWOULDBLOCK) {
 			} else {
 				mbus_errorf("connection reset by server");
-				mbus_client_notify_disconnect(client, mbus_client_disconnect_status_connection_closed);
 				mbus_client_reset(client);
 				client->state = mbus_client_state_disconnected;
+				mbus_client_notify_disconnect(client, mbus_client_disconnect_status_connection_closed);
 				goto out;
 			}
 		} else {
@@ -3277,6 +3272,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 					client->state = mbus_client_state_connecting;
 				} else {
 					client->state = mbus_client_state_disconnected;
+					mbus_client_notify_disconnect(client, mbus_client_disconnect_status_canceled);
 				}
 				goto out;
 			} else {
@@ -3457,6 +3453,7 @@ out:
 				client->state = mbus_client_state_connecting;
 			} else {
 				client->state = mbus_client_state_disconnected;
+				mbus_client_notify_disconnect(client, mbus_client_disconnect_status_internal_error);
 			}
 			goto out;
 		}
