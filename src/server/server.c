@@ -3299,7 +3299,8 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					} else {
 						read_rc += rc;
 					}
-				} while (SSL_pending(client->ssl.ssl));
+				} while (read_rc > 0 &&
+					 SSL_pending(client->ssl.ssl));
 			}
 #endif
 			if (read_rc <= 0) {
