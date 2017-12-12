@@ -636,6 +636,11 @@ static void mbus_client_reset (struct mbus_client *client)
 		mbus_socket_destroy(client->socket);
 		client->socket = NULL;
 	}
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (client->ssl.ssl != NULL) {
+		SSL_clear(client->ssl.ssl);
+	}
+#endif
 	if (client->incoming != NULL) {
 		mbus_buffer_reset(client->incoming);
 	}
@@ -3203,7 +3208,8 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 					} else {
 						read_rc += rc;
 					}
-				} while (SSL_pending(client->ssl.ssl));
+				} while (read_rc > 0 &&
+				         SSL_pending(client->ssl.ssl));
 			}
 #endif
 		if (read_rc <= 0) {
