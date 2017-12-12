@@ -397,24 +397,20 @@ run
 
     mbus-broker --help
 
-create certificate authority
-- enter password when requested
+create certificate authority, enter password when requested
 
     openssl req -new -x509 -days 365 -extensions v3_ca -keyout mbus-ca.key -out mbus-ca.crt
 
-generate server certificate and key
-- do not enter any password, just press enter
+generate server certificate and key, do not enter any password
 
     openssl genrsa -out mbus-server.key 2048
     openssl req -out mbus-server.csr -key mbus-server.key -new -newkey rsa:4096 -sha256
 
-add csr to the ca
-- enter password used for ca authority
+add csr to the ca, enter password used for ca authority
 
     openssl x509 -req -in mbus-server.csr -CA mbus-ca.crt -CAkey mbus-ca.key -CAcreateserial -out mbus-server.crt -days 365
 
-execute broker with ssl support
-- disable non-ssl listeners
+execute broker with ssl support, disable non-ssl listeners
 
     mbus-broker \
       --mbus-debug-level info \
