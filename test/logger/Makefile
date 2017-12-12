@@ -2,19 +2,19 @@
 include ../../Makefile.conf
 
 target-y += \
-	mbus-logger-publish \
-	mbus-logger-subscribe
+	mbus-test-logger-publish \
+	mbus-test-logger-subscribe
 
-mbus-logger-publish_files-y += \
+mbus-test-logger-publish_files-y += \
 	publish.c
 
-mbus-logger-publish_includes-y += \
+mbus-test-logger-publish_includes-y += \
 	../../dist/include
 
-mbus-logger-publish_libraries-y += \
+mbus-test-logger-publish_libraries-y += \
 	../../dist/lib
 
-mbus-logger-publish_ldflags-y += \
+mbus-test-logger-publish_ldflags-y += \
 	-lmbus-client \
 	-lmbus-socket \
 	-lmbus-json \
@@ -36,16 +36,16 @@ mbus-file-publish_ldflags-y += \
 	-lm \
 	-ldl
 
-mbus-logger-subscribe_files-y += \
+mbus-test-logger-subscribe_files-y += \
 	subscribe.c
 
-mbus-logger-subscribe_includes-y += \
+mbus-test-logger-subscribe_includes-y += \
 	../../dist/include
 
-mbus-logger-subscribe_libraries-y += \
+mbus-test-logger-subscribe_libraries-y += \
 	../../dist/lib
 
-mbus-logger-subscribe_ldflags-y += \
+mbus-test-logger-subscribe_ldflags-y += \
 	-lmbus-client \
 	-lmbus-socket \
 	-lmbus-json \
@@ -66,5 +66,11 @@ mbus-file-subscribe_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
+
+distdir = ../../dist
+
+dist.bin-y = \
+	mbus-test-logger-publish \
+	mbus-test-logger-subscribe
 
 include ../../Makefile.lib
