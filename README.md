@@ -23,8 +23,10 @@ and applications. enabling development of component based distributed applicatio
     - <a href="#71-certificate-authority">certificate authority</a>
     - <a href="#72-server">server</a>
     - <a href="#73-client">client</a>
-8. <a href="#8-contact">contact</a>
-9. <a href="#9-license">license</a>
+8. <a href="#8-tests">tests</a>
+    - <a href="#81-logger">logger</a>
+9. <a href="#9-contact">contact</a>
+10. <a href="#10-license">license</a>
 
 ## 1. overview ##
 
@@ -378,12 +380,76 @@ send the csr to the ca, or sign it with you ca key
 
     openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 365
 
-## 8. contact ##
+## 8. tests ##
+
+### 8.1 logger ###
+
+build & install
+
+    git clone https://github.com/alperakcan/mbus.git mbus.git
+    cd mbus.git
+    git submodule update --init --recursive
+    make -j
+    sudo make install
+    sudo ldconfig
+
+run
+
+    mbus-broker --help
+
+create certificate authority, enter password when requested
+
+    openssl req -new -x509 -days 365 -extensions v3_ca -keyout mbus-ca.key -out mbus-ca.crt
+
+generate server certificate and key, do not enter any password
+
+    openssl genrsa -out mbus-server.key 2048
+    openssl req -out mbus-server.csr -key mbus-server.key -new -newkey rsa:4096 -sha256
+
+add csr to the ca, enter password used for ca authority
+
+    openssl x509 -req -in mbus-server.csr -CA mbus-ca.crt -CAkey mbus-ca.key -CAcreateserial -out mbus-server.crt -days 365
+
+execute broker with ssl support, disable non-ssl listeners
+
+    mbus-broker \
+      --mbus-debug-level info \
+      --mbus-server-tcp-enable 0 --mbus-server-tcp-address 0.0.0.0 --mbus-server-tcp-port 8000 \
+      --mbus-server-uds-enable 0 --mbus-server-uds-address /tmp/mbus-server-uds --mbus-server-uds-port 0 \
+      --mbus-server-ws-enable 0 --mbus-server-ws-address 0.0.0.0 --mbus-server-ws-port 9000 \
+      --mbus-server-tcps-enable 1 --mbus-server-tcps-address 0.0.0.0 --mbus-server-tcps-port 8001 --mbus-server-tcps-certificate mbus-server.crt --mbus-server-tcps-privatekey mbus-server.key \
+      --mbus-server-udss-enable 1 --mbus-server-udss-address /tmp/mbus-server-udss --mbus-server-udss-port 0 --mbus-server-udss-certificate mbus-server.crt --mbus-server-udss-privatekey mbus-server.key \
+      --mbus-server-wss-enable 1 --mbus-server-wss-address 0.0.0.0 --mbus-server-wss-port 9001 --mbus-server-wss-certificate mbus-server.crt --mbus-server-wss-privatekey mbus-server.key
+
+publish
+
+    mbus-test-logger-publish --help
+
+    mbus-test-logger-publish \
+      --qos 1 \
+      --mbus-client-identifier org.mbus.client.test.logger.publish.0 \
+      --mbus-client-server-protocol tcps --mbus-client-server-address 104.236.206.233 --mbus-client-server-port 8001 \
+      --mbus-client-connect-timeout 30000 --mbus-client-connect-interval 5000 \
+      --mbus-client-ping-interval 10000 --mbus-client-ping-timeout 5000 --mbus-client-ping-threshold 2
+
+subscribe
+
+    mbus-test-logger-subscribe --help
+
+    mbus-test-logger-subscribe \
+      --qos 1 \
+      --calback 1 \
+      --mbus-client-identifier org.mbus.client.test.logger.subscribe.0 \
+      --mbus-client-server-protocol tcps --mbus-client-server-address 104.236.206.233 --mbus-client-server-port 8001 \
+      --mbus-client-connect-timeout 30000 --mbus-client-connect-interval 5000 \
+      --mbus-client-ping-interval 10000 --mbus-client-ping-timeout 5000 --mbus-client-ping-threshold 2
+
+## 9. contact ##
 
 if you are using the software and/or have any questions, suggestions, etc.
 please contact with me at alper.akcan@gmail.com
 
-## 9. license ##
+## 10. license ##
 
 ### mBus Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com> ###
 
