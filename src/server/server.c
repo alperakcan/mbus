@@ -906,6 +906,7 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		info.ssl_private_key_filepath = privatekey;
 //		info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
 		info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+		lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
 		listener->u.ws.context = lws_create_context(&info);
 		if (listener->u.ws.context == NULL) {
 			mbus_errorf("can not create ws context for: '%s:%s:%d'", "wss", address, port);
