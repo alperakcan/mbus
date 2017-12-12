@@ -3638,15 +3638,15 @@ int mbus_server_options_default (struct mbus_server_options *options)
 	options->udss.enabled = MBUS_SERVER_UDSS_ENABLE;
 	options->udss.address = MBUS_SERVER_UDSS_ADDRESS;
 	options->udss.port = MBUS_SERVER_UDSS_PORT;
-	options->udss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
-	options->udss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
+	options->udss.certificate = MBUS_SERVER_UDSS_CERTIFICATE;
+	options->udss.privatekey = MBUS_SERVER_UDSS_PRIVATEKEY;
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	options->wss.enabled = MBUS_SERVER_WSS_ENABLE;
 	options->wss.address = MBUS_SERVER_WSS_ADDRESS;
 	options->wss.port = MBUS_SERVER_WSS_PORT;
-	options->wss.certificate = MBUS_SERVER_TCPS_CERTIFICATE;
-	options->wss.privatekey = MBUS_SERVER_TCPS_PRIVATEKEY;
+	options->wss.certificate = MBUS_SERVER_WSS_CERTIFICATE;
+	options->wss.privatekey = MBUS_SERVER_WSS_PRIVATEKEY;
 #endif
 #endif
 	return 0;
@@ -3736,10 +3736,10 @@ int mbus_server_options_from_argv (struct mbus_server_options *options, int argc
 				options->udss.port = atoi(optarg);
 				break;
 			case OPTION_SERVER_UDSS_CERTIFICATE:
-				options->tcps.certificate = optarg;
+				options->udss.certificate = optarg;
 				break;
 			case OPTION_SERVER_UDSS_PRIVATEKEY:
-				options->tcps.privatekey = optarg;
+				options->udss.privatekey = optarg;
 				break;
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 			case OPTION_SERVER_WSS_ENABLE:
@@ -3890,7 +3890,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 		struct listener *listener;
 		listener = listener_create(listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
 		if (listener == NULL) {
-			mbus_infof("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
+			mbus_errorf("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 		} else {
 			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 			mbus_infof("listening from: '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
@@ -3900,7 +3900,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 		struct listener *listener;
 		listener = listener_create(listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
 		if (listener == NULL) {
-			mbus_infof("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
+			mbus_errorf("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 		} else {
 			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 			mbus_infof("listening from: '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
@@ -3912,7 +3912,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 		struct listener *listener;
 		listener = listener_create(listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
 		if (listener == NULL) {
-			mbus_infof("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
+			mbus_errorf("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 		} else {
 			TAILQ_INSERT_TAIL(&server->listeners, listener, listeners);
 			mbus_infof("listening from: '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
