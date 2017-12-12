@@ -26,7 +26,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,17 +44,6 @@ struct mbus_buffer {
 	uint8_t *buffer;
 };
 
-void mbus_buffer_destroy (struct mbus_buffer *buffer)
-{
-	if (buffer == NULL) {
-		return;
-	}
-	if (buffer->buffer != NULL) {
-		free(buffer->buffer);
-	}
-	free(buffer);
-}
-
 struct mbus_buffer * mbus_buffer_create (void)
 {
 	struct mbus_buffer *buffer;
@@ -72,12 +60,32 @@ bail:	if (buffer != NULL) {
 	return NULL;
 }
 
-unsigned int mbus_buffer_size (struct mbus_buffer *buffer)
+void mbus_buffer_destroy (struct mbus_buffer *buffer)
+{
+	if (buffer == NULL) {
+		return;
+	}
+	if (buffer->buffer != NULL) {
+		free(buffer->buffer);
+	}
+	free(buffer);
+}
+
+int mbus_buffer_reset (struct mbus_buffer *buffer)
+{
+	if (buffer == NULL) {
+		return -1;
+	}
+	buffer->length = 0;
+	return 0;
+}
+
+unsigned int mbus_buffer_get_size (struct mbus_buffer *buffer)
 {
 	return buffer->size;
 }
 
-unsigned int mbus_buffer_length (struct mbus_buffer *buffer)
+unsigned int mbus_buffer_get_length (struct mbus_buffer *buffer)
 {
 	return buffer->length;
 }
@@ -91,7 +99,7 @@ int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length)
 	return 0;
 }
 
-uint8_t * mbus_buffer_base (struct mbus_buffer *buffer)
+uint8_t * mbus_buffer_get_base (struct mbus_buffer *buffer)
 {
 	return buffer->buffer;
 }

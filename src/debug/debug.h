@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,8 @@
 enum mbus_debug_level {
 	mbus_debug_level_silent,
 	mbus_debug_level_error,
+	mbus_debug_level_warning,
+	mbus_debug_level_notice,
 	mbus_debug_level_info,
 	mbus_debug_level_debug,
 };
@@ -41,6 +43,14 @@ extern enum mbus_debug_level mbus_debug_level;
 
 #define mbus_debugf(a...) { \
 	mbus_debug_printf(mbus_debug_level_debug, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+}
+
+#define mbus_warningf(a...) { \
+	mbus_debug_printf(mbus_debug_level_warning, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+}
+
+#define mbus_noticef(a...) { \
+	mbus_debug_printf(mbus_debug_level_notice, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
 }
 
 #define mbus_infof(a...) { \

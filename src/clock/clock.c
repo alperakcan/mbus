@@ -1,33 +1,44 @@
 
-#if defined(__APPLE__) && defined(__MACH__)
+/*
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the <Alper Akcan> nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #include <time.h>
-#include <errno.h>
-#include <sys/sysctl.h>
 
 unsigned long mbus_clock_get (void)
 {
-    struct timeval boottime;
-    size_t len = sizeof(boottime);
-    int mib[2] = { CTL_KERN, KERN_BOOTTIME };
-    if (sysctl(mib, 2, &boottime, &len, NULL, 0) < 0) {
-        return 0;
-    }
-    time_t bsec = boottime.tv_sec, csec = time(NULL);
-
-    return ((unsigned long) difftime(csec, bsec)) * 1000;
+	struct timespec ts;
+	unsigned long long tsec;
+	unsigned long long tusec;
+	unsigned long long _clock;
+	if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) < 0) {
+		return 0;
+	}
+	tsec = ((unsigned long long) ts.tv_sec) * 1000;
+	tusec = ((unsigned long long) ts.tv_nsec) / 1000 / 1000;
+	_clock = tsec + tusec;
+	return _clock;
 }
-
-#else
-
-#include <time.h>
-#include <sys/sysinfo.h>
-
-unsigned long mbus_clock_get (void)
-{
-	struct sysinfo info;
-	sysinfo(&info);
-	return info.uptime * 1000;
-}
-
-#endif

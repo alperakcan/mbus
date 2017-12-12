@@ -1,4 +1,31 @@
 
+/*
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the <Alper Akcan> nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,46 +41,95 @@
 
 #include "base64.h"
 
-static int o_r;
-static int o_l;
-static const char *o_p;
-static int o_w;
-static const char *o_s;
-static const char *o_d;
-static const char *o_n;
-static int o_t;
+#define DEFAULT_MODE		mode_receiver
+#define DEFAULT_IDENTIFIER	"org.mbus.client.file-transfer"
+#define DEFAULT_PREFIX		"./"
+#define DEFAULT_TIMEOUT		30000
 
-static struct option options[] = {
-	{"reader"		, no_argument		, 0, 'r' },
-	{"writer"		, no_argument		, 0, 'w' },
+enum mode {
+	mode_unknown,
+	mode_receiver,
+	mode_sender,
+};
+
+struct receiver_param {
+	const char *prefix;
+	int result;
+	int finished;
+};
+
+struct sender_param {
+	const char *identifier;
+	const char *source;
+	const char *destination;
+	int timeout;
+	int status;
+	int finished;
+};
+
+static enum mode mode_value (const char *mode)
+{
+	if (strcasecmp(mode, "receiver") == 0) {
+		return mode_receiver;
+	}
+	if (strcasecmp(mode, "r") == 0) {
+		return mode_receiver;
+	}
+	if (strcasecmp(mode, "sender") == 0) {
+		return mode_sender;
+	}
+	if (strcasecmp(mode, "s") == 0) {
+		return mode_sender;
+	}
+	return mode_unknown;
+}
+
+static const char * mode_string (enum mode mode)
+{
+	if (mode == mode_receiver) {
+		return "receiver";
+	}
+	if (mode == mode_sender) {
+		return "sender";
+	}
+	return "unknown";
+}
+
+static struct option longopts[] = {
+	{"mode"			, required_argument	, 0, 'm' },
+	{"identifier"		, required_argument	, 0, 'i' },
 	{"prefix"		, required_argument	, 0, 'p' },
-	{"reconnect"		, required_argument	, 0, 'l' },
 	{"source"		, required_argument	, 0, 's' },
 	{"destination"		, required_argument	, 0, 'd' },
-	{"identifier"		, required_argument	, 0, 'n' },
 	{"timeout"		, required_argument	, 0, 't' },
 	{"help"			, no_argument	   	, 0, 'h' },
 	{0			, 0                	, 0, 0 }
 };
 
-static void print_help (const char *name)
+static void usage (const char *name)
 {
 	fprintf(stdout, "%s options:\n", name);
-	fprintf(stdout, "  -r / --reader     : mode reader\n");
-	fprintf(stdout, "  -p / --prefix     : file prefix\n");
-	fprintf(stdout, "  -l / --reconnect  : reconnect on error\n");
-	fprintf(stdout, "  -w / --writer     : mode writer\n");
-	fprintf(stdout, "  -s / --source     : file source\n");
-	fprintf(stdout, "  -d / --destination: file destination\n");
-	fprintf(stdout, "  -n / --identifier : mbus identifier\n");
-	fprintf(stdout, "  -t / --timeout    : request timeout milliseconds\n");
+	fprintf(stdout, "\n");
+	fprintf(stdout, "%s --mode receiver --identifier identifier [--prefix prefix]\n", name);
+	fprintf(stdout, "%s --mode sender --identifier identifier --source source --destination destination [--timeout timeout]\n", name);
+	fprintf(stdout, "\n");
+	fprintf(stdout, "  -m, --mode: running mode (default: %s)\n", mode_string(DEFAULT_MODE));
+	fprintf(stdout, "  modes:\n");
+	fprintf(stdout, "    receiver\n");
+	fprintf(stdout, "      -i, --identifier : application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
+	fprintf(stdout, "      -p, --prefix     : file prefix (default: %s)\n", DEFAULT_PREFIX);
+	fprintf(stdout, "    sender\n");
+	fprintf(stdout, "      -i, --identifier : receiver application identifier (default: %s)\n", DEFAULT_IDENTIFIER);
+	fprintf(stdout, "      -s, --source     : file source\n");
+	fprintf(stdout, "      -d, --destination: file destination\n");
+	fprintf(stdout, "      -t, --timeout    : request timeout milliseconds (default: %d)\n", DEFAULT_TIMEOUT);
 	fprintf(stdout, "example:\n");
-	fprintf(stdout, "  %s -r -n org.mbus.client.file-transfer [-l 1] -p /tmp\n", name);
-	fprintf(stdout, "  %s -w -n org.mbus.client.file-transfer -s from -d to -t 30000\n", name);
+	fprintf(stdout, "  %s --mode receiver --identifier org.mbus.client.file-transfer --prefix /tmp\n", name);
+	fprintf(stdout, "  %s --mode sender --identifier org.mbus.client.file-transfer --source source --destination destination --timeout 30000\n", name);
 	mbus_client_usage();
 }
 
-static int command_put (struct mbus_client *client, const char *source, const char *command, struct mbus_json *payload, struct mbus_json *result, void *data)
+static int mbus_client_receiver_callback_command_put (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
 	int fd;
@@ -63,26 +139,22 @@ static int command_put (struct mbus_client *client, const char *source, const ch
 	char *fname;
 	char *decoded;
 	size_t decoded_length;
+	struct receiver_param *param = context;
 	(void) client;
-	(void) source;
-	(void) command;
-	(void) payload;
-	(void) result;
-	(void) data;
 	fd = -1;
 	fname = NULL;
 	decoded = NULL;
-	s = mbus_json_get_string_value(payload, "source", NULL);
+	s = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "source", NULL);
 	if (s == NULL) {
 		fprintf(stderr, "source is invalid\n");
 		goto bail;
 	}
-	d = mbus_json_get_string_value(payload, "destination", NULL);
+	d = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "destination", NULL);
 	if (d == NULL) {
 		fprintf(stderr, "destination is invalid\n");
 		goto bail;
 	}
-	e = mbus_json_get_string_value(payload, "encoded", NULL);
+	e = mbus_json_get_string_value(mbus_client_message_routine_request_payload(message), "encoded", NULL);
 	if (d == NULL) {
 		fprintf(stderr, "encoded is invalid\n");
 		goto bail;
@@ -92,12 +164,12 @@ static int command_put (struct mbus_client *client, const char *source, const ch
 		fprintf(stderr, "can not decode source: %s\n", s);
 		goto bail;
 	}
-	fname = malloc(strlen(o_p) + strlen(d) + 1);
+	fname = malloc(strlen(param->prefix) + strlen(d) + 1);
 	if (fname == NULL) {
 		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
-	sprintf(fname, "%s%s", o_p, d);
+	sprintf(fname, "%s%s", param->prefix, d);
 	fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (fd < 0) {
 		fprintf(stderr, "can not open file: %s\n", fname);
@@ -125,218 +197,296 @@ bail:	if (decoded != NULL) {
 	return -1;
 }
 
-int main (int argc, char *argv[])
+static void mbus_client_receiver_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
 {
-	int c;
+	int rc;
+	struct receiver_param *param = context;
+	if (status == mbus_client_connect_status_success) {
+		struct mbus_client_register_options register_options;
+		rc = mbus_client_register_options_default(&register_options);
+		if (rc != 0) {
+			param->result = -1;
+			param->finished = 1;
+			return;
+		}
+		register_options.command = "command.put";
+		register_options.callback = mbus_client_receiver_callback_command_put;
+		register_options.context = param;
+		rc = mbus_client_register_with_options(client, &register_options);
+		if (rc != 0) {
+			param->result = -1;
+			param->finished = 1;
+		}
+	} else {
+		param->result = -1;
+		param->finished = 1;
+	}
+}
+
+static void mbus_client_sender_callback_command_put_result (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
+{
+	struct sender_param *param = context;
+	(void) client;
+	(void) status;
+	param->status = mbus_client_message_command_response_status(message);
+	param->finished = 1;
+}
+
+static void mbus_client_sender_callback_connect (struct mbus_client *client, void *context, enum mbus_client_connect_status status)
+{
 	int rc;
 	int fd;
+	struct stat st;
 	char *buffer;
 	size_t buffer_length;
 	char *encoded;
 	size_t encoded_length;
-	struct mbus_json *req;
-	struct mbus_client *mbus_client;
-	struct mbus_client_options mbus_client_options;
-
-	o_r = 0;
-	o_p = NULL;
-	o_l = 0;
-	o_w = 0;
-	o_s = NULL;
-	o_d = NULL;
-	o_n = "org.pipeline.mbus-file-transfer";
-	o_t = 30000;
-
+	struct mbus_json *request;
+	struct sender_param *param = context;
+	(void) client;
 	fd = -1;
-	req = NULL;
 	buffer = NULL;
 	encoded = NULL;
-	mbus_client = NULL;
-	mbus_client_options_from_argv(&mbus_client_options, argc, argv);
-
-	while (1) {
-		c = getopt_long(argc, argv, ":rlp:ws:d:n:t:h", options, NULL);
-		if (c == -1) {
-			break;
-		}
-		switch (c) {
-			case 'h':
-				print_help(argv[0]);
-				return 0;
-			case 'r':
-				o_r = 1;
-				break;
-			case 'l':
-				o_l = 1;
-				break;
-			case 'p':
-				o_p = optarg;
-				break;
-			case 'w':
-				o_w = 1;
-				break;
-			case 's':
-				o_s = optarg;
-				break;
-			case 'd':
-				o_d = optarg;
-				break;
-			case 'n':
-				o_n = optarg;
-				break;
-			case 't':
-				o_t = atoi(optarg);
-				break;
-		}
-	}
-
-	if (o_r == 0 && o_w == 0) {
-		fprintf(stderr, "invalid mode\n");
+	request = NULL;
+	if (status != mbus_client_connect_status_success) {
 		goto bail;
 	}
-	if (o_r == 1 && o_w == 1) {
-		fprintf(stderr, "invalid mode\n");
+	rc = stat(param->source, &st);
+	if (rc < 0) {
+		fprintf(stderr, "can not open source: %s\n", param->source);
 		goto bail;
 	}
-	if (o_r == 1) {
-		if (o_p == NULL) {
-			fprintf(stderr, "invalid prefix\n");
-			goto bail;
-		}
-	}
-	if (o_w == 1) {
-		if (o_s == NULL) {
-			fprintf(stderr, "invalid source\n");
-			goto bail;
-		}
-		if (o_d == NULL) {
-			fprintf(stderr, "invalid destination\n");
-			goto bail;
-		}
-	}
-	if (o_n == NULL) {
-		fprintf(stderr, "invalid identifier\n");
+	buffer_length = st.st_size;
+	buffer = malloc(buffer_length + 1);
+	if (buffer == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
-
-	if (o_r == 1) {
-		while (1) {
-			if (mbus_client == NULL) {
-				mbus_client_options.client.name = o_n;
-				mbus_client = mbus_client_create_with_options(&mbus_client_options);
-				if (mbus_client == NULL) {
-					fprintf(stderr, "can not create mbus client\n");
-					if (o_l) {
-						usleep(1000000);
-						continue;
-					} else {
-						goto bail;
-					}
-				} else {
-					rc = mbus_client_register(mbus_client, "command.put", command_put, NULL);
-					if (rc != 0) {
-						fprintf(stderr, "can not register command\n");
-						if (o_l) {
-							mbus_client_destroy(mbus_client);
-							mbus_client = NULL;
-							usleep(1000000);
-							continue;
-						} else {
-							goto bail;
-						}
-					}
-				}
-			}
-			rc = mbus_client_run_timeout(mbus_client, MBUS_CLIENT_DEFAULT_TIMEOUT);
-			if (rc < 0) {
-				fprintf(stderr, "client run failed: %d\n", rc);
-				if (o_l) {
-					mbus_client_destroy(mbus_client);
-					mbus_client = NULL;
-					usleep(1000000);
-					continue;
-				} else {
-					goto bail;
-				}
-			}
-			if (rc > 1) {
-				fprintf(stderr, "client run exited: %d\n", rc);
-				if (o_l) {
-					mbus_client_destroy(mbus_client);
-					mbus_client = NULL;
-					usleep(1000000);
-					continue;
-				} else {
-					goto bail;
-				}
-			}
-		}
+	fd = open(param->source, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "can not open source: %s\n", param->source);
+		goto bail;
 	}
-	if (o_w == 1) {
-		int fd;
-		struct stat st;
-		rc = stat(o_s, &st);
-		if (rc < 0) {
-			fprintf(stderr, "can not open source: %s\n", o_s);
-			goto bail;
-		}
-		buffer_length = st.st_size;
-		buffer = malloc(buffer_length + 1);
-		if (buffer == NULL) {
-			fprintf(stderr, "can not allocate memory\n");
-			goto bail;
-		}
-		fd = open(o_s, O_RDONLY);
-		if (fd < 0) {
-			fprintf(stderr, "can not open source: %s\n", o_s);
-			goto bail;
-		}
-		rc = read(fd, buffer, buffer_length);
-		if (rc != (int) buffer_length) {
-			fprintf(stderr, "can not read source: %s\n", o_s);
-			goto bail;
-		}
-		buffer[rc] = '\0';
-		encoded = (char *) base64_encode((unsigned char *) buffer, buffer_length, &encoded_length);
-		if (encoded == NULL) {
-			fprintf(stderr, "can not encode source: %s\n", o_s);
-			goto bail;
-		}
-		mbus_client = mbus_client_create_with_options(&mbus_client_options);
-		if (mbus_client == NULL) {
-			fprintf(stderr, "can not create mbus client\n");
-			goto bail;
-		}
-		req = mbus_json_create_object();
-		mbus_json_add_string_to_object_cs(req, "source", o_s);
-		mbus_json_add_string_to_object_cs(req, "destination", o_d);
-		mbus_json_add_string_to_object_cs(req, "encoded", encoded);
-		rc = mbus_client_command_timeout(mbus_client, o_n, "command.put", req, NULL, o_t);
-		if (rc != 0) {
-			fprintf(stderr, "can not execute command\n");
-			goto bail;
-		}
-		mbus_client_destroy(mbus_client);
-		mbus_client = NULL;
+	rc = read(fd, buffer, buffer_length);
+	if (rc != (int) buffer_length) {
+		fprintf(stderr, "can not read source: %s\n", param->source);
+		goto bail;
 	}
-
-	rc = 0;
-out:	if (mbus_client != NULL) {
-		mbus_client_destroy(mbus_client);
+	buffer[rc] = '\0';
+	encoded = (char *) base64_encode((unsigned char *) buffer, buffer_length, &encoded_length);
+	if (encoded == NULL) {
+		fprintf(stderr, "can not encode source: %s\n", param->source);
+		goto bail;
 	}
-	if (req != NULL) {
-		mbus_json_delete(req);
+	request = mbus_json_create_object();
+	if (request == NULL) {
+		fprintf(stderr, "can not create request\n");
+		goto bail;
 	}
-	if (buffer != NULL) {
-		free(buffer);
+	rc = mbus_json_add_string_to_object_cs(request, "source", param->source);
+	if (rc != 0) {
+		fprintf(stderr, "can not create request\n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(request, "destination", param->destination);
+	if (rc != 0) {
+		fprintf(stderr, "can not create request\n");
+		goto bail;
+	}
+	rc = mbus_json_add_string_to_object_cs(request, "encoded", encoded);
+	if (rc != 0) {
+		fprintf(stderr, "can not create request\n");
+		goto bail;
+	}
+	struct mbus_client_command_options command_options;
+	mbus_client_command_options_default(&command_options);
+	command_options.destination = param->identifier;
+	command_options.command = "command.put";
+	command_options.payload = request;
+	command_options.callback = mbus_client_sender_callback_command_put_result;
+	command_options.context = param;
+	command_options.timeout = param->timeout;
+	rc = mbus_client_command_with_options(client, &command_options);
+	if (rc != 0) {
+		fprintf(stderr, "can not execute command\n");
+		goto bail;
+	}
+	mbus_json_delete(request);
+	free(encoded);
+	free(buffer);
+	return;
+bail:	if (request != NULL) {
+		mbus_json_delete(request);
 	}
 	if (encoded != NULL) {
 		free(encoded);
 	}
-	if (fd >= 0) {
-		close(fd);
+	if (buffer != NULL) {
+		free(buffer);
 	}
-	return rc;
-bail:	rc = -1;
-	goto out;
+	param->status = -1;
+	param->finished = 1;
+	return;
+}
+
+int main (int argc, char *argv[])
+{
+	int rc;
+
+	int c;
+	int _argc;
+	char **_argv;
+
+	enum mode o_mode;
+	const char *o_prefix;
+	const char *o_identifier;
+	const char *o_source;
+	const char *o_destination;
+	int o_timeout;
+
+	struct mbus_client *mbus_client;
+	struct mbus_client_options mbus_options;
+
+	struct receiver_param receiver_param;
+	struct sender_param sender_param;
+
+	o_mode = DEFAULT_MODE;
+	o_prefix = DEFAULT_PREFIX;
+	o_identifier = DEFAULT_IDENTIFIER;
+	o_source = NULL;
+	o_destination = NULL;
+	o_timeout = DEFAULT_TIMEOUT;
+
+	_argc = 0;
+	_argv = NULL;
+
+	memset(&receiver_param, 0, sizeof(struct receiver_param));
+	memset(&sender_param, 0, sizeof(struct sender_param));
+	mbus_client = NULL;
+
+	_argv = malloc(sizeof(char *) * argc);
+	if (_argv == NULL) {
+		fprintf(stderr, "can not allocate memory\n");
+		goto bail;
+	}
+	for (_argc = 0; _argc < argc; _argc++) {
+		_argv[_argc] = argv[_argc];
+	}
+
+	while ((c = getopt_long(_argc, _argv, ":m:p:i:s:d:t:h", longopts, NULL)) != -1) {
+		switch (c) {
+			case 'm':
+				o_mode = mode_value(optarg);
+				if (o_mode == mode_unknown) {
+					fprintf(stderr, "invalid mode: %s\n", optarg);
+					goto bail;
+				}
+				break;
+			case 'p':
+				o_prefix = optarg;
+				break;
+			case 'i':
+				o_identifier = optarg;
+				break;
+			case 's':
+				o_source = optarg;
+				break;
+			case 'd':
+				o_destination = optarg;
+				break;
+			case 't':
+				o_timeout = atoi(optarg);
+				break;
+			case 'h':
+				usage(argv[0]);
+				goto bail;
+		}
+	}
+
+	rc = mbus_client_options_default(&mbus_options);
+	if (rc != 0) {
+		fprintf(stderr, "can not get default options\n");
+		goto bail;
+	}
+	rc = mbus_client_options_from_argv(&mbus_options, argc, argv);
+	if (rc != 0) {
+		fprintf(stderr, "can not parse options\n");
+		goto bail;
+	}
+	if (o_mode == mode_receiver) {
+		memset(&receiver_param, 0, sizeof(struct receiver_param));
+		receiver_param.prefix = o_prefix;
+		mbus_options.identifier = (char *) o_identifier;
+		mbus_options.callbacks.connect = mbus_client_receiver_callback_connect;
+		mbus_options.callbacks.context = &receiver_param;
+	} else if (o_mode == mode_sender) {
+		if (o_source == NULL) {
+			fprintf(stderr, "source is invalid\n");
+			goto bail;
+		}
+		if (o_destination == NULL) {
+			fprintf(stderr, "destination is invalid\n");
+			goto bail;
+		}
+		memset(&sender_param, 0, sizeof(struct sender_param));
+		sender_param.identifier = o_identifier;
+		sender_param.source = o_source;
+		sender_param.destination = o_destination;
+		sender_param.timeout = o_timeout;
+		mbus_options.callbacks.connect = mbus_client_sender_callback_connect;
+		mbus_options.callbacks.context = &sender_param;
+	} else {
+		fprintf(stderr, "invalid mode: %d\n", o_mode);
+		goto bail;
+	}
+
+	mbus_client = mbus_client_create(&mbus_options);
+	if (mbus_client == NULL) {
+		fprintf(stderr, "can not create client\n");
+		goto bail;
+	}
+	rc = mbus_client_connect(mbus_client);
+	if (rc != 0) {
+		fprintf(stderr, "can not connect client\n");
+		goto bail;
+	}
+
+	while (1) {
+		rc = mbus_client_run(mbus_client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
+		if (rc != 0) {
+			fprintf(stderr, "client run failed\n");
+			goto bail;
+		}
+		if (o_mode == mode_receiver) {
+			if (receiver_param.finished == 1 &&
+			    mbus_client_has_pending(mbus_client) == 0) {
+				break;
+			}
+		} else if (o_mode == mode_sender) {
+			if (sender_param.finished == 1 &&
+			    mbus_client_has_pending(mbus_client) == 0) {
+				break;
+			}
+		}
+		if (mbus_client_get_state(mbus_client) == mbus_client_state_disconnected) {
+			break;
+		}
+	}
+
+	mbus_client_destroy(mbus_client);
+	free(_argv);
+	if (o_mode == mode_receiver) {
+		return receiver_param.result;
+	}
+	if (o_mode == mode_sender) {
+		return sender_param.status;
+	}
+	return 0;
+bail:	if (_argv != NULL) {
+		free(_argv);
+	}
+	if (mbus_client != NULL) {
+		mbus_client_destroy(mbus_client);
+	}
+	return -1;
 }

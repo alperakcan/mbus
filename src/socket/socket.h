@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,14 +39,21 @@ enum mbus_socket_protocol {
 	mbus_socket_protocol_any,
 };
 
+enum mbus_socket_shutdown {
+	mbus_socket_shutdown_rd,
+	mbus_socket_shutdown_wr,
+	mbus_socket_shutdown_rdwr,
+};
+
 struct mbus_socket;
 
 struct mbus_socket * mbus_socket_create (enum mbus_socket_domain domain, enum mbus_socket_type type, enum mbus_socket_protocol protocol);
 void mbus_socket_destroy (struct mbus_socket *socket);
 
-void mbus_socket_close (struct mbus_socket *socket);
+int mbus_socket_shutdown (struct mbus_socket *socket, enum mbus_socket_shutdown shutdown);
 
 int mbus_socket_get_fd (struct mbus_socket *socket);
+int mbus_socket_get_error (struct mbus_socket *socket);
 
 int mbus_socket_set_reuseaddr (struct mbus_socket *socket, int on);
 int mbus_socket_get_reuseaddr (struct mbus_socket *socket);

@@ -1,4 +1,31 @@
 
+/*
+ * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the <Alper Akcan> nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -258,18 +285,42 @@ struct mbus_json * mbus_json_get_array_item (const struct mbus_json *json, int a
 
 int mbus_json_add_item_to_object (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
+	if (item == NULL) {
+		return -1;
+	}
 	mbus_cJSON_AddItemToObject((mbus_cJSON *) json, name, (mbus_cJSON *) item);
 	return 0;
 }
 
 int mbus_json_add_item_to_object_cs (struct mbus_json *json, const char *name, struct mbus_json *item)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
+	if (item == NULL) {
+		return -1;
+	}
 	mbus_cJSON_AddItemToObjectCS((mbus_cJSON *) json, name, (mbus_cJSON *) item);
 	return 0;
 }
 
 int mbus_json_delete_item_from_object (struct mbus_json *json, const char *name)
 {
+	if (json == NULL) {
+		return -1;
+	}
+	if (name == NULL) {
+		return -1;
+	}
 	mbus_cJSON_DeleteItemFromObject((mbus_cJSON *) json, name);
 	return 0;
 }
@@ -338,6 +389,22 @@ int mbus_json_get_int_value (const struct mbus_json *json, const char *name, int
 		return value;
 	}
 	return mbus_cJSON->valueint;
+}
+
+int mbus_json_get_bool_value (const struct mbus_json *json, const char *name, int value)
+{
+	struct mbus_cJSON *mbus_cJSON;
+	mbus_cJSON = (struct mbus_cJSON *) mbus_json_get_object(json, name);
+	if (mbus_cJSON == NULL) {
+		return value;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_true) {
+		return 1;
+	}
+	if (mbus_json_get_type(json) == mbus_json_type_false) {
+		return 0;
+	}
+	return value;
 }
 
 const char * mbus_json_get_string_value (const struct mbus_json *json, const char *name, const char *value)

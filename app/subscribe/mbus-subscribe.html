@@ -1,0 +1,70 @@
+<html>
+	<head>
+    	<meta charset="utf-8"></meta>
+		<title>org.mbus.subscribe</title>
+		<script src="MBusClient.js"></script> 
+	</head>
+
+	<body>
+	 	<script language="javascript" type="text/javascript">
+			var output;
+
+	  		var mbc;
+	  		var mbcOptions;
+
+			var address;
+
+			function init()
+			{
+				if (typeof window.location.hostname !== 'string' ||
+					window.location.hostname === '') {
+					address = "localhost";
+				} else {
+					address = window.location.hostname;
+				}
+				
+				output = document.getElementById("output");
+				
+				mbcOptions = new MBusClientOptions();
+				mbcOptions.connectInterval = 1000;
+				mbcOptions.serverAddress = address;
+				mbcOptions.onConnect = function (client, context, status) {
+					console.log("connect status: {0}, {1}".format(status, MBusClientConnectStatusString(status)));
+					if (status == MBusClientConnectStatus.Success) {
+						mbc.subscribe(MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+					}
+				}
+				mbcOptions.onDisconnect = function (client, context, status) {
+					console.log("disconnect status: {0}, {1}".format(status, MBusClientDisconnectStatusString(status)));
+				}
+				mbcOptions.onSubscribe = function (client, context, source, event, status) {
+					console.log("subscribe status: {0}, {1}, source: {2}, event: {3}".format(status, MBusClientDisconnectStatusString(status), source, event));
+				}
+				mbcOptions.onPublish = function (client, context, message, status) {
+					console.log("publish status: {0}, {1}, message: {2}.{3}: {4}".format(status, MBusClientPublishStatusString(status), message.getDestination(), message.getIdentifier(), JSON.stringify(message.getPayload())));
+				}
+				mbcOptions.onMessage = function (client, context, message) {
+					console.log("message: {0}.{1}: {2}".format(message.getSource(), message.getIdentifier(), JSON.stringify(message.getPayload())));
+				}
+				mbcOptions.onContext = null;
+				
+				mbc = new MBusClient(mbcOptions);
+				mbc.connect();
+			}
+		
+			function writeToScreen(message)
+			{
+				var pre = document.createElement("p");
+				pre.style.wordWrap = "break-word";
+				pre.innerHTML = message;
+				output.appendChild(pre);
+			}
+		
+			window.addEventListener("load", init, false);
+		</script>
+		
+		<h2>org.mbus.subscribe</h2>
+		
+    		<div id="output"></div>
+	</body>
+</html>

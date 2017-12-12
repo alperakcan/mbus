@@ -1,0 +1,3 @@
+[submodule "libmakefile"]
+	path = libmakefile
+	url = https://github.com/alperakcan/libmakefile.git

@@ -1,9 +1,10 @@
 
 subdir-y = \
+	client \
 	command \
-	controller \
-	event \
-	listener \
+	broker \
+	publish \
+	subscribe \
 	version
 
 include ../Makefile.lib

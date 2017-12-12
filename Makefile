@@ -15,9 +15,12 @@ include Makefile.lib
 install: app src test
 	install -d ${DESTDIR}/usr/local/bin
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
-	install -m 0755 dist/bin/mbus-controller ${DESTDIR}/usr/local/bin/mbus-controller
-	install -m 0755 dist/bin/mbus-event ${DESTDIR}/usr/local/bin/mbus-event
-	install -m 0755 dist/bin/mbus-listener ${DESTDIR}/usr/local/bin/mbus-listener
+	install -m 0755 dist/bin/mbus-command.py ${DESTDIR}/usr/local/bin/mbus-command.py
+	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
+	install -m 0755 dist/bin/mbus-publish ${DESTDIR}/usr/local/bin/mbus-publish
+	install -m 0755 dist/bin/mbus-publish.py ${DESTDIR}/usr/local/bin/mbus-publish.py
+	install -m 0755 dist/bin/mbus-subscribe ${DESTDIR}/usr/local/bin/mbus-subscribe
+	install -m 0755 dist/bin/mbus-subscribe.py ${DESTDIR}/usr/local/bin/mbus-subscribe.py
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
@@ -57,6 +60,22 @@ install: app src test
 	install -m 0644 dist/lib/libmbus-socket.a ${DESTDIR}/usr/local/lib/libmbus-socket.a
 	install -m 0644 dist/lib/libmbus-version.a ${DESTDIR}/usr/local/lib/libmbus-version.a
 
+	install -d ${DESTDIR}/usr/local/lib
+	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/usr/local/lib/MBusClient.js
+	install -m 0644 dist/lib/MBusClient.py ${DESTDIR}/usr/local/lib/MBusClient.py
+
+	install -d ${DESTDIR}/var/www/html/mbus
+	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
+	install -m 0644 app/subscribe/mbus-subscribe.html ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
+
+	install -d ${DESTDIR}/usr/local/bin
+	install -m 0755 test/execute-command/mbus-execute-command ${DESTDIR}/usr/local/bin/mbus-execute-command
+
+	install -d ${DESTDIR}/usr/local/bin
+	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
+	install -m 0755 test/file-transfer/mbus-file-transfer ${DESTDIR}/usr/local/bin/mbus-file-transfer
+	install -m 0644 test/file-transfer/mbus-file-transfer.html ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html
+	
 	install -d ${DESTDIR}/usr/local/lib/pkgconfig
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-client.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-server.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
@@ -64,9 +83,12 @@ install: app src test
 
 uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
-	rm -f ${DESTDIR}/usr/local/bin/mbus-controller
-	rm -f ${DESTDIR}/usr/local/bin/mbus-event
-	rm -f ${DESTDIR}/usr/local/bin/mbus-listener
+	rm -f ${DESTDIR}/usr/local/bin/mbus-command.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe
+	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe.py
 	rm -f ${DESTDIR}/usr/local/bin/mbus-version
 	
 	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h
@@ -103,7 +125,17 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-server.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-socket.a
 	rm -f ${DESTDIR}/usr/local/lib/libmbus-version.a
+	
+	rm -f ${DESTDIR}/usr/local/lib/MBusClient.js
+	rm -f ${DESTDIR}/usr/local/lib/MBusClient.py
 
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
+
+	rm -f ${DESTDIR}/usr/local/bin/mbus-execute-command
+	rm -f ${DESTDIR}/usr/local/bin/mbus-file-transfer
+	
+	rm -f ${DESTDIR}/var/www/html/mbus/MBusClient.js
+	rm -f ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
+	rm -f ${DESTDIR}/var/www/html/mbus/mbus-file-transfer.html

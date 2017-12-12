@@ -2,18 +2,18 @@
 include ../../Makefile.conf
 
 target-y = \
-	mbus-command
+	mbus-publish
 
-mbus-command_includes-y = \
+mbus-publish_includes-y = \
 	../../dist/include
 
-mbus-command_libraries-y = \
+mbus-publish_libraries-y = \
 	../../dist/lib
 
-mbus-command_files-y = \
-	command.c
+mbus-publish_files-y = \
+	publish.c
 
-mbus-command_ldflags-y = \
+mbus-publish_ldflags-y = \
 	-lmbus-client \
 	-lmbus-socket \
 	-lmbus-json \
@@ -24,13 +24,13 @@ mbus-command_ldflags-y = \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-command_ldflags-${SSL_ENABLE} += \
+mbus-publish_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-command_ldflags-${ZLIB_ENABLE} += \
+mbus-publish_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-command_ldflags-y += \
+mbus-publish_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
@@ -38,7 +38,7 @@ mbus-command_ldflags-y += \
 distdir = ../../dist
 
 dist.bin-y = \
-	mbus-command \
-	mbus-command.py
+	mbus-publish \
+	mbus-publish.py
 
 include ../../Makefile.lib
