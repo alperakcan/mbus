@@ -3184,11 +3184,9 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 						int error;
 						error = SSL_get_error(client->ssl.ssl, rc);
 						if (error == SSL_ERROR_WANT_READ) {
-							read_rc = 0;
 							errno = EAGAIN;
 							client->ssl.want_read = 1;
 						} else if (error == SSL_ERROR_WANT_WRITE) {
-							read_rc = 0;
 							errno = EAGAIN;
 							client->ssl.want_write = 1;
 						} else if (error == SSL_ERROR_SYSCALL) {
@@ -3208,8 +3206,8 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 					} else {
 						read_rc += rc;
 					}
-				} while (read_rc > 0 &&
-				         SSL_pending(client->ssl.ssl));
+				} while (read_rc >= 0 &&
+					 SSL_pending(client->ssl.ssl));
 			}
 #endif
 		if (read_rc <= 0) {

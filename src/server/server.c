@@ -3275,11 +3275,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						int error;
 						error = SSL_get_error(client->ssl.ssl, rc);
 						if (error == SSL_ERROR_WANT_READ) {
-							read_rc = 0;
 							errno = EAGAIN;
 							client->ssl.want_read = 1;
 						} else if (error == SSL_ERROR_WANT_WRITE) {
-							read_rc = 0;
 							errno = EAGAIN;
 							client->ssl.want_write = 1;
 						} else if (error == SSL_ERROR_SYSCALL) {
@@ -3299,7 +3297,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					} else {
 						read_rc += rc;
 					}
-				} while (read_rc > 0 &&
+				} while (read_rc >= 0 &&
 					 SSL_pending(client->ssl.ssl));
 			}
 #endif
