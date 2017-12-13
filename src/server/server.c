@@ -3362,7 +3362,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 							goto bail;
 						}
 					}
-					mbus_debugf("        message: '%.*s'", uncompressed, data);
+					mbus_debugf("        message: %s, e: %d, u: %d, '%.*s'", mbus_compress_method_string(client_get_compression(client)), expected, uncompressed, uncompressed, data);
 					string = _strndup((char *) data, uncompressed);
 					if (string == NULL) {
 						mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_identifier(client));
