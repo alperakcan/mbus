@@ -3494,7 +3494,14 @@ out:
 		}
 		if (client->pong_missed_count > client->ping_threshold) {
 			mbus_errorf("missed too many pongs, %d > %d", client->pong_missed_count, client->ping_threshold);
-			goto bail;
+			mbus_client_notify_disconnect(client, mbus_client_disconnect_status_ping_timeout);
+			mbus_client_reset(client);
+			if (client->options->connect_interval > 0) {
+				client->state = mbus_client_state_connecting;
+			} else {
+				client->state = mbus_client_state_disconnected;
+			}
+			goto out;
 		}
 	}
 
@@ -3759,6 +3766,7 @@ const char * mbus_client_disconnect_status_string (enum mbus_client_disconnect_s
 		case mbus_client_disconnect_status_internal_error:		return "internal error";
 		case mbus_client_disconnect_status_connection_closed:		return "connection closed";
 		case mbus_client_disconnect_status_canceled:			return "canceled";
+		case mbus_client_disconnect_status_ping_timeout:		return "ping timeout";
 	}
 	return "internal error";
 }
