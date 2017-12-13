@@ -70,7 +70,8 @@ enum mbus_client_disconnect_status {
 	mbus_client_disconnect_status_success,
 	mbus_client_disconnect_status_internal_error,
 	mbus_client_disconnect_status_connection_closed,
-	mbus_client_disconnect_status_canceled
+	mbus_client_disconnect_status_canceled,
+	mbus_client_disconnect_status_ping_timeout
 };
 
 enum mbus_client_publish_status {

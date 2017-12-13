@@ -174,6 +174,7 @@ class MBusClientDisconnectStatus:
     InternalError    = 1
     ConnectionClosed = 2
     Canceled         = 3
+    PingTimeout      = 4
 
 def MBusClientDisconnectStatusString (status):
     if (status == MBusClientDisconnectStatus.Success):
@@ -182,6 +183,8 @@ def MBusClientDisconnectStatusString (status):
         return "internal error"
     if (status == MBusClientDisconnectStatus.ConnectionClosed):
         return "connection closed"
+    if (status == MBusClientDisconnectStatus.PingTimeout):
+        return "ping timeout"
     return "unknown"
 
 class MBusClientPublishStatus:
@@ -1155,7 +1158,13 @@ class MBusClient (object):
                 self.__pingWaitPong = 0
                 self.__pongMissedCount += 1
             if (self.__pongMissedCount > self.__pingThreshold):
-                raise ValueError("missed too many pongs, {} > {}".format(self.__pongMissedCount, self.__pingThreshold))
+                self.__notifyDisonnect(MBusClientDisconnectStatus.PingTimeout)
+                self.__reset()
+                if (self.__options.connectInterval > 0):
+                    self.__state = MBusClientState.Connecting
+                else:
+                    self.__state = MBusClientState.Disconnected
+                return 0
 
         for request in self.__requests:
             if (request.timeout < 0 or
