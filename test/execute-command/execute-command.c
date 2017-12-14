@@ -467,7 +467,7 @@ int main (int argc, char *argv[])
 		mbus_options.callbacks.context = &receiver_param;
 	} else if (o_mode == mode_sender) {
 		if (o_command == NULL) {
-			fprintf(stderr, "source is invalid\n");
+			fprintf(stderr, "command is invalid\n");
 			goto bail;
 		}
 		memset(&sender_param, 0, sizeof(struct sender_param));
