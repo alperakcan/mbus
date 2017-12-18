@@ -42,8 +42,7 @@ static void signal_handler (int signal)
 	g_running = 0;
 }
 
-#define OPTION_HELP		0x100
-#define OPTION_SUBSCRIBE	0x101
+#define OPTION_HELP		'h'
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
 	{ NULL,				0,			NULL,	0 },
@@ -83,7 +82,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_HELP:
 				usage();
