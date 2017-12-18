@@ -414,7 +414,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		struct addrinfo *result;
 		struct addrinfo *res;
 		memset(&hints, 0, sizeof(struct addrinfo));
-		hints.ai_family = PF_UNSPEC;
+		hints.ai_family = AF_INET;
 		hints.ai_socktype = SOCK_STREAM;
 		rc = getaddrinfo(address, NULL, &hints, &result);
 		if (rc != 0) {
