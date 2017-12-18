@@ -31,6 +31,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <signal.h>
 
 #define MBUS_DEBUG_NAME	"app-subscribe"
 
@@ -186,6 +187,14 @@ static struct option longopts[] = {
 	{ NULL,				0,			NULL,	0 },
 };
 
+static volatile int g_running;
+
+static void signal_handler (int signal)
+{
+	(void) signal;
+	g_running = 0;
+}
+
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
@@ -219,6 +228,10 @@ int main (int argc, char *argv[])
 	_argc = 0;
 	_argv = NULL;
 	_optind = optind;
+
+	g_running = 1;
+	signal(SIGINT, signal_handler);
+	signal(SIGTERM, signal_handler);
 
 	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);
@@ -276,7 +289,8 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 
-	while (arg.connected >= 0 &&
+	while (g_running == 1 &&
+	       arg.connected >= 0 &&
 	       arg.disconnected == 0) {
 		rc = mbus_client_run(client, MBUS_CLIENT_DEFAULT_RUN_TIMEOUT);
 		if (rc != 0) {
