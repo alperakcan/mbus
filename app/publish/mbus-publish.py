@@ -52,28 +52,28 @@ mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
 subscriptions = []
 
-options, remainder = getopt.gnu_getopt(sys.argv[1:], 'd:e:p:f:h', ['help', 
-                                                                 'destination=',
-                                                                 'event=',
-                                                                 'payload=',
-                                                                 'flood=',
-                                                                 'mbus-client-identifier=',
-                                                                 'mbus-client-server-protocol=',
-                                                                 'mbus-client-server-address=',
-                                                                 'mbus-client-server-port=',
-                                                                 'mbus-client-connect-timeout=',
-                                                                 'mbus-client-connect-interval=',
-                                                                 'mbus-client-subscribe-timeout=',
-                                                                 'mbus-client-register-timeout=',
-                                                                 'mbus-client-command-timeout=',
-                                                                 'mbus-client-publish-timeout=',
-                                                                 'mbus-client-ping-interval=',
-                                                                 'mbus-client-ping-timeout=',
-                                                                 'mbus-client-ping-threshold=',
+options, remainder = getopt.gnu_getopt(sys.argv[1:], "d:e:p:f:h", ["help", 
+                                                                 "destination=",
+                                                                 "event=",
+                                                                 "payload=",
+                                                                 "flood=",
+                                                                 "mbus-client-identifier=",
+                                                                 "mbus-client-server-protocol=",
+                                                                 "mbus-client-server-address=",
+                                                                 "mbus-client-server-port=",
+                                                                 "mbus-client-connect-timeout=",
+                                                                 "mbus-client-connect-interval=",
+                                                                 "mbus-client-subscribe-timeout=",
+                                                                 "mbus-client-register-timeout=",
+                                                                 "mbus-client-command-timeout=",
+                                                                 "mbus-client-publish-timeout=",
+                                                                 "mbus-client-ping-interval=",
+                                                                 "mbus-client-ping-timeout=",
+                                                                 "mbus-client-ping-threshold=",
                                                                  ])
 
 for opt, arg in options:
-    if opt in ('-h', '--help'):
+    if opt in ("-h", "--help"):
         print("publish usage:\n" \
               "  -d, --destination              : publish destination identifier (default: {})\n" \
               "  -e, --event                    : publish event identifier (default: {})\n" \
@@ -115,39 +115,39 @@ for opt, arg in options:
                     )
               )
         exit(0)
-    elif opt in ('-d', '--destination'):
+    elif opt in ("-d", "--destination"):
         o_destination = arg
-    elif opt in ('-e', '--event'):
+    elif opt in ("-e", "--event"):
         o_event = arg
-    elif opt in ('-p', '--payload'):
+    elif opt in ("-p", "--payload"):
         o_payload = json.loads(arg)
-    elif opt in ('-f', '--flood'):
+    elif opt in ("-f", "--flood"):
         o_flood = int(arg)
-    elif opt == '--mbus-client-identifier':
+    elif opt == "--mbus-client-identifier":
         mbus_client_identifier = arg
-    elif opt == '--mbus-client-server-protocol':
+    elif opt == "--mbus-client-server-protocol":
         mbus_client_server_protocol = arg
-    elif opt == '--mbus-client-server-address':
+    elif opt == "--mbus-client-server-address":
         mbus_client_server_address = arg
-    elif opt == '--mbus-client-server-port':
+    elif opt == "--mbus-client-server-port":
         mbus_client_server_port = arg
-    elif opt == '--mbus-client-connect-timeout':
+    elif opt == "--mbus-client-connect-timeout":
         mbus_client_connect_timeout = arg
-    elif opt == '--mbus-client-connect-interval':
+    elif opt == "--mbus-client-connect-interval":
         mbus_client_connect_interval = arg
-    elif opt == '--mbus-client-subscribe-timeout':
+    elif opt == "--mbus-client-subscribe-timeout":
         mbus_client_subscribe_timeout = arg
-    elif opt == '--mbus-client-register-timeout':
+    elif opt == "--mbus-client-register-timeout":
         mbus_client_register_timeout = arg
-    elif opt == '--mbus-client-command-timeout':
+    elif opt == "--mbus-client-command-timeout":
         mbus_client_command_timeout = arg
-    elif opt == '--mbus-client-publish-timeout':
+    elif opt == "--mbus-client-publish-timeout":
         mbus_client_publish_timeout = arg
-    elif opt == '--mbus-client-ping-interval':
+    elif opt == "--mbus-client-ping-interval":
         mbus_client_ping_interval = arg
-    elif opt == '--mbus-client-ping-timeout':
+    elif opt == "--mbus-client-ping-timeout":
         mbus_client_ping_timeout = arg
-    elif opt == '--mbus-client-ping-threshold':
+    elif opt == "--mbus-client-ping-threshold":
         mbus_client_ping_threshold = arg
 
 class onParam(object):
