@@ -398,10 +398,10 @@ int mbus_json_get_bool_value (const struct mbus_json *json, const char *name, in
 	if (mbus_cJSON == NULL) {
 		return value;
 	}
-	if (mbus_json_get_type(json) == mbus_json_type_true) {
+	if (mbus_json_get_type(mbus_cJSON) == mbus_json_type_true) {
 		return 1;
 	}
-	if (mbus_json_get_type(json) == mbus_json_type_false) {
+	if (mbus_json_get_type(mbus_cJSON) == mbus_json_type_false) {
 		return 0;
 	}
 	return value;
