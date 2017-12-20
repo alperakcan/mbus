@@ -357,6 +357,9 @@ static struct lws_protocols ws_protocols[] = {
 		0,
 		0,
 		NULL,
+#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
+		0,
+#endif
 	},
 	{
 		NULL,
@@ -364,7 +367,10 @@ static struct lws_protocols ws_protocols[] = {
 		0,
 		0,
 		0,
-		NULL
+		NULL,
+#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
+		0,
+#endif
 	}
 };
 
@@ -398,6 +404,9 @@ static struct lws_protocols wss_protocols[] = {
 		0,
 		0,
 		NULL,
+#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
+		0,
+#endif
 	},
 	{
 		NULL,
@@ -405,7 +414,10 @@ static struct lws_protocols wss_protocols[] = {
 		0,
 		0,
 		0,
-		NULL
+		NULL,
+#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
+		0,
+#endif
 	}
 };
 
