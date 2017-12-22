@@ -2787,11 +2787,13 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			break;
 		case LWS_CALLBACK_CLOSED:
 			mbus_debugf("  closed");
-			if (data->client != NULL) {
-				client_set_socket(data->client, NULL);
-				data->client = NULL;
+			if (data != NULL) {
+				if (data->client != NULL) {
+					client_set_socket(data->client, NULL);
+					data->client = NULL;
+				}
+				data->wsi = NULL;
 			}
-			data->wsi = NULL;
 			break;
 		case LWS_CALLBACK_RECEIVE:
 			mbus_debugf("  server receive");
