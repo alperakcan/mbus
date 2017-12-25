@@ -25,13 +25,13 @@ mbus-test-logger-publish_ldflags-y += \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-file-publish_ldflags-${SSL_ENABLE} += \
+mbus-test-logger-publish_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-file-publish_ldflags-${ZLIB_ENABLE} += \
+mbus-test-logger-publish_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-file-publish_ldflags-y += \
+mbus-test-logger-publish_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
@@ -56,13 +56,13 @@ mbus-test-logger-subscribe_ldflags-y += \
 	-lmbus-compress \
 	-lmbus-debug
 
-mbus-file-subscribe_ldflags-${SSL_ENABLE} += \
+mbus-test-logger-subscribe_ldflags-${SSL_ENABLE} += \
 	${ssl_ldflags-y}
 
-mbus-file-subscribe_ldflags-${ZLIB_ENABLE} += \
+mbus-test-logger-subscribe_ldflags-${ZLIB_ENABLE} += \
 	${zlib_ldflags-y}
 
-mbus-file-subscribe_ldflags-y += \
+mbus-test-logger-subscribe_ldflags-y += \
 	-lpthread \
 	-lm \
 	-ldl
