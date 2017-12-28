@@ -11,7 +11,8 @@ libmbus-server.so_files-y = \
 	server.c
 
 libmbus-server.so_cflags-y += \
-	-I../../dist/include
+	-I../../dist/include \
+	-Wno-unused-parameter
 
 libmbus-server.so_ldflags-y += \
 	-L../../dist/lib
