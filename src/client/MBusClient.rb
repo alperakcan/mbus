@@ -479,58 +479,58 @@ module MBusClient
       end
       if (@options.connectTimeout == nil or
           @options.connectTimeout <= 0)
-          @options.connectTimeout = MBusClientDefaults::CONNECT_TIMEOUT
+        @options.connectTimeout = MBusClientDefaults::CONNECT_TIMEOUT
       end
       if (@options.connectInterval == nil or
           @options.connectInterval <= 0)
-          @options.connectInterval = MBusClientDefaults::CONNECT_INTERVAL
+        @options.connectInterval = MBusClientDefaults::CONNECT_INTERVAL
       end
       if (@options.subscribeTimeout == nil or
           @options.subscribeTimeout <= 0)
-          @options.subscribeTimeout = MBusClientDefaults::SUBSCRIBE_TIMEOUT
+        @options.subscribeTimeout = MBusClientDefaults::SUBSCRIBE_TIMEOUT
       end
       if (@options.registerTimeout == nil or
           @options.registerTimeout <= 0)
-          @options.registerTimeout = MBusClientDefaults::REGISTER_TIMEOUT
+        @options.registerTimeout = MBusClientDefaults::REGISTER_TIMEOUT
       end
       if (@options.commandTimeout == nil or
           @options.commandTimeout <= 0)
-          @options.commandTimeout = MBusClientDefaults::COMMAND_TIMEOUT
+        @options.commandTimeout = MBusClientDefaults::COMMAND_TIMEOUT
       end
       if (@options.publishTimeout == nil or
           @options.publishTimeout <= 0)
-          @options.publishTimeout = MBusClientDefaults::PUBLISH_TIMEOUT
+        @options.publishTimeout = MBusClientDefaults::PUBLISH_TIMEOUT
       end
 
       if (@options.pingInterval == nil or
           @options.pingInterval == 0)
-          @options.pingInterval = MBusClientDefaults::PING_INTERVAL
+        @options.pingInterval = MBusClientDefaults::PING_INTERVAL
       end
 
       if (@options.pingTimeout == nil or
           @options.pingTimeout == 0)
-          @options.pingTimeout = MBusClientDefaults::PING_TIMEOUT
+        @options.pingTimeout = MBusClientDefaults::PING_TIMEOUT
       end
 
       if (@options.pingThreshold == nil or
           @options.pingThreshold == 0)
-          @options.pingThreshold = MBusClientDefaults::PING_THRESHOLD
+        @options.pingThreshold = MBusClientDefaults::PING_THRESHOLD
       end
 
       if (@options.serverProtocol == nil)
-          @options.serverProtocol = MBusClientDefaults::SERVER_PROTOCOL
+        @options.serverProtocol = MBusClientDefaults::SERVER_PROTOCOL
       end
       
       if (@options.serverProtocol == MBusClientDefaults::SERVER_TCP_PROTOCOL)
-          if (@options.serverAddress == nil)
-              @options.serverAddress = MBusClientDefaults::SERVER_TCP_ADDRESS
-          end
-          if (@options.serverPort == nil or
-              @options.serverPort <= 0)
-              @options.serverPort = MBusClientDefaults::SERVER_TCP_PORT
-          end
+        if (@options.serverAddress == nil)
+          @options.serverAddress = MBusClientDefaults::SERVER_TCP_ADDRESS
+        end
+        if (@options.serverPort == nil or
+            @options.serverPort <= 0)
+          @options.serverPort = MBusClientDefaults::SERVER_TCP_PORT
+        end
       else
-          raise "invalid server protocol"
+        raise "invalid server protocol"
       end
     end
     
