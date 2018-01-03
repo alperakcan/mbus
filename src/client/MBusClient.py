@@ -35,6 +35,8 @@ import json
 import collections
 import select
 import struct
+import copy
+
 try:
     import ssl
 except ImportError:
@@ -736,7 +738,7 @@ class MBusClient (object):
         else:
             if (not isinstance(options, MBusClientOptions)):
                 raise ValueError("options is invalid")
-            self.__options = options
+            self.__options = copy.deepcopy(options)
         
         if (self.__options.identifier == None):
             self.__options.identifier = MBusClientDefaults.ClientIdentifier
@@ -783,7 +785,7 @@ class MBusClient (object):
                 self.__options.serverPort = MBusClientDefaults.ServerTCPPort
         else:
             raise ValueError("invalid server protocol: {}".format(self.__options.serverProtocol))
-    
+
     def getOptions (self):
         options = None
         options = self.__options
