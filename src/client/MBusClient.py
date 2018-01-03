@@ -101,7 +101,7 @@ def mbus_clock_before (a, b):
     return mbus_clock_after(b, a)
 
 class MBusClientDefaults:
-    ClientIdentifier = None
+    Identifier        = None
     
     ServerTCPProtocol = "tcp"
     ServerTCPAddress  = "127.0.0.1"
@@ -145,7 +145,7 @@ class MBusClientConnectStatus:
     Timeout                 = 5
     Canceled                = 6
     InvalidProtocolVersion  = 7
-    InvalidClientIdentifier = 8
+    InvalidIdentifier       = 8
     ServerError             = 9
     
 def MBusClientConnectStatusString (status):
@@ -165,8 +165,8 @@ def MBusClientConnectStatusString (status):
         return "connection canceled"
     if (status == MBusClientConnectStatus.InvalidProtocolVersion):
         return "invalid protocol version"
-    if (status == MBusClientConnectStatus.InvalidClientIdentifier):
-        return "invalid client identifier"
+    if (status == MBusClientConnectStatus.InvalidIdentifier):
+        return "invalid identifier"
     if (status == MBusClientConnectStatus.ServerError):
         return "server error"
     return "unknown"
@@ -741,7 +741,7 @@ class MBusClient (object):
             self.__options = copy.deepcopy(options)
         
         if (self.__options.identifier == None):
-            self.__options.identifier = MBusClientDefaults.ClientIdentifier
+            self.__options.identifier = MBusClientDefaults.Identifier
         
         if (self.__options.connectTimeout == None or
             self.__options.connectTimeout <= 0):
