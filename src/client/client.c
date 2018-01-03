@@ -3767,7 +3767,7 @@ const char * mbus_client_connect_status_string (enum mbus_client_connect_status 
 		case mbus_client_connect_status_timeout:			return "connection timeout";
 		case mbus_client_connect_status_canceled:			return "connection canceled";
 		case mbus_client_connect_status_invalid_protocol_version:	return "invalid protocol version";
-		case mbus_client_connect_status_invalid_client_identfier:	return "invalid client identifier";
+		case mbus_client_connect_status_invalid_identfier:		return "invalid identifier";
 		case mbus_client_connect_status_server_error:			return "server error";
 	}
 	return "internal error";

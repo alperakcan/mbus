@@ -62,7 +62,7 @@ enum mbus_client_connect_status {
 	mbus_client_connect_status_timeout,
 	mbus_client_connect_status_canceled,
 	mbus_client_connect_status_invalid_protocol_version,
-	mbus_client_connect_status_invalid_client_identfier,
+	mbus_client_connect_status_invalid_identfier,
 	mbus_client_connect_status_server_error
 };
 
