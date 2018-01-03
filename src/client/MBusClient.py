@@ -298,15 +298,18 @@ class MBusClientOptions (object):
     
     def __init__ (self):
         self.identifier       = None
+        
         self.serverProtocol   = None
         self.serverAddress    = None
         self.serverPort       = None
+        
         self.connectTimeout   = None
         self.connectInterval  = None
         self.subscribeTimeout = None
         self.registerTimeout  = None
         self.commandTimeout   = None
         self.publishTimeout   = None
+        
         self.pingInterval     = None
         self.pingTimeout      = None
         self.pingThreshold    = None

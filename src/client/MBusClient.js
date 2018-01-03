@@ -316,15 +316,18 @@ function MBusClientCommandStatusString (status) {
 
 function MBusClientOptions () {
     this.identifier       = null;
+    
     this.serverProtocol   = null;
     this.serverAddress    = null;
     this.serverPort       = null;
+    
     this.connectTimeout   = null;
     this.connectInterval  = null;
     this.subscribeTimeout = null;
     this.registerTimeout  = null;
     this.commandTimeout   = null;
     this.publishTimeout   = null;
+    
     this.pingInterval     = null;
     this.pingTimeout      = null;
     this.pingThreshold    = null;
