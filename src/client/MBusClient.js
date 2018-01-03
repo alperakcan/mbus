@@ -72,7 +72,7 @@ function mbus_clock_before (a, b) {
 }
 
 var MBusClientDefaults = Object.freeze({
-    ClientIdentifier  : null,
+    Identifier        : null,
     
     ServerWSProtocol  : "ws",
     ServerWSAddress   : "127.0.0.1",
@@ -119,7 +119,7 @@ var MBusClientConnectStatus = Object.freeze({
     Timeout                 : 5,
     Canceled                : 6,
     InvalidProtocolVersion  : 7,
-    InvalidClientIdentifier : 8,
+    InvalidIdentifier       : 8,
     ServerError             : 9
 })
 
@@ -148,8 +148,8 @@ function MBusClientConnectStatusString (status) {
     if (status == MBusClientConnectStatus.InvalidProtocolVersion) {
     	return "invalid protocol version";
     }
-    if (status == MBusClientConnectStatus.InvalidClientIdentifier) {
-        return "invalid client identifier";
+    if (status == MBusClientConnectStatus.InvalidIdentifier) {
+        return "invalid identifier";
     }
     if (status == MBusClientConnectStatus.ServerError) {
         return "server error";
@@ -447,7 +447,7 @@ function MBusClient (options = null) {
 	}
     
 	if (this.__options.identifier == null) {
-		this.__options.identifier = MBusClientDefaults.ClientIdentifier;
+		this.__options.identifier = MBusClientDefaults.Identifier;
 	}
     
 	if (this.__options.connectTimeout == null ||
