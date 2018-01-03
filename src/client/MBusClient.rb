@@ -26,6 +26,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+require 'json'
 require 'socket'
 include Socket::Constants
 
@@ -380,6 +381,17 @@ module MBusClient
   end
   
   class MBusClientRequest
+    
+    attr_reader :type
+    attr_reader :destination
+    attr_reader :identifier
+    attr_reader :sequence
+    attr_reader :payload
+    attr_reader :callback
+    attr_reader :context
+    attr_reader :timeout
+    attr_reader :createdAt
+    
     def initialize (type, destination, identifier, sequence, payload, callback, context, timeout)
       @type        = type
       @destination = destination
@@ -400,7 +412,7 @@ module MBusClient
       request[MBUS_METHOD_TAG_SEQUENCE]    = @sequence
       request[MBUS_METHOD_TAG_PAYLOAD]     = @payload
       request[MBUS_METHOD_TAG_TIMEOUT]     = @timeout
-      return json.dumps(request)
+      return JSON.dump(request)
     end
   end
 
@@ -545,8 +557,8 @@ module MBusClient
       @pendings        = Array.new()
       @routines        = Array.new()
       @subscriptions   = Array.new()
-      @incoming        = nil
-      @outgoing        = nil
+      @incoming        = String.new()
+      @outgoing        = String.new()
       @identifier      = nil
       @connectTsms     = 0
       @pingInterval    = nil
@@ -782,10 +794,21 @@ module MBusClient
           selectWrite.push(@socket)
         else
           selectRead.push(@socket)
+          if (@outgoing.bytesize() > 0)
+            selectWrite.push(@socket)
+          end
         end
       end
 
       selectReadable, selectWritable, = IO.select(selectRead, selectWrite, nil, 1000 / 1000.00)
+      
+      if (selectReadable != nil)
+        selectReadable.each{ |fd|
+          if (fd == @socket)
+            raise "in data"
+          end
+        }
+      end
       
       if (selectWritable != nil)
         selectWritable.each{ |fd|
@@ -812,11 +835,30 @@ module MBusClient
                 notifyConnect(MBusClientConnectStatus.InternalError)
                 raise "can not connect to server"
               end
+            elsif (@outgoing.bytesize() > 0)
+              @socket.write(@outgoing)
+              @outgoing.clear()
             end
-          end 
+          end
         }
       end
-#      raise "not implemented yet"
+      
+      while (@requests.count() > 0)
+        request = @requests.shift()
+        
+        data = request.stringify()
+        data = data.to_s().encode('UTF-8')
+        data.force_encoding('ASCII-8BIT')
+        dlen = [data.bytesize().to_i()].pack('N')
+        
+        @outgoing += dlen
+        @outgoing += data
+
+        if (request.type == MBUS_METHOD_TYPE_EVENT)
+        else
+          @pendings.push(request)
+        end
+      end
     end
   end
 end
