@@ -30,8 +30,48 @@ require 'socket'
 include Socket::Constants
 
 module MBusClient
+  MBUS_METHOD_TYPE_COMMAND                    = "org.mbus.method.type.command"
+  MBUS_METHOD_TYPE_EVENT                      = "org.mbus.method.type.event"
+  MBUS_METHOD_TYPE_RESULT                     = "org.mbus.method.type.result"
+  
   MBUS_METHOD_SEQUENCE_START                  = 1
   MBUS_METHOD_SEQUENCE_END                    = 9999
+  
+  MBUS_METHOD_EVENT_SOURCE_ALL                = "org.mbus.method.event.source.all"
+  MBUS_METHOD_EVENT_DESTINATION_ALL           = "org.mbus.method.event.destination.all"
+  MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS   = "org.mbus.method.event.destination.subscribers"
+  MBUS_METHOD_EVENT_IDENTIFIER_ALL            = "org.mbus.method.event.identifier.all"
+  
+  MBUS_METHOD_TAG_TYPE                        = "org.mbus.method.tag.type"
+  MBUS_METHOD_TAG_SOURCE                      = "org.mbus.method.tag.source"
+  MBUS_METHOD_TAG_DESTINATION                 = "org.mbus.method.tag.destination"
+  MBUS_METHOD_TAG_IDENTIFIER                  = "org.mbus.method.tag.identifier"
+  MBUS_METHOD_TAG_SEQUENCE                    = "org.mbus.method.tag.sequence"
+  MBUS_METHOD_TAG_TIMEOUT                     = "org.mbus.method.tag.timeout"
+  MBUS_METHOD_TAG_PAYLOAD                     = "org.mbus.method.tag.payload"
+  MBUS_METHOD_TAG_STATUS                      = "org.mbus.method.tag.status"
+  
+  MBUS_SERVER_IDENTIFIER                      = "org.mbus.server"
+  
+  MBUS_SERVER_COMMAND_CREATE                  = "command.create"
+  MBUS_SERVER_COMMAND_EVENT                   = "command.event"
+  MBUS_SERVER_COMMAND_CALL                    = "command.call"
+  MBUS_SERVER_COMMAND_RESULT                  = "command.result"
+  MBUS_SERVER_COMMAND_STATUS                  = "command.status"
+  MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients"
+  MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe"
+  MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe"
+  MBUS_SERVER_COMMAND_REGISTER                = "command.register"
+  MBUS_SERVER_COMMAND_UNREGISTER              = "command.unregister"
+  MBUS_SERVER_COMMAND_CLOSE                   = "command.close"
+  
+  MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected"
+  MBUS_SERVER_EVENT_DISCONNECTED              = "org.mbus.server.event.disconnected"
+  MBUS_SERVER_EVENT_SUBSCRIBED                = "org.mbus.server.event.subscribed"
+  MBUS_SERVER_EVENT_UNSUBSCRIBED              = "org.mbus.server.event.unsubscribed"
+  
+  MBUS_SERVER_EVENT_PING                      = "org.mbus.server.event.ping"
+  MBUS_SERVER_EVENT_PONG                      = "org.mbus.server.event.pong"
 
   class MBusClientClock
     def self.get
@@ -339,6 +379,31 @@ module MBusClient
     end
   end
   
+  class MBusClientRequest
+    def initialize (type, destination, identifier, sequence, payload, callback, context, timeout)
+      @type        = type
+      @destination = destination
+      @identifier  = identifier
+      @sequence    = sequence
+      @payload     = payload
+      @callback    = callback
+      @context     = context
+      @timeout     = timeout
+      @createdAt   = MBusClientClock::get()
+    end
+    
+    def stringify
+      request = {}
+      request[MBUS_METHOD_TAG_TYPE]        = @type
+      request[MBUS_METHOD_TAG_DESTINATION] = @destination
+      request[MBUS_METHOD_TAG_IDENTIFIER]  = @identifier
+      request[MBUS_METHOD_TAG_SEQUENCE]    = @sequence
+      request[MBUS_METHOD_TAG_PAYLOAD]     = @payload
+      request[MBUS_METHOD_TAG_TIMEOUT]     = @timeout
+      return json.dumps(request)
+    end
+  end
+
   class MBusClient
 
     private
@@ -393,8 +458,37 @@ module MBusClient
       @sequence        = MBUS_METHOD_SEQUENCE_START
       @compression     = nil
       @socketConnected = 0
+      
+      @requests.clear()
+      @pendings.clear()
+      @routines.clear()
+      @subscriptions.clear()
     end
     
+    def commandCreateResponse (context, message, status)
+      
+    end
+    
+    def commandCreateRequest
+      payload = {}
+      if (@options.identifier != nil)
+        payload["identifier"] = @options.identifier
+      end
+      if (@options.pingInterval > 0)
+        payload["ping"] = {}
+        payload["ping"]["interval"] = @options.pingInterval
+        payload["ping"]["timeout"] = @options.pingTimeout
+        payload["ping"]["threshold"] = @options.pingThreshold
+      end
+      payload["compressions"] = []
+      payload["compressions"].push("none")
+      rc = command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CREATE, payload, method(:commandCreateResponse))
+      if (rc != 0)
+          return -1
+      end
+      return 0
+    end
+
     def runConnect
       status = MBusClientConnectStatus::INTERNAL_ERROR
       reset()
@@ -447,10 +541,10 @@ module MBusClient
       @options         = nil
       @state           = MBusClientState::DISCONNECTED
       @socket          = nil
-      @requests        = nil
-      @pendings        = nil
-      @routines        = nil
-      @subscriptions   = nil
+      @requests        = Array.new()
+      @pendings        = Array.new()
+      @routines        = Array.new()
+      @subscriptions   = Array.new()
       @incoming        = nil
       @outgoing        = nil
       @identifier      = nil
@@ -614,6 +708,38 @@ module MBusClient
       raise "not implemented yet"
     end
     
+    def command (destination, command, payload, callback = nil, context = nil, timeout = nil)
+      if (destination == nil)
+        raise ValueError("destination is invalid")
+      end
+      if (command == nil)
+        raise ValueError("command is invalid")
+      end
+      if (command == MBUS_SERVER_COMMAND_CREATE)
+        if (@state != MBusClientState::CONNECTING)
+          raise ValueError("client state is not connecting: {}".format(@state))
+        end
+      else
+        if (@state != MBusClientState.Connected)
+          raise ValueError("client state is not connected: {}".format(@state))
+        end
+      end
+      if (timeout == nil or
+          timeout <= 0)
+        timeout = @options.commandTimeout
+      end
+      request = MBusClientRequest.new(MBUS_METHOD_TYPE_COMMAND, destination, command, @sequence, payload, callback, context, timeout)
+      if (request == nil)
+        raise ValueError("can not create request")
+      end
+      @sequence += 1
+      if (@sequence >= MBUS_METHOD_SEQUENCE_END)
+        @sequence = MBUS_METHOD_SEQUENCE_START
+      end
+      @requests.push(request)
+      return 0
+    end
+
     def run (timeout = -1)
       p"loop"
       if (@state == MBusClientState::CONNECTING)
