@@ -443,7 +443,7 @@ function MBusClient (options = null) {
 	if (options == undefined) {
 		this.__options = new MBusClientOptions();
 	} else {
-		this.__options = options;
+		this.__options = Object.assign(new MBusClientOptions(), options);
 	}
     
 	if (this.__options.identifier == null) {
