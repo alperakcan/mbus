@@ -148,7 +148,7 @@ module MBusClient
     TIMEOUT                   = 5
     CANCELED                  = 6
     INVALID_PROTOCOL_VERSION  = 7
-    INVALID_IDENTIFIER = 8
+    INVALID_IDENTIFIER        = 8
     SERVER_ERROR              = 9
     
     def self.string (status)
