@@ -1311,7 +1311,8 @@ module MBusClient
     end
     
     def breakRun
-      raise "not implemented yet"
+      wakeUp(MBusClientWakeUpReason::Break)
+      return 0
     end
     
     def run (timeout = -1)
