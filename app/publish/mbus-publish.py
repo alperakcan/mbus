@@ -99,7 +99,7 @@ for opt, arg in options:
                        o_event, \
                        o_payload, \
                        o_flood, \
-                       MBusClient.MBusClientDefaults.ClientIdentifier, \
+                       MBusClient.MBusClientDefaults.Identifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
                        MBusClient.MBusClientDefaults.ServerPort, \
