@@ -370,6 +370,7 @@ module MBusClient
     attr_accessor :onConnect
     attr_accessor :onDisconnect
     attr_accessor :onMessage
+    attr_accessor :onResult
     attr_accessor :onRoutine
     attr_accessor :onPublish
     attr_accessor :onSubscribe
@@ -399,6 +400,7 @@ module MBusClient
       @onConnect        = nil
       @onDisconnect     = nil
       @onMessage        = nil
+      @onResult         = nil
       @onRoutine        = nil
       @onPublish        = nil
       @onSubscribe      = nil
@@ -477,10 +479,18 @@ module MBusClient
       @response = response
     end
     
+    def getRequestDestination
+      return @request[MBUS_METHOD_TAG_DESTINATION]
+    end
+    
+    def getRequestIdentifier
+      return @request[MBUS_METHOD_TAG_IDENTIFIER]
+    end
+    
     def getRequestPayload
       return @request[MBUS_METHOD_TAG_PAYLOAD]
     end
-
+    
     def getResponseStatus
       return @response[MBUS_METHOD_TAG_STATUS]
     end
@@ -518,40 +528,46 @@ module MBusClient
     attr_accessor :sequence
     
     def notifyPublish (request, status)
-      if (@options.onPublish != None)
+      if (@options.onPublish != nil)
         message = MBusClientMessageEvent(request)
         @options.onPublish.call(self, @options.onContext, message, status)
       end
     end
 
     def notifySubscribe (source, event, status)
-      if (@options.onSubscribe != None)
+      if (@options.onSubscribe != nil)
         @options.onSubscribe.call(self, @options.onContext, source, event, status)
       end
     end
 
     def notifyUnsubscribe (source, event, status)
-      if (@options.onUnsubscribe != None)
+      if (@options.onUnsubscribe != nil)
         @options.onUnsubscribe.call(self, @options.onContext, source, event, status)
       end
     end
 
     def notifyRegistered (command, status)
-      if (@options.onRegistered != None)
+      if (@options.onRegistered != nil)
         @options.onRegistered.call(self, @options.onContext, command, status)
       end
     end
 
     def notifyUnregistered (command, status)
-      if (@options.onUnregistered != None)
+      if (@options.onUnregistered != nil)
         @options.onUnregistered.call(self, @options.onContext, command, status)
       end
     end
 
     def notifyCommand (request, response, status)
+      callback = @options.onResult
+      context = @options.onContext
       if (request.callback != nil)
+        callback = request.callback
+        context = request.context
+      end
+      if (callback != nil)
         message = MBusClientMessageCommand.new(request, response)
-        request.callback.call(self, request.context, message, status)
+        callback.call(self, context, message, status)
       end
     end
     
@@ -944,7 +960,7 @@ module MBusClient
       raise "not implemented yet"
     end
     
-    def command (destination, command, payload, callback = nil, context = nil, timeout = nil)
+    def command (destination, command, payload = nil, callback = nil, context = nil, timeout = nil)
       if (destination == nil)
         raise "destination is invalid"
       end
@@ -1182,6 +1198,10 @@ module MBusClient
         @outgoing += data
 
         if (request.type == MBUS_METHOD_TYPE_EVENT)
+          if (request.destination != MBUS_SERVER_IDENTIFIER and
+              request.identifier != MBUS_SERVER_EVENT_PING)
+            notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::SUCCESS)
+          end
         else
           @pendings.push(request)
         end
@@ -1190,10 +1210,17 @@ module MBusClient
   end
 end
 
+def onResult (client, context, message, status)
+  puts "command status: %s" % MBusClient::MBusClientCommandStatus::string(status)
+  puts "  request: %s.%s: %s" % [ message.getRequestDestination(), message.getRequestIdentifier(), message.getRequestPayload() ]
+  puts "  response: %s, %s" % [ message.getResponseStatus(), message.getResponsePayload() ] 
+end
+
 def onConnect (client, context, status)
   puts "connect status: %s" % MBusClient::MBusClientConnectStatus::string(status)
   if (status == MBusClient::MBusClientConnectStatus::SUCCESS)
-    puts "  identifier: %p" % [ client.identifier ]
+    puts "  identifier: %s" % [ client.identifier ]
+    client.command(MBusClient::MBUS_SERVER_IDENTIFIER, MBusClient::MBUS_SERVER_COMMAND_STATUS)
   end
 end
 
@@ -1205,6 +1232,7 @@ options = MBusClient::MBusClientOptions.new()
 options.connectInterval = 0
 options.onConnect = method(:onConnect)
 options.onDisconnect = method(:onDisconnect)
+options.onResult = method(:onResult)
 
 client = MBusClient::MBusClient.new(options)
 client.connect()

@@ -319,6 +319,7 @@ class MBusClientOptions (object):
         self.onConnect        = None
         self.onDisconnect     = None
         self.onMessage        = None
+        self.onResult         = None
         self.onRoutine        = None
         self.onPublish        = None
         self.onSubscribe      = None
@@ -421,7 +422,12 @@ class MBusClient (object):
             self.__options.onUnregistered(self, self.__options.onContext, command, status)
 
     def __notifyCommand (self, request, response, status):
+        callback = self.__options.onResult
+        context = self.__options.onContext
         if (request.callback != None):
+            callback = request.callback
+            context = request.context
+        if (callback != None):
             message = MBusClientMessageCommand(request, response)
             request.callback(self, request.context, message, status)
 
@@ -927,7 +933,7 @@ class MBusClient (object):
     def unregister (self, command):
         raise ValueError("not implemented yet")
     
-    def command (self, destination, command, payload, callback = None, context = None, timeout = None):
+    def command (self, destination, command, payload = None, callback = None, context = None, timeout = None):
         if (destination == None):
             raise ValueError("destination is invalid")
         if (command == None):

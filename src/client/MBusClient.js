@@ -335,6 +335,7 @@ function MBusClientOptions () {
     this.onConnect        = null;
     this.onDisconnect     = null;
     this.onMessage        = null;
+    this.onResult         = null;
     this.onRoutine        = null;
     this.onPublish        = null;
     this.onSubscribe      = null;
@@ -593,9 +594,15 @@ function MBusClient (options = null) {
 	}
 
 	this.__notifyCommand = function (request, response, status) {
+		callback = this.__options.onResult;
+		context = this.__options.onContext
 		if (request.callback != null) {
+			callback = request.callback;
+			context = request.context;
+		}
+		if (callback != null)
 			message = new MBusClientMessageCommand(request, response);
-			request.callback(this, request.context, message, status);
+			callback(this, context, message, status);
 		}
 	}
 
