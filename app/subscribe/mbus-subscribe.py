@@ -84,7 +84,7 @@ for opt, arg in options:
               "  --mbus-client-ping-threshold   : ping threshold (default: {})\n" \
               "  --help                         : this text" \
               .format( \
-                       MBusClient.MBusClientDefaults.ClientIdentifier, \
+                       MBusClient.MBusClientDefaults.Identifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
                        MBusClient.MBusClientDefaults.ServerPort, \
