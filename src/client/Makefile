@@ -57,7 +57,8 @@ dist.lib-${SHARED_ENABLE} += \
 
 dist.lib-y += \
 	MBusClient.js \
-	MBusClient.py
+	MBusClient.py \
+	MBusClient.rb
 
 include ../../Makefile.lib
 

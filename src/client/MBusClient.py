@@ -35,6 +35,8 @@ import json
 import collections
 import select
 import struct
+import copy
+
 try:
     import ssl
 except ImportError:
@@ -99,7 +101,7 @@ def mbus_clock_before (a, b):
     return mbus_clock_after(b, a)
 
 class MBusClientDefaults:
-    ClientIdentifier = None
+    Identifier        = None
     
     ServerTCPProtocol = "tcp"
     ServerTCPAddress  = "127.0.0.1"
@@ -143,7 +145,7 @@ class MBusClientConnectStatus:
     Timeout                 = 5
     Canceled                = 6
     InvalidProtocolVersion  = 7
-    InvalidClientIdentifier = 8
+    InvalidIdentifier       = 8
     ServerError             = 9
     
 def MBusClientConnectStatusString (status):
@@ -163,8 +165,8 @@ def MBusClientConnectStatusString (status):
         return "connection canceled"
     if (status == MBusClientConnectStatus.InvalidProtocolVersion):
         return "invalid protocol version"
-    if (status == MBusClientConnectStatus.InvalidClientIdentifier):
-        return "invalid client identifier"
+    if (status == MBusClientConnectStatus.InvalidIdentifier):
+        return "invalid identifier"
     if (status == MBusClientConnectStatus.ServerError):
         return "server error"
     return "unknown"
@@ -298,15 +300,18 @@ class MBusClientOptions (object):
     
     def __init__ (self):
         self.identifier       = None
+        
         self.serverProtocol   = None
         self.serverAddress    = None
         self.serverPort       = None
+        
         self.connectTimeout   = None
         self.connectInterval  = None
         self.subscribeTimeout = None
         self.registerTimeout  = None
         self.commandTimeout   = None
         self.publishTimeout   = None
+        
         self.pingInterval     = None
         self.pingTimeout      = None
         self.pingThreshold    = None
@@ -314,6 +319,7 @@ class MBusClientOptions (object):
         self.onConnect        = None
         self.onDisconnect     = None
         self.onMessage        = None
+        self.onResult         = None
         self.onRoutine        = None
         self.onPublish        = None
         self.onSubscribe      = None
@@ -416,7 +422,12 @@ class MBusClient (object):
             self.__options.onUnregistered(self, self.__options.onContext, command, status)
 
     def __notifyCommand (self, request, response, status):
+        callback = self.__options.onResult
+        context = self.__options.onContext
         if (request.callback != None):
+            callback = request.callback
+            context = request.context
+        if (callback != None):
             message = MBusClientMessageCommand(request, response)
             request.callback(self, request.context, message, status)
 
@@ -710,8 +721,8 @@ class MBusClient (object):
         self.__pendings        = collections.deque()
         self.__routines        = collections.deque()
         self.__subscriptions   = collections.deque()
-        self.__incoming        = None
-        self.__outgoing        = None
+        self.__incoming        = bytearray()
+        self.__outgoing        = bytearray()
         self.__identifier      = None
         self.__connectTsms     = 0
         self.__pingInterval    = None
@@ -733,10 +744,10 @@ class MBusClient (object):
         else:
             if (not isinstance(options, MBusClientOptions)):
                 raise ValueError("options is invalid")
-            self.__options = options
+            self.__options = copy.deepcopy(options)
         
         if (self.__options.identifier == None):
-            self.__options.identifier = MBusClientDefaults.ClientIdentifier
+            self.__options.identifier = MBusClientDefaults.Identifier
         
         if (self.__options.connectTimeout == None or
             self.__options.connectTimeout <= 0):
@@ -780,7 +791,7 @@ class MBusClient (object):
                 self.__options.serverPort = MBusClientDefaults.ServerTCPPort
         else:
             raise ValueError("invalid server protocol: {}".format(self.__options.serverProtocol))
-    
+
     def getOptions (self):
         options = None
         options = self.__options
@@ -922,7 +933,7 @@ class MBusClient (object):
     def unregister (self, command):
         raise ValueError("not implemented yet")
     
-    def command (self, destination, command, payload, callback = None, context = None, timeout = None):
+    def command (self, destination, command, payload = None, callback = None, context = None, timeout = None):
         if (destination == None):
             raise ValueError("destination is invalid")
         if (command == None):
@@ -1061,7 +1072,7 @@ class MBusClient (object):
             
             if (fd == self.__socket.fileno()):
                 if (event & select.POLLIN):
-                    dlen = 0
+                    data = bytearray()
                     try:
                         data = self.__socket.recv(4096)
                     except socket.error as error:
@@ -1072,7 +1083,7 @@ class MBusClient (object):
                         if error.errno == errno.EWOULDBLOCK:
                             pass
                         raise ValueError("recv failed")
-                    if (len(data) == 0):
+                    if (len(data) <= 0):
                         self.__reset()
                         self.__state = MBusClientState.Disconnected
                         self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
@@ -1166,7 +1177,7 @@ class MBusClient (object):
                     self.__state = MBusClientState.Disconnected
                 return 0
 
-        for request in self.__requests:
+        for request in self.__requests[:]:
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
                 continue
@@ -1187,8 +1198,9 @@ class MBusClient (object):
                     self.__notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
                 else:
                     self.__notifyCommand(request, None, MBusClientCommandStatus.Timeout)
+            self.__requests.remove(request)
 
-        for request in self.__pendings:
+        for request in self.__pendings[:]:
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
                 continue
@@ -1209,6 +1221,7 @@ class MBusClient (object):
                     self.__notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus.Timeout)
                 else:
                     self.__notifyCommand(request, None, MBusClientCommandStatus.Timeout)
+            self.__pendings.remove(request)
 
         while (len(self.__requests) > 0):
             request = self.__requests.popleft()

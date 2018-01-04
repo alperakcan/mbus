@@ -593,12 +593,20 @@ static void mbus_client_notify_unregistered (struct mbus_client *client, const c
 
 static void mbus_client_notify_command (struct mbus_client *client, const struct request *request, const struct mbus_json *response, enum mbus_client_command_status status)
 {
+	void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status);
+	void *context;
+	callback = client->options->callbacks.result;
+	context = client->options->callbacks.context;
 	if (request_get_callback(request) != NULL) {
+		callback = request_get_callback(request);
+		context = request_get_context(request);
+	}
+	if (callback != NULL) {
 		struct mbus_client_message_command message;
 		message.request = request_get_json(request);
 		message.response = response;
 		mbus_client_unlock(client);
-		request_get_callback(request)(client, request_get_context(request), &message, status);
+		callback(client, context, &message, status);
 		mbus_client_lock(client);
 	}
 }
@@ -3767,7 +3775,7 @@ const char * mbus_client_connect_status_string (enum mbus_client_connect_status 
 		case mbus_client_connect_status_timeout:			return "connection timeout";
 		case mbus_client_connect_status_canceled:			return "connection canceled";
 		case mbus_client_connect_status_invalid_protocol_version:	return "invalid protocol version";
-		case mbus_client_connect_status_invalid_client_identfier:	return "invalid client identifier";
+		case mbus_client_connect_status_invalid_identfier:		return "invalid identifier";
 		case mbus_client_connect_status_server_error:			return "server error";
 	}
 	return "internal error";

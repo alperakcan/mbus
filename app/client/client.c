@@ -92,6 +92,22 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	rl_on_new_line();
 }
 
+static void mbus_client_callback_result (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status)
+{
+	char *request_string;
+	char *response_string;
+	(void) client;
+	(void) context;
+	fprintf(stdout, "\033[0G** command status: %d, %s\n", status, mbus_client_command_status_string(status));
+	request_string = mbus_json_print(mbus_client_message_command_request_payload(message));
+	response_string = mbus_json_print(mbus_client_message_command_response_payload(message));
+	fprintf(stdout, "request: %s.%s: %s\n", mbus_client_message_command_request_destination(message), mbus_client_message_command_request_identifier(message), request_string);
+	fprintf(stdout, "response: %d, %s\n", mbus_client_message_command_response_status(message), response_string);
+	free(request_string);
+	free(response_string);
+	rl_on_new_line();
+}
+
 static int mbus_client_callback_routine (struct mbus_client *client, void *context, struct mbus_client_message_routine *message)
 {
 	int rc;
@@ -375,6 +391,7 @@ static int command_create (int argc, char *argv[])
 	options.callbacks.connect     = mbus_client_callback_connect;
 	options.callbacks.disconnect  = mbus_client_callback_disconnect;
 	options.callbacks.message     = mbus_client_callback_message;
+	options.callbacks.result      = mbus_client_callback_result;
 	options.callbacks.routine     = mbus_client_callback_routine;
 	options.callbacks.publish     = mbus_client_callback_publish;
 	options.callbacks.subscribe   = mbus_client_callback_subscribe;
@@ -541,7 +558,7 @@ static int command_subscribe (int argc, char *argv[])
 		{ "help",	no_argument,		0,	'h' },
 		{ "source",	required_argument,	0,	's' },
 		{ "event",	required_argument,	0,	'e' },
-		{ "qos",		required_argument,	0,	'q' },
+		{ "qos",	required_argument,	0,	'q' },
 		{ "callback",	required_argument,	0,	'c' },
 		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
@@ -713,7 +730,7 @@ static int command_publish (int argc, char *argv[])
 		{ "destination",required_argument,	0,	'd' },
 		{ "event",	required_argument,	0,	'e' },
 		{ "payload",	required_argument,	0,	'p' },
-		{ "qos",		required_argument,	0,	'q' },
+		{ "qos",	required_argument,	0,	'q' },
 		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
@@ -811,6 +828,7 @@ static int command_command (int argc, char *argv[])
 	const char *destination;
 	const char *command;
 	const char *payload;
+	int callback;
 	int timeout;
 	struct mbus_json *jpayload;
 
@@ -820,6 +838,7 @@ static int command_command (int argc, char *argv[])
 		{ "destination",required_argument,	0,	'd' },
 		{ "command",	required_argument,	0,	'c' },
 		{ "payload",	required_argument,	0,	'p' },
+		{ "callback",	required_argument,	0,	'b' },
 		{ "timeout",	required_argument,	0,	't' },
 		{ NULL,		0,			NULL,	0 }
 	};
@@ -827,12 +846,13 @@ static int command_command (int argc, char *argv[])
 	destination = NULL;
 	command = NULL;
 	payload = NULL;
+	callback = 0;
 	timeout = -1;
 
 	jpayload = NULL;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "d:c:p:t:h", long_options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:c:p:b:t:h", long_options, NULL)) != -1) {
 		switch (c) {
 			case 'd':
 				destination = optarg;
@@ -843,6 +863,9 @@ static int command_command (int argc, char *argv[])
 			case 'p':
 				payload = optarg;
 				break;
+			case 'b':
+				callback = atoi(optarg);
+				break;
 			case 't':
 				timeout = atoi(optarg);
 				break;
@@ -851,6 +874,7 @@ static int command_command (int argc, char *argv[])
 				fprintf(stdout, "  -d, --destination: destination to execute command (default: %s)\n", destination);
 				fprintf(stdout, "  -c, --command    : command identifier to execute (default: %s)\n", command);
 				fprintf(stdout, "  -p, --payload    : command payload (default: %s)\n", payload);
+				fprintf(stdout, "  -b, --callback: register with callback (default: %d)\n", callback);
 				fprintf(stdout, "  -t, --timeout    : command timeout (default: %d)\n", timeout);
 				fprintf(stdout, "  -h, --help       : this text\n");;
 				return 0;
@@ -889,8 +913,10 @@ static int command_command (int argc, char *argv[])
 	options.destination = destination;
 	options.command = command;
 	options.payload = jpayload;
-	options.callback = mbus_client_callback_command_callback;
-	options.context = NULL;
+	if (callback != 0) {
+		options.callback = mbus_client_callback_command_callback;
+		options.context = NULL;
+	}
 	options.timeout = timeout;
 	rc = mbus_client_command_with_options_unlocked(g_mbus_client, &options);
 	if (rc != 0) {

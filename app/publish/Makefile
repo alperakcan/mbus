@@ -39,6 +39,7 @@ distdir = ../../dist
 
 dist.bin-y = \
 	mbus-publish \
-	mbus-publish.py
+	mbus-publish.py \
+	mbus-publish.rb
 
 include ../../Makefile.lib

@@ -62,7 +62,7 @@ enum mbus_client_connect_status {
 	mbus_client_connect_status_timeout,
 	mbus_client_connect_status_canceled,
 	mbus_client_connect_status_invalid_protocol_version,
-	mbus_client_connect_status_invalid_client_identfier,
+	mbus_client_connect_status_invalid_identfier,
 	mbus_client_connect_status_server_error
 };
 
@@ -184,6 +184,7 @@ struct mbus_client_options {
 		void (*connect) (struct mbus_client *client, void *context, enum mbus_client_connect_status status);
 		void (*disconnect) (struct mbus_client *client, void *context, enum mbus_client_disconnect_status status);
 		void (*message) (struct mbus_client *client, void *context, struct mbus_client_message_event *message);
+		void (*result) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status);
 		int (*routine) (struct mbus_client *client, void *context, struct mbus_client_message_routine *message);
 		void (*publish) (struct mbus_client *client, void *context, struct mbus_client_message_event *message, enum mbus_client_publish_status status);
 		void (*subscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_subscribe_status status);

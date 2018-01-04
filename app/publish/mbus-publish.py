@@ -78,7 +78,7 @@ for opt, arg in options:
               "  -d, --destination              : publish destination identifier (default: {})\n" \
               "  -e, --event                    : publish event identifier (default: {})\n" \
               "  -p, --payload                  : publish payload (default: {})\n" \
-              "  -f, --flood                    : publish event n timed (default: {})\n" \
+              "  -f, --flood                    : publish event n times (default: {})\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
@@ -99,7 +99,7 @@ for opt, arg in options:
                        o_event, \
                        o_payload, \
                        o_flood, \
-                       MBusClient.MBusClientDefaults.ClientIdentifier, \
+                       MBusClient.MBusClientDefaults.Identifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
                        MBusClient.MBusClientDefaults.ServerPort, \

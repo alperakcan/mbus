@@ -72,7 +72,7 @@ function mbus_clock_before (a, b) {
 }
 
 var MBusClientDefaults = Object.freeze({
-    ClientIdentifier  : null,
+    Identifier        : null,
     
     ServerWSProtocol  : "ws",
     ServerWSAddress   : "127.0.0.1",
@@ -119,7 +119,7 @@ var MBusClientConnectStatus = Object.freeze({
     Timeout                 : 5,
     Canceled                : 6,
     InvalidProtocolVersion  : 7,
-    InvalidClientIdentifier : 8,
+    InvalidIdentifier       : 8,
     ServerError             : 9
 })
 
@@ -148,8 +148,8 @@ function MBusClientConnectStatusString (status) {
     if (status == MBusClientConnectStatus.InvalidProtocolVersion) {
     	return "invalid protocol version";
     }
-    if (status == MBusClientConnectStatus.InvalidClientIdentifier) {
-        return "invalid client identifier";
+    if (status == MBusClientConnectStatus.InvalidIdentifier) {
+        return "invalid identifier";
     }
     if (status == MBusClientConnectStatus.ServerError) {
         return "server error";
@@ -316,15 +316,18 @@ function MBusClientCommandStatusString (status) {
 
 function MBusClientOptions () {
     this.identifier       = null;
+    
     this.serverProtocol   = null;
     this.serverAddress    = null;
     this.serverPort       = null;
+    
     this.connectTimeout   = null;
     this.connectInterval  = null;
     this.subscribeTimeout = null;
     this.registerTimeout  = null;
     this.commandTimeout   = null;
     this.publishTimeout   = null;
+    
     this.pingInterval     = null;
     this.pingTimeout      = null;
     this.pingThreshold    = null;
@@ -332,6 +335,7 @@ function MBusClientOptions () {
     this.onConnect        = null;
     this.onDisconnect     = null;
     this.onMessage        = null;
+    this.onResult         = null;
     this.onRoutine        = null;
     this.onPublish        = null;
     this.onSubscribe      = null;
@@ -440,11 +444,11 @@ function MBusClient (options = null) {
 	if (options == undefined) {
 		this.__options = new MBusClientOptions();
 	} else {
-		this.__options = options;
+		this.__options = Object.assign(new MBusClientOptions(), options);
 	}
     
 	if (this.__options.identifier == null) {
-		this.__options.identifier = MBusClientDefaults.ClientIdentifier;
+		this.__options.identifier = MBusClientDefaults.Identifier;
 	}
     
 	if (this.__options.connectTimeout == null ||
@@ -590,9 +594,15 @@ function MBusClient (options = null) {
 	}
 
 	this.__notifyCommand = function (request, response, status) {
+		callback = this.__options.onResult;
+		context = this.__options.onContext
 		if (request.callback != null) {
+			callback = request.callback;
+			context = request.context;
+		}
+		if (callback != null)
 			message = new MBusClientMessageCommand(request, response);
-			request.callback(this, request.context, message, status);
+			callback(this, context, message, status);
 		}
 	}
 
