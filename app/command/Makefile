@@ -39,6 +39,7 @@ distdir = ../../dist
 
 dist.bin-y = \
 	mbus-command \
-	mbus-command.py
+	mbus-command.py \
+	mbus-command.rb
 
 include ../../Makefile.lib

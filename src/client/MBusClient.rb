@@ -81,7 +81,10 @@ module MBusClient
     end
     
     def self.after (a, b)
-      return ((((b) - (a)) < 0)) ? 1 : 0;
+      if (((((b) - (a)) < 0)))
+        return true
+       end
+       return false
     end
     
     def self.before (a, b)
@@ -526,6 +529,8 @@ module MBusClient
     attr_accessor :compression
     attr_accessor :socketConnected
     attr_accessor :sequence
+    attr_accessor :wakeupRead
+    attr_accessor :wakeupWrite
     
     def notifyPublish (request, status)
       if (@options.onPublish != nil)
@@ -797,6 +802,45 @@ module MBusClient
       return 0
     end
 
+    def handleEvent (object)
+      source = object[MBUS_METHOD_TAG_SOURCE]
+      if (source == nil)
+        return -1
+      end
+      identifier = object[MBUS_METHOD_TAG_IDENTIFIER]
+      if (identifier == nil)
+        return -1
+      end
+      if (source == MBUS_SERVER_IDENTIFIER and
+          identifier == MBUS_SERVER_EVENT_PONG)
+        @pingWaitPong = 0
+        @pingMissedCount = 0
+        @pongRecvTsms = MBusClientClock::get()
+      else
+        callback = @options.onMessage
+        callbackContext = @options.onContext
+        for s in @subscriptions
+          if ((s.source == MBUS_METHOD_EVENT_SOURCE_ALL or s.source == source) and
+              (s.identifier == MBUS_METHOD_EVENT_IDENTIFIER_ALL or s.identifier == identifier))
+            if (s.callback != nil)
+              callback = s.callback
+              callbackContext = s.context
+            end
+            break
+          end
+        end
+      end
+      if (callback != nil)
+        message = MBusClientMessageEvent(object)
+        callback(self, callbackContext, message)
+      end
+    end
+    
+    def wakeUp (reason)
+      data = [reason.to_i()].pack("N")
+      @wakeupWrite.write(data)
+    end
+    
     public
     
     attr_reader   :identifier
@@ -823,6 +867,7 @@ module MBusClient
       @compression     = nil
       @socketConnected = nil
       @sequence        = nil
+      @wakeupRead, @wakeupWrite = IO::pipe()
       
       if (options == nil)
         @options = MBusClientOptions.new()
@@ -911,7 +956,9 @@ module MBusClient
     end
     
     def getWakeUpFd
-      raise "not implemented yet"
+      fd = nil
+      fd = @wakeupRead
+      return fd
     end
     
     def getWakeUpFdEvents
@@ -919,7 +966,9 @@ module MBusClient
     end
     
     def getConnectionFd
-      raise "not implemented yet"
+      fd = nil
+      fd = @socket
+      return fd
     end
     
     def getConnectionFdEvents
@@ -927,17 +976,28 @@ module MBusClient
     end
     
     def hasPending
-      raise "not implemented yet"
+      rc = 0
+      if (@requests.count() > 0 or
+          @pendings.count() > 0 or
+          @incoming.bytesize() > 0 or
+          @outgoing.bytesize() > 0)
+          rc = 1
+      end
+      return rc
     end
     
     def connect
       if (@state != MBusClientState::CONNECTED)
         @state = MBusClientState::CONNECTING
+        wakeUp(MBusClientWakeUpReason::CONNECT)
       end
     end
     
     def disconnect
-      raise "not implemented yet"
+      if (@state != MBusClientState::DISCONNECTED)
+        @state = MBusClientState::DISCONNECTING
+        wakeUp(MBusClientWakeUpReason::DISCONNECT)
+      end
     end
     
     def subscribe
@@ -948,8 +1008,43 @@ module MBusClient
       raise "not implemented yet"
     end
     
-    def publish
-      raise "not implemented yet"
+    def publish (event, payload = nil, qos = nil, destination = nil, timeout = nil)
+      if (@state != MBusClientState::CONNECTED)
+        raise "client state is not connected: %d" % [@state]
+      end
+      if (event == nil)
+        raise "event is invalid"
+      end
+      if (qos == nil)
+        qos = MBusClientQoS::AT_MOST_ONCE
+      end
+      if (destination == nil)
+        destination = MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS
+      end
+      if (timeout == nil or
+          timeout <= 0)
+        timeout = @options.publishTimeout
+      end
+      if (qos == MBusClientQoS::AT_MOST_ONCE)
+        request = MBusClientRequest.new(MBUS_METHOD_TYPE_EVENT, destination, event, @sequence, payload, nil, nil, timeout)
+        if (request == nil)
+          raise "can not create request"
+        end
+        @sequence += 1
+        if (@sequence >= MBUS_METHOD_SEQUENCE_END)
+          @sequence = MBUS_METHOD_SEQUENCE_START
+        end
+        @requests.push(request)
+      elsif (qos == MBusClientQoS::AT_LEAST_ONCE)
+        cpayload = {}
+        cpayload[MBUS_METHOD_TAG_DESTINATION] = destination
+        cpayload[MBUS_METHOD_TAG_IDENTIFIER] = event
+        cpayload[MBUS_METHOD_TAG_PAYLOAD] = payload
+        command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, @commandEventResponse, nil, timeout)
+      else
+        raise "qos: %d is invalid" % [ qos ]
+      end
+      return 0
     end
     
     def register
@@ -993,7 +1088,63 @@ module MBusClient
     end
     
     def getRunTimeout
-      raise "not implemented yet"
+      current = MBusClientClock::get()
+      timeout = MBusClientDefaults::RUN_TIMEOUT
+      if (@state == MBusClientState::CONNECTING)
+        if (@socket == nil)
+          if (MBusClientClock::after(current, @connectTsms + @options.connectInterval))
+            timeout = 0
+          else
+            timeout = [timeout, (@connectTsms + @options.connectInterval) - (current)].min
+          end
+        elsif (@socketConnected == 0)
+          if (MBusClientClock::after(current, @connectTsms + @options.connectTimeout))
+            timeout = 0
+          else
+            timeout = [timeout, (@connectTsms + @options.connectTimeout) - (current)].min
+          end
+        end
+      elsif (@state == MBusClientState::CONNECTED)
+        if (@pingInterval > 0)
+          if (MBusClientClock::after(current, @pingSendTsms + @pingInterval))
+            timeout = 0
+          else
+            timeout = [timeout, (@pingSendTsms + @pingInterval) - (current)].min
+          end
+        end
+        for request in @requests
+          if (request.timeout >= 0)
+            if (MBusClientClock::after(current, request.createdAt + request.timeout))
+              timeout = 0
+            else
+              timeout = [timeout, (request.createdAt + request.timeout) - (current)].min
+            end
+          end
+        end
+        for request in @pendings
+          if (request.timeout >= 0)
+            if (MBusClientClock::after(current, request.createdAt + request.timeout))
+              timeout = 0
+            else
+              timeout = [timeout, (request.createdAt + request.timeout) - (current)].min
+            end
+          end
+        end
+        if (@incoming.bytesize() > 0)
+          timeout = 0
+        end
+      elsif (@state == MBusClientState::DISCONNECTING)
+        timeout = 0
+      elsif (@state == MBusClientState::DISCONNECTED)
+        if (@options.connectInterval > 0)
+          if (MBusClientClock::after(current, @connectTsms + @options.connectInterval))
+            timeout = 0
+          else
+            timeout = [timeout, (@connectTsms + @options.connectInterval) - (current)].min
+          end
+        end
+      end
+      return timeout
     end
     
     def breakRun
@@ -1005,7 +1156,7 @@ module MBusClient
         if (@socket == nil)
           current = MBusClientClock::get()
           if (@options.connectInterval <= 0 or
-            MBusClientClock::after(current, @connectTsms + @options.connectInterval) != 0)
+            MBusClientClock::after(current, @connectTsms + @options.connectInterval))
             @connectTsms = MBusClientClock::get()
             rc = runConnect()
             if (rc != 0)
@@ -1030,6 +1181,8 @@ module MBusClient
       
       selectRead = Array.new()
       selectWrite = Array.new()
+      
+      selectRead.push(@wakeupRead)
       if (@socket != nil)
         if (@state == MBusClientState::CONNECTING and
             @socketConnected == 0)
@@ -1042,10 +1195,22 @@ module MBusClient
         end
       end
 
-      selectReadable, selectWritable, = IO.select(selectRead, selectWrite, nil, 1000 / 1000.00)
+      ptimeout = getRunTimeout()
+      if (ptimeout < 0 or
+          timeout < 0)
+          ptimeout = [ptimeout, timeout].max
+      else
+          ptimeout = [ptimeout, timeout].min
+      end
+
+      selectReadable, selectWritable, = IO.select(selectRead, selectWrite, nil, ptimeout / 1000.00)
       
       if (selectReadable != nil)
         selectReadable.each do |fd|
+          if (fd == @wakeupRead)
+            data = @wakeupRead.read(4)
+            reason = data.unpack("N")[0]
+          end
           if (fd == @socket)
             data = String.new()
             begin
@@ -1130,6 +1295,36 @@ module MBusClient
         end
       end
       
+      if (@state == MBusClientState::CONNECTED and
+          @pingInterval > 0)
+        if (MBusClientClock::after(current, @pingSendTsms + @pingInterval))
+          @pingSendTsms = current
+          @pongRecvTsms = 0
+          @pingWaitPong = 1
+          rc = publish(MBUS_SERVER_EVENT_PING, nil, nil, MBUS_SERVER_IDENTIFIER, nil)
+          if (rc != 0)
+            raise "can not publish ping"
+          end
+        end
+        if (@pingWaitPong != 0 and
+            @pingSendTsms != 0 and
+            @pongRecvTsms == 0 and
+            MBusClientClock::after(current, @pingSendTsms + @pingTimeout))
+          @pingWaitPong = 0
+          @pongMissedCount += 1
+        end
+        if (@pongMissedCount > @pingThreshold)
+          notifyDisonnect(MBusClientDisconnectStatus::PING_TIMEOUT)
+          reset()
+          if (@options.connectInterval > 0)
+            @state = MBusClientState::CONNECTING
+          else
+            @state = MBusClientState::DISCONNECTED
+          end
+          return 0
+        end
+      end
+
       @requests.delete_if do |request|
         if (request.timeout < 0 or
           MBusClientClock::before(current, request.createdAt + request.timeout))
@@ -1208,35 +1403,4 @@ module MBusClient
       end
     end
   end
-end
-
-def onResult (client, context, message, status)
-  puts "command status: %s" % MBusClient::MBusClientCommandStatus::string(status)
-  puts "  request: %s.%s: %s" % [ message.getRequestDestination(), message.getRequestIdentifier(), message.getRequestPayload() ]
-  puts "  response: %s, %s" % [ message.getResponseStatus(), message.getResponsePayload() ] 
-end
-
-def onConnect (client, context, status)
-  puts "connect status: %s" % MBusClient::MBusClientConnectStatus::string(status)
-  if (status == MBusClient::MBusClientConnectStatus::SUCCESS)
-    puts "  identifier: %s" % [ client.identifier ]
-    client.command(MBusClient::MBUS_SERVER_IDENTIFIER, MBusClient::MBUS_SERVER_COMMAND_STATUS)
-  end
-end
-
-def onDisconnect (client, context, status)
-  puts "disconnect status: %s" % MBusClient::MBusClientDisconnectStatus::string(status)
-end
-
-options = MBusClient::MBusClientOptions.new()
-options.connectInterval = 0
-options.onConnect = method(:onConnect)
-options.onDisconnect = method(:onDisconnect)
-options.onResult = method(:onResult)
-
-client = MBusClient::MBusClient.new(options)
-client.connect()
-
-while (1)
-  client.run()
 end
