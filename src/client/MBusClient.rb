@@ -28,6 +28,7 @@
 
 require "json"
 require "socket"
+require "openssl"
 include Socket::Constants
 
 module MBusClient
@@ -100,6 +101,10 @@ module MBusClient
     SERVER_TCP_PROTOCOL = "tcp"
     SERVER_TCP_ADDRESS  = "127.0.0.1"
     SERVER_TCP_PORT     = 8000
+    
+    SERVER_TCPS_PROTOCOL= "tcps"
+    SERVER_TCPS_ADDRESS = "127.0.0.1"
+    SERVER_TCPS_PORT    = 8001
     
     SERVER_PROTOCOL     = SERVER_TCP_PROTOCOL
     SERVER_ADDRESS      = SERVER_TCP_ADDRESS
@@ -665,6 +670,7 @@ module MBusClient
       
       @identifier      = nil
       @socket          = nil
+      @sslContext      = nil
       @pingInterval    = 0
       @pingTimeout     = 0
       @pingThreshold   = 0
@@ -830,6 +836,22 @@ module MBusClient
         rescue
           status = MBusClientConnectStatus::INTERVAL_ERROR
         end
+      elsif (@options.serverProtocol == "tcps")
+        @socket = Socket.new(AF_INET, SOCK_STREAM, 0)
+        sockaddr = Socket.sockaddr_in(@options.serverPort, @options.serverAddress)
+        begin
+          @socket.connect_nonblock(sockaddr)
+          @socketConnected = 1
+          status = MBusClientConnectStatus::SUCCESS
+        rescue Errno::EINPROGRESS
+          status = MBusClientConnectStatus::SUCCESS
+        rescue Errno::ECONNREFUSED
+          status = MBusClientConnectStatus::CONNECTION_REFUSED
+        rescue Errno::ENOENT
+          status = MBusClientConnectStatus::SERVER_UNAVAILABLE
+        rescue
+          status = MBusClientConnectStatus::INTERVAL_ERROR
+        end
       else
           status = MBusClientConnectStatus::INVALID_PROTOCOL
       end
@@ -924,6 +946,7 @@ module MBusClient
       @options         = nil
       @state           = MBusClientState::DISCONNECTED
       @socket          = nil
+      @sslContext      = nil
       @requests        = Array.new()
       @pendings        = Array.new()
       @routines        = Array.new()
@@ -1006,6 +1029,14 @@ module MBusClient
         if (@options.serverPort == nil or
             @options.serverPort <= 0)
           @options.serverPort = MBusClientDefaults::SERVER_TCP_PORT
+        end
+      elsif (@options.serverProtocol == MBusClientDefaults::SERVER_TCPS_PROTOCOL)
+        if (@options.serverAddress == nil)
+          @options.serverAddress = MBusClientDefaults::SERVER_TCPS_ADDRESS
+        end
+        if (@options.serverPort == nil or
+            @options.serverPort <= 0)
+          @options.serverPort = MBusClientDefaults::SERVER_TCPS_PORT
         end
       else
         raise "invalid server protocol"
@@ -1350,8 +1381,9 @@ module MBusClient
             rescue Errno::EAGAIN
             rescue Errno::EINTR
             rescue Errno::EWOULDBLOCK
-            rescue
-              raise "recv failed"
+            rescue EOFError
+            rescue => exception
+              raise "recv failed with error: %s" % [ exception ]
             end
             if (data.bytesize() <= 0)
               reset()
@@ -1373,6 +1405,12 @@ module MBusClient
               begin
                 @socket.connect_nonblock(sockaddr)
               rescue Errno::EISCONN
+                if (@options.serverProtocol == "tcps")
+                  @sslContext = OpenSSL::SSL::SSLContext.new()
+                  @socket = OpenSSL::SSL::SSLSocket.new(@socket, @sslContext)
+                  @socket.sync_close = true
+                  @socket.connect
+                end
                 @socketConnected = 1
                 commandCreateRequest()
               rescue Errno::ECONNREFUSED

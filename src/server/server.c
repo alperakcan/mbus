@@ -112,6 +112,7 @@ enum listener_type {
 
 struct listener {
 	TAILQ_ENTRY(listener) listeners;
+	char *name;
 	enum listener_type type;
 	union {
 		struct {
@@ -768,6 +769,15 @@ bail:	if (method != NULL) {
 	return NULL;
 }
 
+static const char * listener_get_name (struct listener *listener)
+{
+	if (listener == NULL) {
+		mbus_errorf("listener is null");
+		return NULL;
+	}
+	return listener->name;
+}
+
 static enum listener_type listener_get_type (struct listener *listener)
 {
 	if (listener == NULL) {
@@ -781,6 +791,9 @@ static void listener_destroy (struct listener *listener)
 {
 	if (listener == NULL) {
 		return;
+	}
+	if (listener->name != NULL) {
+		free(listener->name);
 	}
 	if (listener->type == listener_type_tcp) {
 		if (listener->u.tcp.socket != NULL) {
@@ -810,7 +823,7 @@ static void listener_destroy (struct listener *listener)
 	free(listener);
 }
 
-static struct listener * listener_create (enum listener_type type, const char *address, int port, const char *certificate, const char *privatekey)
+static struct listener * listener_create (const char *name, enum listener_type type, const char *address, int port, const char *certificate, const char *privatekey)
 {
 	int rc;
 	struct listener *listener;
@@ -832,6 +845,11 @@ static struct listener * listener_create (enum listener_type type, const char *a
 		goto bail;
 	}
 	memset(listener, 0, sizeof(struct listener));
+	listener->name = strdup(name);
+	if (listener->name == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
 	listener->type = type;
 	if (type == listener_type_tcp) {
 		listener->u.tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
@@ -3221,12 +3239,12 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 						if (server->pollfds.pollfds[c].revents & POLLIN) {
 							rc = server_accept_client(server, listener, listener->u.tcp.socket);
 							if (rc == -1) {
-								mbus_errorf("can not accept new connection");
+								mbus_errorf("can not accept new connection on listener: %s", listener_get_name(listener));
 								goto bail;
 							} else if (rc == -2) {
-								mbus_errorf("rejected new connection");
+								mbus_errorf("rejected new connection on listener: %s", listener_get_name(listener));
 							} else {
-								mbus_infof("accepted new client");
+								mbus_infof("accepted new client on listener: %s", listener_get_name(listener));
 							}
 						}
 					}
@@ -3870,7 +3888,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 
 	if (server->options.tcp.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_tcp, server->options.tcp.address, server->options.tcp.port, NULL, NULL);
+		listener = listener_create("tcp", listener_type_tcp, server->options.tcp.address, server->options.tcp.port, NULL, NULL);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: tcp");
 			goto bail;
@@ -3880,7 +3898,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 	}
 	if (server->options.uds.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_uds, server->options.uds.address, server->options.uds.port, NULL, NULL);
+		listener = listener_create("uds", listener_type_uds, server->options.uds.address, server->options.uds.port, NULL, NULL);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: uds");
 			goto bail;
@@ -3891,7 +3909,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	if (server->options.ws.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);
+		listener = listener_create("ws", listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: ws");
 			goto bail;
@@ -3902,7 +3920,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #endif
 	if (server->options.tcps.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
+		listener = listener_create("tcps", listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 		} else {
@@ -3912,7 +3930,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 	}
 	if (server->options.udss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
+		listener = listener_create("udss", listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 		} else {
@@ -3924,7 +3942,7 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.wss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create(listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
+		listener = listener_create("wss", listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 		} else {
