@@ -1120,7 +1120,7 @@ module MBusClient
         raise "event is invalid"
       end
       subscription = nil
-      for s in self.__subscriptions
+      for s in @subscriptions
         if (s.source == source and
             s.identifier == event)
           subscription = s
@@ -1133,7 +1133,7 @@ module MBusClient
       payload = {}
       payload["source"] = source
       payload["event"] = event
-      rc = command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, self.__commandUnsubscribeResponse, subscription, timeout)
+      rc = command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, method(:commandUnsubscribeResponse), subscription, timeout)
       if (rc != 0)
         raise "can not call unsubscribe command"
       end
@@ -1424,6 +1424,21 @@ module MBusClient
           handleEvent(object)
         else
           raise "unknown type: %s" % [object[MBUS_METHOD_TAG_TYPE]]
+        end
+      end
+      
+      if (@state == MBusClientState::CONNECTING and
+          @socket != nil and
+          @socketConnected == 0)
+        if (MBusClientClock::after(current, @connectTsms + @options.connectTimeout))
+          notifyConnect(MBusClientConnectStatus::TIMEOUT)
+          reset()
+          if (@options.connectInterval > 0)
+            @state == MBusClientState::CONNECTING
+          else
+            @state == MBusClientState::DISCONNECTED
+          end
+          return 0
         end
       end
       
