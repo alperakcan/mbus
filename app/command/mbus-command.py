@@ -49,13 +49,11 @@ mbus_client_publish_timeout   = None
 mbus_client_ping_interval     = None
 mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
-subscriptions = []
 
 options, remainder = getopt.gnu_getopt(sys.argv[1:], "d:c:p:f:h", ["help",
                                                                  "destination=",
                                                                  "command=",
                                                                  "payload=",
-                                                                 "flood=",
                                                                  "mbus-client-identifier=",
                                                                  "mbus-client-server-protocol=",
                                                                  "mbus-client-server-address=",
@@ -96,7 +94,7 @@ for opt, arg in options:
                        o_destination, \
                        o_command, \
                        o_payload, \
-                       MBusClient.MBusClientDefaults.ClientIdentifier, \
+                       MBusClient.MBusClientDefaults.Identifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
                        MBusClient.MBusClientDefaults.ServerPort, \
@@ -150,8 +148,6 @@ class onParam(object):
         self.destination = None
         self.command = None
         self.payload = None
-        self.flood = 1
-        self.published = 0
         self.finished = 0
         self.status = -1
         self.connected = 0
