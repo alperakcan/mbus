@@ -33,8 +33,10 @@ require "json"
 require "MBusClient"
 
 o_destination = nil
-o_command     = nil
+o_event       = nil
 o_payload     = nil
+o_flood       = 1
+
 
 mbus_client_identifier        = nil
 mbus_client_server_protocol   = nil
@@ -54,8 +56,9 @@ opts = GetoptLong.new(
   [ "--help"       , "-h", GetoptLong::NO_ARGUMENT ],
     
   [ "--destination", "-d", GetoptLong::REQUIRED_ARGUMENT ],
-  [ "--command"    , "-c", GetoptLong::REQUIRED_ARGUMENT ],
+  [ "--event"      , "-e", GetoptLong::REQUIRED_ARGUMENT ],
   [ "--payload"    , "-p", GetoptLong::REQUIRED_ARGUMENT ],
+  [ "--flood"      , "-f", GetoptLong::REQUIRED_ARGUMENT ],
     
   [ "--mbus-client-identifier"       , GetoptLong::REQUIRED_ARGUMENT ],
   [ "--mbus-client-server-protocol"  , GetoptLong::REQUIRED_ARGUMENT ],
@@ -77,8 +80,9 @@ opts.each do |opt, arg|
     when "--help"
     puts "command usage:\n" \
          "  -d, --destination              : command destination identifier (default: %s)\n" \
-         "  -c, --command                  : command identifier (default: %s)\n" \
-         "  -p, --payload                  : command payload (default: %s)\n" \
+         "  -e, --event                    : publish event identifier (default: %s)\n" \
+         "  -p, --payload                  : publish payload (default: %s)\n" \
+         "  -f, --flood                    : publish event n times (default: %s)\n" \
          "  --mbus-debug-level             : debug level (default: error)\n" \
          "  --mbus-client-identifier       : client identifier (default: %s)\n" \
          "  --mbus-client-server-protocol  : server protocol (default: %s)\n" \
@@ -96,8 +100,9 @@ opts.each do |opt, arg|
          "  --help                         : this text" \
          % [
            o_destination,
-           o_command,
+           o_event,
            o_payload,
+           o_flood,
            MBusClient::MBusClientDefaults::IDENTIFIER,
            MBusClient::MBusClientDefaults::SERVER_PROTOCOL,
            MBusClient::MBusClientDefaults::SERVER_ADDRESS,
@@ -115,10 +120,12 @@ opts.each do |opt, arg|
          exit(0)
     when "--destination"
       o_destination = arg
-    when "--command"
-      o_command     = arg
+    when "--event"
+      o_event       = arg
     when "--payload"
       o_payload     = JSON.parse(arg)
+    when "--flood"
+      o_flood       = arg.to_i()
     when "--mbus-client-identifier"
       mbus_client_identifier        = arg
     when "--mbus-client-server-protocol"
@@ -150,38 +157,35 @@ end
 
 class CallbackParam
   attr_accessor :destination
-  attr_accessor :command
+  attr_accessor :event
   attr_accessor :payload
+  attr_accessor :flood
+  attr_accessor :published
   attr_accessor :finished
-  attr_accessor :status
+  attr_accessor :result
   attr_accessor :connected
   attr_accessor :disconnected
 
   def initialize
     @destination = nil
-    @command = nil
+    @event = nil
     @payload = nil
+    @flood = 1
+    @published = 0
     @finished = 0
-    @status = -1
+    @result = -1
     @connected = 0
     @disconnected = 0
   end
 end
 
-def onCommandCallback (client, context, message, status)
-  if (message.getResponseStatus() == 0)
-    if (message.getResponsePayload() != nil)
-      puts "%s" % [ message.getResponsePayload() ]
-     end
-  end
-  context.status = message.getResponseStatus()
-  context.finished = 1
-end
-
 def onConnect (client, context, status)
+  puts "connect: %s, %s" % [ status, MBusClient::MBusClientConnectStatus.string(status) ]
   if (status == MBusClient::MBusClientConnectStatus::SUCCESS)
     context.connected = 1
-    client.command(context.destination, context.command, context.payload, method(:onCommandCallback), context)
+    0.upto(context.flood - 1) do |i|
+      client.publish(context.event, context.payload, MBusClient::MBusClientQoS::AT_LEAST_ONCE)
+    end
   else
     if (client.getOptions().connectInterval <= 0)
       context.connected = -1
@@ -190,8 +194,30 @@ def onConnect (client, context, status)
 end
 
 def onDisconnect (client, context, status)
+  puts "disconnect: %s, %s" % [ status, MBusClient::MBusClientDisconnectStatus.string(status) ]
   if (client.getOptions().connectInterval <= 0)
     context.disconnected = 1
+  end
+end
+
+def onPublish (client, context, message, status)
+  puts "publish: %s, %s, source: %s, event: %s, payload: %s" \
+       % [
+         status,
+         MBusClient::MBusClientPublishStatus.string(status),
+         message.getDestination(),
+         message.getIdentifier(),
+         message.getPayload()
+       ]
+  context.published += 1
+  if (status == MBusClient::MBusClientPublishStatus::SUCCESS)
+    if (context.published == context.flood)
+      context.finished = 1
+      context.result = 0
+    end
+  else
+    context.finished = 1
+    context.result = -1
   end
 end
 
@@ -237,13 +263,19 @@ if (mbus_client_ping_threshold != nil)
 end
 
 
+if (o_event == nil)
+  raise "event is invalid"
+end
+
 options.onConnect    = method(:onConnect)
 options.onDisconnect = method(:onDisconnect)
+options.onPublish    = method(:onPublish)
 
 options.onContext = CallbackParam.new()
 options.onContext.destination = o_destination
-options.onContext.command     = o_command
+options.onContext.event       = o_event
 options.onContext.payload     = o_payload
+options.onContext.flood       = o_flood
 
 client = MBusClient::MBusClient.new(options)
 client.connect()
@@ -252,9 +284,7 @@ while (options.onContext.connected >= 0 and
        options.onContext.disconnected == 0)
   client.run()
   if (options.onContext.finished == 1 and
-    client.hasPending() == 0)
+      client.hasPending() == 0)
     break;
   end
 end
-
-exit(options.onContext.status)

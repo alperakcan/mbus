@@ -415,6 +415,22 @@ module MBusClient
     
   end
   
+  class MBusClientSubscription
+      
+    attr_reader :source
+    attr_reader :identifier
+    attr_reader :callback
+    attr_reader :context
+
+    def initialize (source, identifier, callback, context)
+       @source     = source
+       @identifier = identifier
+       @callback   = callback
+       @context    = context
+     end
+      
+  end
+  
   class MBusClientRequest
     
     attr_reader :type
@@ -534,7 +550,7 @@ module MBusClient
     
     def notifyPublish (request, status)
       if (@options.onPublish != nil)
-        message = MBusClientMessageEvent(request)
+        message = MBusClientMessageEvent.new(request)
         @options.onPublish.call(self, @options.onContext, message, status)
       end
     end
@@ -597,21 +613,21 @@ module MBusClient
         if (request.type == MBUS_METHOD_TYPE_EVENT)
             if (request.destination != MBUS_SERVER_IDENTIFIER and
                 request.identifier != MBUS_SERVER_EVENT_PING)
-                notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::CANCELED)
+              notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::CANCELED)
             end
         elsif (request.type == MBUS_METHOD_TYPE_COMMAND)
             if (request.identifier == MBUS_SERVER_COMMAND_EVENT)
-                notifyPublish(request.payload, MBusClientPublishStatus::CANCELED)
+              notifyPublish(request.payload, MBusClientPublishStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE)
-                notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::CANCELED)
+              notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE)
-                notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::CANCELED)
+              notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_REGISTER)
-                notifyRegistered(request.payload["command"], MBusClientRegisterStatus::CANCELED)
+              notifyRegistered(request.payload["command"], MBusClientRegisterStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER)
-                notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::CANCELED)
+              notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::CANCELED)
             else
-                notifyCommand(request, nil, MBusClientCommandStatus::CANCELED)
+              notifyCommand(request, nil, MBusClientCommandStatus::CANCELED)
             end
         end
       end
@@ -620,21 +636,21 @@ module MBusClient
         if (request.type == MBUS_METHOD_TYPE_EVENT)
             if (request.destination != MBUS_SERVER_IDENTIFIER and
                 request.identifier != MBUS_SERVER_EVENT_PING)
-                notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::CANCELED)
+              notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::CANCELED)
             end
         elsif (request.type == MBUS_METHOD_TYPE_COMMAND)
             if (request.identifier == MBUS_SERVER_COMMAND_EVENT)
-                notifyPublish(request.payload, MBusClientPublishStatus::CANCELED)
+              notifyPublish(request.payload, MBusClientPublishStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE)
-                notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::CANCELED)
+              notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE)
-                notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::CANCELED)
+              notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_REGISTER)
-                notifyRegistered(request.payload["command"], MBusClientRegisterStatus::CANCELED)
+              notifyRegistered(request.payload["command"], MBusClientRegisterStatus::CANCELED)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER)
-                notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::CANCELED)
+              notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::CANCELED)
             else
-                notifyCommand(request, nil, MBusClientCommandStatus::CANCELED)
+              notifyCommand(request, nil, MBusClientCommandStatus::CANCELED)
             end
         end
       end
@@ -667,6 +683,65 @@ module MBusClient
       @pendings.clear()
       @routines.clear()
       @subscriptions.clear()
+    end
+    
+    def commandSubscribeResponse (this, context, message, status)
+      subscription = context
+      if (status != MBusClientCommandStatus::SUCCESS)
+        if (status == MBusClientCommandStatus::INTERNAL_ERROR)
+          cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
+        elsif (status == MBusClientCommandStatus::TIMEOUT)
+          cstatus = MBusClientSubscribeStatus::TIMEOUT
+        else
+          cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
+        end
+      elsif (message.getResponseStatus() == 0)
+        cstatus = MBusClientSubscribeStatus::SUCCESS
+        if (subscription != nil)
+          @subscriptions.push(subscription)
+        end
+      else
+        cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
+      end
+      notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+    end
+    
+    def commandUnsubscribeResponse (this, context, message, status)
+      subscription = context
+      if (status != MBusClientCommandStatus::SUCCESS)
+        if (status == MBusClientCommandStatus::INTERNAL_ERROR)
+          cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
+        elsif (status == MBusClientCommandStatus::TIMEOUT)
+          cstatus = MBusClientUnsubscribeStatus::TIMEOUT
+        else
+          cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
+        end
+      elsif (message.getResponseStatus() == 0)
+        cstatus = MBusClientUnsubscribeStatus::SUCCESS
+        if (subscription != nil)
+          @subscriptions.remove(subscription)
+        end
+      else
+        cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
+      end
+      notifyUnsubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+    end
+    
+    def commandEventResponse (this, context, message, status)
+      if (status != MBusClientCommandStatus::SUCCESS)
+        if (status == MBusClientCommandStatus::INTERNAL_ERROR)
+          cstatus = MBusClientPublishStatus::INTERNAL_ERROR
+        elsif (status == MBusClientCommandStatus::TIMEOUT)
+          cstatus = MBusClientPublishStatus::TIMEOUT
+        else
+          cstatus = MBusClientPublishStatus::INTERNAL_ERROR
+        end
+      elsif (message.getResponseStatus() == 0)
+        cstatus = MBusClientPublishStatus::SUCCESS
+      else
+        cstatus = MBusClientPublishStatus::INTERNAL_ERROR
+      end
+      notifyPublish(message.getRequestPayload(), status)
     end
     
     def commandCreateResponse (this, context, message, status)
@@ -1000,12 +1075,69 @@ module MBusClient
       end
     end
     
-    def subscribe
-      raise "not implemented yet"
+    def subscribe (event, callback = nil, context = nil, source = nil, timeout = nil)
+      if (@state != MBusClientState::CONNECTED)
+        raise "client state is not connected: %d" % [@state]
+      end
+      if (source == nil)
+        source = MBUS_METHOD_EVENT_SOURCE_ALL
+      end
+      if (event == nil)
+        raise "event is invalid"
+      end
+      for subscription in @subscriptions
+        if (subscription.source == source and
+            subscription.identifier == event)
+          raise "subscription already exists"
+        end
+      end
+      if (timeout == nil or
+          timeout < 0)
+        timeout = @options.subscribeTimeout
+      end
+      subscription = MBusClientSubscription.new(source, event, callback, context)
+      if (subscription == nil)
+        raise "can not create subscription"
+      end
+      payload = {}
+      payload["source"] = source
+      payload["event"] = event
+      rc = self.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_SUBSCRIBE, payload, method(:commandSubscribeResponse), subscription, timeout)
+      if (rc != 0)
+          raise "can not call subscribe command"
+      end
+      return 0
     end
     
     def unsubscribe
-      raise "not implemented yet"
+      if (@state != MBusClientState::CONNECTED)
+        raise "client state is not connected: %d" % [@state]
+      end
+      if (source == nil)
+        source = MBUS_METHOD_EVENT_SOURCE_ALL
+      end
+      if (event == nil)
+        raise "event is invalid"
+      end
+      subscription = nil
+      for s in self.__subscriptions
+        if (s.source == source and
+            s.identifier == event)
+          subscription = s
+          break
+        end
+      end
+      if (subscription != nil)
+        raise "can not find subscription for source: %s, event: %s" % [ source, event ]
+      end
+      payload = {}
+      payload["source"] = source
+      payload["event"] = event
+      rc = command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_UNSUBSCRIBE, payload, self.__commandUnsubscribeResponse, subscription, timeout)
+      if (rc != 0)
+        raise "can not call unsubscribe command"
+      end
+      return 0
     end
     
     def publish (event, payload = nil, qos = nil, destination = nil, timeout = nil)
@@ -1040,7 +1172,7 @@ module MBusClient
         cpayload[MBUS_METHOD_TAG_DESTINATION] = destination
         cpayload[MBUS_METHOD_TAG_IDENTIFIER] = event
         cpayload[MBUS_METHOD_TAG_PAYLOAD] = payload
-        command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, @commandEventResponse, nil, timeout)
+        command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_EVENT, cpayload, method(:commandEventResponse), nil, timeout)
       else
         raise "qos: %d is invalid" % [ qos ]
       end
@@ -1333,21 +1465,21 @@ module MBusClient
         if (request.type == MBUS_METHOD_TYPE_EVENT)
             if (request.destination != MBUS_SERVER_IDENTIFIER and
                 request.identifier != MBUS_SERVER_EVENT_PING)
-                notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::TIMEOUT)
+              notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::TIMEOUT)
             end
         elsif (request.type == MBUS_METHOD_TYPE_COMMAND)
             if (request.identifier == MBUS_SERVER_COMMAND_EVENT)
-                notifyPublish(request.payload, MBusClientPublishStatus::TIMEOUT)
+              notifyPublish(request.payload, MBusClientPublishStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE)
-                notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::TIMEOUT)
+              notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE)
-                notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::TIMEOUT)
+              notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_REGISTER)
-                notifyRegistered(request.payload["command"], MBusClientRegisterStatus::TIMEOUT)
+              notifyRegistered(request.payload["command"], MBusClientRegisterStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER)
-                notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::TIMEOUT)
+              notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::TIMEOUT)
             else
-                notifyCommand(request, nil, MBusClientCommandStatus::TIMEOUT)
+              notifyCommand(request, nil, MBusClientCommandStatus::TIMEOUT)
             end
         end
         next true
@@ -1361,21 +1493,21 @@ module MBusClient
         if (request.type == MBUS_METHOD_TYPE_EVENT)
             if (request.destination != MBUS_SERVER_IDENTIFIER and
                 request.identifier != MBUS_SERVER_EVENT_PING)
-                notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::TIMEOUT)
+              notifyPublish(json.loads(request.stringify()), MBusClientPublishStatus::TIMEOUT)
             end
         elsif (request.type == MBUS_METHOD_TYPE_COMMAND)
             if (request.identifier == MBUS_SERVER_COMMAND_EVENT)
-                notifyPublish(request.payload, MBusClientPublishStatus::TIMEOUT)
+              notifyPublish(request.payload, MBusClientPublishStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_SUBSCRIBE)
-                notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::TIMEOUT)
+              notifySubscribe(request.payload["source"], request.payload["event"], MBusClientSubscribeStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNSUBSCRIBE)
-                notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::TIMEOUT)
+              notifyUnsubscribe(request.payload["source"], request.payload["event"], MBusClientUnsubscribeStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_REGISTER)
-                notifyRegistered(request.payload["command"], MBusClientRegisterStatus::TIMEOUT)
+              notifyRegistered(request.payload["command"], MBusClientRegisterStatus::TIMEOUT)
             elsif (request.identifier == MBUS_SERVER_COMMAND_UNREGISTER)
-                notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::TIMEOUT)
+              notifyUnregistered(request.payload["command"], MBusClientUnregisterStatus::TIMEOUT)
             else
-                notifyCommand(request, nil, MBusClientCommandStatus::TIMEOUT)
+              notifyCommand(request, nil, MBusClientCommandStatus::TIMEOUT)
             end
         end
         next true

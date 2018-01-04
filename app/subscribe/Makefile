@@ -39,6 +39,7 @@ distdir = ../../dist
 
 dist.bin-y = \
 	mbus-subscribe \
-	mbus-subscribe.py
+	mbus-subscribe.py \
+	mbus-subscribe.rb
 
 include ../../Makefile.lib

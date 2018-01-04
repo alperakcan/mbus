@@ -32,6 +32,8 @@ import getopt
 import json
 import MBusClient as MBusClient
 
+o_subscriptions = []
+
 mbus_client_identifier        = None
 mbus_client_server_protocol   = None
 mbus_client_server_address    = None
@@ -45,7 +47,6 @@ mbus_client_publish_timeout   = None
 mbus_client_ping_interval     = None
 mbus_client_ping_timeout      = None
 mbus_client_ping_threshold    = None
-subscriptions = []
 
 options, remainder = getopt.gnu_getopt(sys.argv[1:], "e:h", ["help", 
                                                              "event=",
@@ -67,7 +68,7 @@ options, remainder = getopt.gnu_getopt(sys.argv[1:], "e:h", ["help",
 for opt, arg in options:
     if opt in ("-h", "--help"):
         print("subscribe usage:\n" \
-              "  -e, --event                    : subscribe to an event identifier\n" \
+              "  -e, --event                    : subscribe to an event identifier (default: {})\n" \
               "  --mbus-debug-level             : debug level (default: error)\n" \
               "  --mbus-client-identifier       : client identifier (default: {})\n" \
               "  --mbus-client-server-protocol  : server protocol (default: {})\n" \
@@ -84,6 +85,7 @@ for opt, arg in options:
               "  --mbus-client-ping-threshold   : ping threshold (default: {})\n" \
               "  --help                         : this text" \
               .format( \
+                       MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, \
                        MBusClient.MBusClientDefaults.Identifier, \
                        MBusClient.MBusClientDefaults.ServerProtocol, \
                        MBusClient.MBusClientDefaults.ServerAddress, \
@@ -101,7 +103,7 @@ for opt, arg in options:
               )
         exit(0)
     elif opt in ("-e", "--event"):
-        subscriptions.append(arg)
+        o_subscriptions.append(arg)
     elif opt == "--mbus-client-identifier":
         mbus_client_identifier = arg
     elif opt == "--mbus-client-server-protocol":
@@ -138,10 +140,10 @@ def onConnect (client, context, status):
     print("connect: {}, {}".format(status, MBusClient.MBusClientConnectStatusString(status)))
     if (status == MBusClient.MBusClientConnectStatus.Success):
         context.connected = 1
-        if (len(subscriptions) == 0):
+        if (len(o_subscriptions) == 0):
             client.subscribe(MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL)
         else:
-            for s in subscriptions:
+            for s in o_subscriptions:
                 client.subscribe(s)
     else:
         if (client.getOptions().connectInterval <= 0):
