@@ -26,8 +26,8 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-require 'json'
-require 'socket'
+require "json"
+require "socket"
 include Socket::Constants
 
 module MBusClient
@@ -75,18 +75,23 @@ module MBusClient
   MBUS_SERVER_EVENT_PONG                      = "org.mbus.server.event.pong"
 
   class MBusClientClock
+    
     def self.get
       return Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :millisecond)
     end
+    
     def self.after (a, b)
       return ((((b) - (a)) < 0)) ? 1 : 0;
     end
+    
     def self.before (a, b)
       return after(b, a)
     end
+    
   end
   
   class MBusClientDefaults
+    
     IDENTIFIER          = nil
     
     SERVER_TCP_PROTOCOL = "tcp"
@@ -109,23 +114,29 @@ module MBusClient
     PING_INTERVAL       = 180000
     PING_TIMEOUT        = 5000
     PING_THRESHOLD      = 2
+    
   end
   
   class MBusClientQoS
+    
     AT_MOST_ONCE  = 0
     AT_LEAST_ONCE = 1
     EXACTLY_ONCE  = 2
+    
   end
   
   class MBusClientState
+    
     UNKNOWN       = 0
     CONNECTING    = 1
     CONNECTED     = 2
     DISCONNECTING = 3
     DISCONNECTED  = 4
+    
   end
   
   class MBusClientConnectStatus
+    
     SUCCESS                   = 0
     INTERNAL_ERROR            = 1
     INVALID_PROTOCOL          = 2
@@ -162,9 +173,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
   
   class MBusClientDisconnectStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     CONNECTION_CLOSED = 2
@@ -186,9 +199,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientPublishStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -207,9 +222,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientSubscribeStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -228,9 +245,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientUnsubscribeStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -249,9 +268,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientRegisterStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -270,9 +291,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientUnregisterStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -291,9 +314,11 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
 
   class MBusClientCommandStatus
+    
     SUCCESS           = 0
     INTERNAL_ERROR    = 1
     TIMEOUT           = 2
@@ -312,15 +337,19 @@ module MBusClient
         return "unknown"
       end
     end
+    
   end
   
   class MBusClientWakeUpReason
+    
     BREAK      = 0
     CONNECT    = 1
     DISCONNECT = 2
+    
   end
   
   class MBusClientOptions
+    
     attr_accessor :identifier
     
     attr_accessor :serverProtocol
@@ -378,6 +407,7 @@ module MBusClient
       @onUnregistered   = nil
       @onContext        = nil
     end
+    
   end
   
   class MBusClientRequest
@@ -414,6 +444,28 @@ module MBusClient
       request[MBUS_METHOD_TAG_TIMEOUT]     = @timeout
       return JSON.dump(request)
     end
+    
+  end
+
+  class MBusClientMessageCommand
+
+    def initialize (request, response)
+      @request = JSON.parse(request.stringify())
+      @response = response
+    end
+    
+    def getRequestPayload
+      return @request[MBUS_METHOD_TAG_PAYLOAD]
+    end
+
+    def getResponseStatus
+      return @response[MBUS_METHOD_TAG_STATUS]
+    end
+
+    def getResponsePayload
+      return @response[MBUS_METHOD_TAG_PAYLOAD]
+    end
+    
   end
 
   class MBusClient
@@ -429,7 +481,7 @@ module MBusClient
     attr_accessor :subscriptions
     attr_accessor :incoming
     attr_accessor :outgoing
-    attr_accessor :identifier
+    attr_writer   :identifier
     attr_accessor :connectTsms
     attr_accessor :pingInterval
     attr_accessor :pingTimeout
@@ -442,15 +494,22 @@ module MBusClient
     attr_accessor :socketConnected
     attr_accessor :sequence
     
+    def notifyCommand (request, response, status)
+      if (request.callback != nil)
+        message = MBusClientMessageCommand.new(request, response)
+        request.callback.call(self, request.context, message, status)
+      end
+    end
+    
     def notifyConnect (status)
       if (@options.onConnect != nil)
-        @options.onConnect.call(@options.onContext, status)
+        @options.onConnect.call(self, @options.onContext, status)
       end
     end
 
     def notifyDisonnect (status)
       if (@options.onDisconnect != nil)
-        @options.onDisconnect.call(@options.onContext, status)
+        @options.onDisconnect.call(self, @options.onContext, status)
       end
     end
 
@@ -471,14 +530,60 @@ module MBusClient
       @compression     = nil
       @socketConnected = 0
       
+      @incoming.clear()
+      @outgoing.clear()
+
       @requests.clear()
       @pendings.clear()
       @routines.clear()
       @subscriptions.clear()
     end
     
-    def commandCreateResponse (context, message, status)
-      
+    def commandCreateResponse (this, context, message, status)
+      if (status != MBusClientCommandStatus::SUCCESS)
+        if (status == MBusClientCommandStatus::INTERNAL_ERROR)
+          notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+        elsif (status == MBusClientCommandStatus::TIMEOUT)
+          notifyConnect(MBusClientConnectStatus::TIMEOUT)
+        elsif (status == MBusClientCommandStatus::CANCELED)
+          notifyConnect(MBusClientConnectStatus::CANCELED)
+        else
+          notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+        end
+        reset()
+        @state = MBusClientState::DISCONNECTED
+        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        return
+      end
+      if (message.getResponseStatus() != 0)
+        notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+        reset()
+        @state = MBusClientState::DISCONNECTED
+        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        return
+      end
+      payload = message.getResponsePayload()
+      if (payload == nil)
+        notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+        reset()
+        @state = MBusClientState::DISCONNECTED
+        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        return
+      end
+      @identifier = payload["identifier"]
+      if (@identifier == nil)
+        notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+        reset()
+        @state = MBusClientState::DISCONNECTED
+        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        return
+      end
+      @pingInterval = payload["ping"]["interval"]
+      @pingTimeout = payload["ping"]["timeout"]
+      @pingThreshold = payload["ping"]["threshold"]
+      @compression = payload["compression"]
+      @state = MBusClientState::CONNECTED
+      notifyConnect(MBusClientConnectStatus::SUCCESS)
     end
     
     def commandCreateRequest
@@ -536,8 +641,8 @@ module MBusClient
         if (@options.connectInterval > 0)
           @state = MBusClientState::CONNECTING
         else
-          @state = MBusClientState.Disconnected
-          notifyDisonnect(MBusClientDisconnectStatus.Canceled)
+          @state = MBusClientState::DISCONNECTED
+          notifyDisonnect(MBusClientDisconnectStatus::CANCELED)
         end
         return 0
       else
@@ -547,8 +652,30 @@ module MBusClient
       end
     end
 
+    def handleResult (object)
+      pending = nil
+      sequence = object[MBUS_METHOD_TAG_SEQUENCE]
+      if (sequence == nil)
+        return -1
+      end
+      @pendings.each do |p|
+        if (p.sequence == sequence)
+          pending = p
+          break
+        end
+      end
+      if (pending == nil)
+        return -1
+      end
+      @pendings.delete(pending)
+      notifyCommand(pending, object, MBusClientCommandStatus::SUCCESS)
+      return 0
+    end
+
     public
     
+    attr_reader   :identifier
+
     def initialize (options = nil)
       @options         = nil
       @state           = MBusClientState::DISCONNECTED
@@ -722,18 +849,18 @@ module MBusClient
     
     def command (destination, command, payload, callback = nil, context = nil, timeout = nil)
       if (destination == nil)
-        raise ValueError("destination is invalid")
+        raise "destination is invalid"
       end
       if (command == nil)
-        raise ValueError("command is invalid")
+        raise "command is invalid"
       end
       if (command == MBUS_SERVER_COMMAND_CREATE)
         if (@state != MBusClientState::CONNECTING)
-          raise ValueError("client state is not connecting: {}".format(@state))
+          raise "client state is not connecting: %d" % [@state]
         end
       else
-        if (@state != MBusClientState.Connected)
-          raise ValueError("client state is not connected: {}".format(@state))
+        if (@state != MBusClientState::CONNECTED)
+          raise "client state is not connected: %d" % [@state]
         end
       end
       if (timeout == nil or
@@ -742,7 +869,7 @@ module MBusClient
       end
       request = MBusClientRequest.new(MBUS_METHOD_TYPE_COMMAND, destination, command, @sequence, payload, callback, context, timeout)
       if (request == nil)
-        raise ValueError("can not create request")
+        raise "can not create request"
       end
       @sequence += 1
       if (@sequence >= MBUS_METHOD_SEQUENCE_END)
@@ -753,9 +880,7 @@ module MBusClient
     end
 
     def run (timeout = -1)
-      p"loop"
       if (@state == MBusClientState::CONNECTING)
-        p"state == CONNECTING"
         if (@socket == nil)
           current = MBusClientClock::get()
           if (@options.connectInterval <= 0 or
@@ -768,22 +893,18 @@ module MBusClient
           end
         end
       elsif (@state == MBusClientState::CONNECTED)
-        p"state == CONNECTED"
-        pass
       elsif (@state == MBusClientState::DISCONNECTING)
-        p"state == DISCONNECTING"
         reset()
         @state = MBusClientState::DISCONNECTED
         notifyDisonnect(MBusClientDisconnectStatus::SUCCESS)
         return 0
       elsif (@state == MBusClientState::DISCONNECTED)
-        p"state == DISCONNECTED"
         if (@options.connectInterval > 0)
           @state = MBusClientState::CONNECTING
           return 0
         end
       else
-        raise ValueError("client state: {} is invalid".format(@state))
+        raise "client state: %d is invalid" % [@state]
       end
       
       selectRead = Array.new()
@@ -803,15 +924,30 @@ module MBusClient
       selectReadable, selectWritable, = IO.select(selectRead, selectWrite, nil, 1000 / 1000.00)
       
       if (selectReadable != nil)
-        selectReadable.each{ |fd|
+        selectReadable.each do |fd|
           if (fd == @socket)
-            raise "in data"
+            data = String.new()
+            begin
+              data = @socket.read_nonblock(4096)
+            rescue Errno::EAGAIN
+            rescue Errno::EINTR
+            rescue Errno::EWOULDBLOCK
+            rescue
+              raise "recv failed"
+            end
+            if (data.bytesize() <= 0)
+              reset()
+              @state = MBusClientState::DISCONNECTED
+              notifyDisonnect(MBusClientDisconnectStatus::CONNECTION_CLOSED)
+              return 0
+            end
+            @incoming += data
           end
-        }
+        end
       end
       
       if (selectWritable != nil)
-        selectWritable.each{ |fd|
+        selectWritable.each do |fd|
           if (fd == @socket)
             if (@state == MBusClientState::CONNECTING and
                 @socketConnected == 0)
@@ -832,24 +968,52 @@ module MBusClient
                 end
                 return 0
               rescue
-                notifyConnect(MBusClientConnectStatus.InternalError)
+                notifyConnect(MBusClientConnectStatus::INTERNAL_ERROR)
                 raise "can not connect to server"
               end
             elsif (@outgoing.bytesize() > 0)
-              @socket.write(@outgoing)
-              @outgoing.clear()
+              dlen = 0
+              begin
+                dlen = @socket.write_nonblock(@outgoing)
+              rescue Errno::EAGAIN
+              rescue Errno::EINTR
+              rescue Errno::EWOULDBLOCK
+              rescue
+                raise "send failed"
+              end
+              if (dlen > 0)
+                @outgoing.slice!(0, dlen)
+              end
             end
           end
-        }
+        end
+      end
+      
+      while (@incoming.bytesize() >= 4)
+        dlen = @incoming.slice(0, 4)
+        dlen = dlen.unpack("N")[0]
+        if (dlen > @incoming.bytesize() - 4)
+          break
+        end
+        slice = @incoming.slice(4, dlen)
+        @incoming.slice!(0, 4 + dlen)
+        object = JSON.parse(slice)
+        if (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_RESULT)
+          handleResult(object)
+        elsif (object[MBUS_METHOD_TAG_TYPE] == MBUS_METHOD_TYPE_EVENT)
+          handleEvent(object)
+        else
+          raise "unknown type: %s" % [object[MBUS_METHOD_TAG_TYPE]]
+        end
       end
       
       while (@requests.count() > 0)
         request = @requests.shift()
         
         data = request.stringify()
-        data = data.to_s().encode('UTF-8')
-        data.force_encoding('ASCII-8BIT')
-        dlen = [data.bytesize().to_i()].pack('N')
+        data = data.to_s().encode("UTF-8")
+        data.force_encoding("ASCII-8BIT")
+        dlen = [data.bytesize().to_i()].pack("N")
         
         @outgoing += dlen
         @outgoing += data
@@ -863,11 +1027,14 @@ module MBusClient
   end
 end
 
-def onConnect (context, status)
+def onConnect (client, context, status)
   puts "connect status: %s" % MBusClient::MBusClientConnectStatus::string(status)
+  if (status == MBusClient::MBusClientConnectStatus::SUCCESS)
+    puts "  identifier: %p" % [ client.identifier ]
+  end
 end
 
-def onDisconnect (context, status)
+def onDisconnect (client, context, status)
   puts "disconnect status: %s" % MBusClient::MBusClientDisconnectStatus::string(status)
 end
 

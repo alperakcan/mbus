@@ -715,8 +715,8 @@ class MBusClient (object):
         self.__pendings        = collections.deque()
         self.__routines        = collections.deque()
         self.__subscriptions   = collections.deque()
-        self.__incoming        = None
-        self.__outgoing        = None
+        self.__incoming        = bytearray()
+        self.__outgoing        = bytearray()
         self.__identifier      = None
         self.__connectTsms     = 0
         self.__pingInterval    = None
@@ -1066,7 +1066,7 @@ class MBusClient (object):
             
             if (fd == self.__socket.fileno()):
                 if (event & select.POLLIN):
-                    dlen = 0
+                    data = bytearray()
                     try:
                         data = self.__socket.recv(4096)
                     except socket.error as error:
@@ -1077,7 +1077,7 @@ class MBusClient (object):
                         if error.errno == errno.EWOULDBLOCK:
                             pass
                         raise ValueError("recv failed")
-                    if (len(data) == 0):
+                    if (len(data) <= 0):
                         self.__reset()
                         self.__state = MBusClientState.Disconnected
                         self.__notifyDisonnect(MBusClientDisconnectStatus.ConnectionClosed)
