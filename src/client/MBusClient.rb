@@ -835,18 +835,6 @@ module MBusClient
       raise "not implemented yet"
     end
     
-    def command
-      raise "not implemented yet"
-    end
-    
-    def getRunTimeout
-      raise "not implemented yet"
-    end
-    
-    def breakRun
-      raise "not implemented yet"
-    end
-    
     def command (destination, command, payload, callback = nil, context = nil, timeout = nil)
       if (destination == nil)
         raise "destination is invalid"
@@ -878,7 +866,15 @@ module MBusClient
       @requests.push(request)
       return 0
     end
-
+    
+    def getRunTimeout
+      raise "not implemented yet"
+    end
+    
+    def breakRun
+      raise "not implemented yet"
+    end
+    
     def run (timeout = -1)
       if (@state == MBusClientState::CONNECTING)
         if (@socket == nil)
