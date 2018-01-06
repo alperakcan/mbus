@@ -692,6 +692,25 @@ function MBusClient (options = null) {
 		thiz.__notifyUnsubscribe(subscription.source, subscription.identifier, cstatus);
 	}
 
+	this.__commandEventResponse = function (thiz, context, message, status) {
+		if (status != MBusClientCommandStatus.Success) {
+			if (status == MBusClientCommandStatus.InternalError) {
+				cstatus = MBusClientPublishStatus.InternalError;
+			} else if (status == MBusClientCommandStatus.Timeout) {
+				cstatus = MBusClientPublishStatus.Timeout;
+			} else if (status == MBusClientCommandStatus.Canceled) {
+				cstatus = MBusClientPublishStatus.Canceled;
+			} else {
+				cstatus = MBusClientPublishStatus.InternalError;
+			}
+		} else if (message.getResponseStatus() == 0) {
+			cstatus = MBusClientPublishStatus.Success;
+		} else {
+			cstatus = MBusClientPublishStatus.InternalError;
+		}
+		thiz.__notifyPublish(message.getRequestPayload(), cstatus);
+	}
+	
 	this.__commandCreateResponse = function (thiz, context, message, status) {
 		if (status != MBusClientCommandStatus.Success) {
 			if (status == MBusClientCommandStatus.InternalError) {

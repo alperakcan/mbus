@@ -845,6 +845,8 @@ static void mbus_client_command_event_response (struct mbus_client *client, void
 			cstatus = mbus_client_publish_status_internal_error;
 		} else if (status == mbus_client_command_status_timeout) {
 			cstatus = mbus_client_publish_status_timeout;
+		} else if (status == mbus_client_command_status_canceled) {
+			cstatus = mbus_client_publish_status_canceled;
 		} else {
 			cstatus = mbus_client_publish_status_internal_error;
 		}

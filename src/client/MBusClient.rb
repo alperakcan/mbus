@@ -747,6 +747,8 @@ module MBusClient
           cstatus = MBusClientPublishStatus::INTERNAL_ERROR
         elsif (status == MBusClientCommandStatus::TIMEOUT)
           cstatus = MBusClientPublishStatus::TIMEOUT
+        elsif (status == MBusClientCommandStatus::CANCELED)
+          cstatus = MBusClientPublishStatus::CANCELED
         else
           cstatus = MBusClientPublishStatus::INTERNAL_ERROR
         end

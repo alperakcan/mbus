@@ -560,6 +560,8 @@ class MBusClient (object):
                 cstatus = MBusClientPublishStatus.InternalError
             elif (status == MBusClientCommandStatus.Timeout):
                 cstatus = MBusClientPublishStatus.Timeout
+            elif (status == MBusClientCommandStatus.Canceled):
+                cstatus = MBusClientPublishStatus.Canceled
             else:
                 cstatus = MBusClientPublishStatus.InternalError
         elif (message.getResponseStatus() == 0):
