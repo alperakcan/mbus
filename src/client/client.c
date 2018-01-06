@@ -739,26 +739,20 @@ static void mbus_client_command_register_response (struct mbus_client *client, v
 			cstatus = mbus_client_register_status_internal_error;
 		} else if (status == mbus_client_command_status_timeout) {
 			cstatus = mbus_client_register_status_timeout;
+		} else if (status == mbus_client_command_status_canceled) {
+			cstatus = mbus_client_register_status_canceled;
 		} else {
 			cstatus = mbus_client_register_status_internal_error;
 		}
-		if (routine != NULL) {
-			routine_destroy(routine);
-		}
+		routine_destroy(routine);
 	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_register_status_success;
-		if (routine != NULL) {
-			TAILQ_INSERT_TAIL(&client->routines, routine, routines);
-		}
+		TAILQ_INSERT_TAIL(&client->routines, routine, routines);
 	} else {
 		cstatus = mbus_client_register_status_internal_error;
-		if (routine != NULL) {
-			routine_destroy(routine);
-		}
+		routine_destroy(routine);
 	}
-	mbus_client_notify_registered(client,
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "command", NULL),
-				cstatus);
+	mbus_client_notify_registered(client, routine_get_identifier(routine), cstatus);
 	mbus_client_unlock(client);
 }
 
@@ -772,21 +766,19 @@ static void mbus_client_command_unregister_response (struct mbus_client *client,
 			cstatus = mbus_client_unregister_status_internal_error;
 		} else if (status == mbus_client_command_status_timeout) {
 			cstatus = mbus_client_unregister_status_timeout;
+		} else if (status == mbus_client_command_status_canceled) {
+			cstatus = mbus_client_unregister_status_canceled;
 		} else {
 			cstatus = mbus_client_unregister_status_internal_error;
 		}
 	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_unregister_status_success;
-		if (routine != NULL) {
-			TAILQ_REMOVE(&client->routines, routine, routines);
-			routine_destroy(routine);
-		}
+		TAILQ_REMOVE(&client->routines, routine, routines);
+		routine_destroy(routine);
 	} else {
 		cstatus = mbus_client_unregister_status_internal_error;
 	}
-	mbus_client_notify_unregistered(client,
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "command", NULL),
-				cstatus);
+	mbus_client_notify_unregistered(client, routine_get_identifier(routine), cstatus);
 	mbus_client_unlock(client);
 }
 
@@ -800,27 +792,20 @@ static void mbus_client_command_subscribe_response (struct mbus_client *client, 
 			cstatus = mbus_client_subscribe_status_internal_error;
 		} else if (status == mbus_client_command_status_timeout) {
 			cstatus = mbus_client_subscribe_status_timeout;
+		} else if (status == mbus_client_command_status_canceled) {
+			cstatus = mbus_client_subscribe_status_canceled;
 		} else {
 			cstatus = mbus_client_subscribe_status_internal_error;
 		}
-		if (subscription != NULL) {
-			subscription_destroy(subscription);
-		}
+		subscription_destroy(subscription);
 	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_subscribe_status_success;
-		if (subscription != NULL) {
-			TAILQ_INSERT_TAIL(&client->subscriptions, subscription, subscriptions);
-		}
+		TAILQ_INSERT_TAIL(&client->subscriptions, subscription, subscriptions);
 	} else {
 		cstatus = mbus_client_subscribe_status_internal_error;
-		if (subscription != NULL) {
-			subscription_destroy(subscription);
-		}
+		subscription_destroy(subscription);
 	}
-	mbus_client_notify_subscribe(client,
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "source", NULL),
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "event", NULL),
-				cstatus);
+	mbus_client_notify_subscribe(client, subscription_get_source(subscription), subscription_get_identifier(subscription), cstatus);
 	mbus_client_unlock(client);
 }
 
@@ -834,22 +819,19 @@ static void mbus_client_command_unsubscribe_response (struct mbus_client *client
 			cstatus = mbus_client_unsubscribe_status_internal_error;
 		} else if (status == mbus_client_command_status_timeout) {
 			cstatus = mbus_client_unsubscribe_status_timeout;
+		} else if (status == mbus_client_command_status_canceled) {
+			cstatus = mbus_client_unsubscribe_status_canceled;
 		} else {
 			cstatus = mbus_client_unsubscribe_status_internal_error;
 		}
 	} else if (mbus_client_message_command_response_status(message) == 0) {
 		cstatus = mbus_client_unsubscribe_status_success;
-		if (subscription != NULL) {
-			TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
-			subscription_destroy(subscription);
-		}
+		TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
+		subscription_destroy(subscription);
 	} else {
 		cstatus = mbus_client_unsubscribe_status_internal_error;
 	}
-	mbus_client_notify_unsubscribe(client,
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "source", NULL),
-				mbus_json_get_string_value(mbus_client_message_command_request_payload(message), "event", NULL),
-				cstatus);
+	mbus_client_notify_unsubscribe(client, subscription_get_source(subscription), subscription_get_identifier(subscription), cstatus);
 	mbus_client_unlock(client);
 }
 

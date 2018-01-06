@@ -644,6 +644,12 @@ function MBusClient (options = null) {
 		this.__socketConnected = 0;
 	}
 
+	this.__commandRegisterResponse = function (thiz, context, message, status) {
+	}
+	
+	this.__commandUnegisterResponse = function (thiz, context, message, status) {
+	}
+	
 	this.__commandSubscribeResponse = function (thiz, context, message, status) {
 		subscription = context;
 		if (status != MBusClientCommandStatus.Success) {
@@ -651,18 +657,18 @@ function MBusClient (options = null) {
 				cstatus = MBusClientSubscribeStatus.InternalError;
 			} else if (status == MBusClientCommandStatus.Timeout) {
 				cstatus = MBusClientSubscribeStatus.Timeout;
+			} else if (status == MBusClientCommandStatus.Canceled) {
+				cstatus = MBusClientSubscribeStatus.Canceled;
 			} else {
 				cstatus = MBusClientSubscribeStatus.InternalError;
 			}
 		} else if (message.getResponseStatus() == 0) {
 			cstatus = MBusClientSubscribeStatus.Success;
-			if (subscription != null) {
-				thiz.__subscriptions.push(subscription);
-			}
+			thiz.__subscriptions.push(subscription);
 		} else {
 			cstatus = MBusClientSubscribeStatus.InternalError;
 		}
-		thiz.__notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus);
+		thiz.__notifySubscribe(subscription.source, subscription.identifier, cstatus);
 	}
 
 	this.__commandUnsubscribeResponse = function (thiz, context, message, status) {
@@ -672,18 +678,18 @@ function MBusClient (options = null) {
 				cstatus = MBusClientUnsubscribeStatus.InternalError;
 			} else if (status == MBusClientCommandStatus.Timeout) {
 				cstatus = MBusClientUnsubscribeStatus.Timeout;
+			} else if (status == MBusClientCommandStatus.Canceled) {
+				cstatus = MBusClientUnsubscribeStatus.Canceled;
 			} else {
 				cstatus = MBusClientUnsubscribeStatus.InternalError;
 			}
 		} else if (message.getResponseStatus() == 0) {
 			cstatus = MBusClientUnsubscribeStatus.Success;
-			if (subscription != null) {
-				thiz.__subscriptions.remove(subscription);
-			}
+			thiz.__subscriptions.remove(subscription);
 		} else {
 			cstatus = MBusClientUnsubscribeStatus.InternalError;
 		}
-		thiz.__notifyUnsubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus);
+		thiz.__notifyUnsubscribe(subscription.source, subscription.identifier, cstatus);
 	}
 
 	this.__commandCreateResponse = function (thiz, context, message, status) {
@@ -914,6 +920,10 @@ MBusClient.prototype.unsubscribe = function (event, source = null, timeout = nul
 		return -1;
 	}
 	subscription = subscriptions[0];
+	if (subscription == null) {
+		console.log("can not find subscription");
+		return -1;
+	}
     payload = {};
     payload["source"] = source;
     payload["event"] = event;

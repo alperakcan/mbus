@@ -691,6 +691,14 @@ module MBusClient
       @subscriptions.clear()
     end
     
+    def commandRegisterResponse (this, context, message, status):
+        raise "not implemented yet"
+    end
+    
+    def commandUnregisterResponse (this, context, message, status):
+        raise "not implemented yet"
+    end
+    
     def commandSubscribeResponse (this, context, message, status)
       subscription = context
       if (status != MBusClientCommandStatus::SUCCESS)
@@ -698,18 +706,18 @@ module MBusClient
           cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
         elsif (status == MBusClientCommandStatus::TIMEOUT)
           cstatus = MBusClientSubscribeStatus::TIMEOUT
+        elsif (status == MBusClientCommandStatus::CANCELED)
+          cstatus = MBusClientSubscribeStatus::CANCELED
         else
           cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
         end
       elsif (message.getResponseStatus() == 0)
         cstatus = MBusClientSubscribeStatus::SUCCESS
-        if (subscription != nil)
-          @subscriptions.push(subscription)
-        end
+        @subscriptions.push(subscription)
       else
         cstatus = MBusClientSubscribeStatus::INTERNAL_ERROR
       end
-      notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+      notifySubscribe(subscription.source, subscription.identifier, cstatus)
     end
     
     def commandUnsubscribeResponse (this, context, message, status)
@@ -719,18 +727,18 @@ module MBusClient
           cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
         elsif (status == MBusClientCommandStatus::TIMEOUT)
           cstatus = MBusClientUnsubscribeStatus::TIMEOUT
+        elsif (status == MBusClientCommandStatus::CANCELED)
+          cstatus = MBusClientUnsubscribeStatus::CANCELED
         else
           cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
         end
       elsif (message.getResponseStatus() == 0)
         cstatus = MBusClientUnsubscribeStatus::SUCCESS
-        if (subscription != nil)
-          @subscriptions.remove(subscription)
-        end
+        @subscriptions.remove(subscription)
       else
         cstatus = MBusClientUnsubscribeStatus::INTERNAL_ERROR
       end
-      notifyUnsubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+      notifyUnsubscribe(subscription.source, subscription.identifier, cstatus)
     end
     
     def commandEventResponse (this, context, message, status)
@@ -1158,7 +1166,7 @@ module MBusClient
           break
         end
       end
-      if (subscription != nil)
+      if (subscription == nil)
         raise "can not find subscription for source: %s, event: %s" % [ source, event ]
       end
       payload = {}

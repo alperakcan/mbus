@@ -525,15 +525,16 @@ class MBusClient (object):
                 cstatus = MBusClientSubscribeStatus.InternalError
             elif (status == MBusClientCommandStatus.Timeout):
                 cstatus = MBusClientSubscribeStatus.Timeout
+            elif (status == MBusClientCommandStatus.Canceled):
+                cstatus = MBusClientSubscribeStatus.Canceled
             else:
                 cstatus = MBusClientSubscribeStatus.InternalError
         elif (message.getResponseStatus() == 0):
             cstatus = MBusClientSubscribeStatus.Success
-            if (subscription != None):
-                self.__subscriptions.append(subscription)
+            this.__subscriptions.append(subscription)
         else:
             cstatus = MBusClientSubscribeStatus.InternalError
-        self.__notifySubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+        this.__notifySubscribe(subscription.source, subscription.identifier, cstatus)
     
     def __commandUnsubscribeResponse (self, this, context, message, status):
         subscription = context
@@ -542,15 +543,16 @@ class MBusClient (object):
                 cstatus = MBusClientUnsubscribeStatus.InternalError
             elif (status == MBusClientCommandStatus.Timeout):
                 cstatus = MBusClientUnsubscribeStatus.Timeout
+            elif (status == MBusClientCommandStatus.Canceled):
+                cstatus = MBusClientUnsubscribeStatus.Canceled
             else:
                 cstatus = MBusClientUnsubscribeStatus.InternalError
         elif (message.getResponseStatus() == 0):
             cstatus = MBusClientUnsubscribeStatus.Success
-            if (subscription != None):
-                self.__subscriptions.remove(subscription)
+            this.__subscriptions.remove(subscription)
         else:
             cstatus = MBusClientUnsubscribeStatus.InternalError
-        self.__notifyUnsubscribe(message.getRequestPayload()["source"], message.getRequestPayload()["event"], cstatus)
+        this.__notifyUnsubscribe(subscription.source, subscription.identifier, cstatus)
     
     def __commandEventResponse (self, this, context, message, status):
         if (status != MBusClientCommandStatus.Success):
@@ -564,7 +566,7 @@ class MBusClient (object):
             cstatus = MBusClientPublishStatus.Success
         else:
             cstatus = MBusClientPublishStatus.InternalError
-        self.__notifyPublish(message.getRequestPayload(), status)
+        this.__notifyPublish(message.getRequestPayload(), status)
     
     def __commandCreateResponse (self, this, context, message, status):
         if (status != MBusClientCommandStatus.Success):
@@ -887,7 +889,7 @@ class MBusClient (object):
                 s.identifier == event):
                 subscription = s
                 break
-        if (subscription != None):
+        if (subscription == None):
             raise ValueError("can not find subscription for source: {}, event: {}".format(source, event))
         payload = {}
         payload["source"] = source
