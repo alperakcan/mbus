@@ -1576,7 +1576,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		if (strcmp(identifier, MBUS_SERVER_EVENT_PING) == 0) {
 			client = server_find_client_by_identifier(server, source);
 			if (client != NULL) {
-				client->ping.ping_recv_tsms = mbus_clock_get();
+				client->ping.ping_recv_tsms = mbus_clock_monotonic();
 			}
 			rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, source, MBUS_SERVER_EVENT_PONG, NULL);
 			if (rc != 0) {
@@ -1976,7 +1976,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				if (client->ping.threshold <= 0) {
 					client->ping.threshold = 0;
 				}
-				client->ping.ping_recv_tsms = mbus_clock_get() - client->ping.interval;
+				client->ping.ping_recv_tsms = mbus_clock_monotonic() - client->ping.interval;
 				client->ping.enabled = 1;
 			}
 		}
@@ -2912,7 +2912,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	struct client *nwclient;
 	struct method *method;
 	struct method *nmethod;
-	current = mbus_clock_get();
+	current = mbus_clock_monotonic();
 	if (server == NULL) {
 		mbus_errorf("server is null");
 		return -1;

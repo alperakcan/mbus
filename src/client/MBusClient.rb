@@ -77,7 +77,7 @@ module MBusClient
 
   class MBusClientClock
     
-    def self.get
+    def self.monotonic
       return Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :millisecond)
     end
     
@@ -457,7 +457,7 @@ module MBusClient
       @callback    = callback
       @context     = context
       @timeout     = timeout
-      @createdAt   = MBusClientClock::get()
+      @createdAt   = MBusClientClock::monotonic()
     end
     
     def stringify
@@ -934,7 +934,7 @@ module MBusClient
           identifier == MBUS_SERVER_EVENT_PONG)
         @pingWaitPong = 0
         @pingMissedCount = 0
-        @pongRecvTsms = MBusClientClock::get()
+        @pongRecvTsms = MBusClientClock::monotonic()
       else
         callback = @options.onMessage
         callbackContext = @options.onContext
@@ -1273,7 +1273,7 @@ module MBusClient
     end
     
     def getRunTimeout
-      current = MBusClientClock::get()
+      current = MBusClientClock::monotonic()
       timeout = MBusClientDefaults::RUN_TIMEOUT
       if (@state == MBusClientState::CONNECTING)
         if (@socket == nil)
@@ -1340,10 +1340,10 @@ module MBusClient
     def run (timeout = -1)
       if (@state == MBusClientState::CONNECTING)
         if (@socket == nil)
-          current = MBusClientClock::get()
+          current = MBusClientClock::monotonic()
           if (@options.connectInterval <= 0 or
             MBusClientClock::after(current, @connectTsms + @options.connectInterval))
-            @connectTsms = MBusClientClock::get()
+            @connectTsms = MBusClientClock::monotonic()
             rc = runConnect()
             if (rc != 0)
               raise "can not connect client"
@@ -1468,7 +1468,7 @@ module MBusClient
         end
       end
       
-      current = MBusClientClock::get()
+      current = MBusClientClock::monotonic()
       
       while (@incoming.bytesize() >= 4)
         dlen = @incoming.slice(0, 4)

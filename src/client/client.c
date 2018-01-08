@@ -535,7 +535,7 @@ static struct request * request_create (const char *type, const char *destinatio
 	}
 	request->callback = callback;
 	request->context = context;
-	request->created_at = mbus_clock_get();
+	request->created_at = mbus_clock_monotonic();
 	request->timeout = timeout;
 	return request;
 bail:	if (request != NULL) {
@@ -1249,7 +1249,7 @@ static int mbus_client_handle_event (struct mbus_client *client, const struct mb
 	if (strcmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
 	    strcmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
-		client->pong_recv_tsms = mbus_clock_get();
+		client->pong_recv_tsms = mbus_clock_monotonic();
 		client->pong_missed_count = 0;
 	} else {
 		callback = client->options->callbacks.message;
@@ -1310,7 +1310,7 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 	if (strcmp(MBUS_SERVER_IDENTIFIER, source) == 0 &&
 	    strcmp(MBUS_SERVER_EVENT_PONG, identifier) == 0) {
 		client->ping_wait_pong = 0;
-		client->pong_recv_tsms = mbus_clock_get();
+		client->pong_recv_tsms = mbus_clock_monotonic();
 		client->pong_missed_count = 0;
 	} else {
 		callback = client->options->callbacks.routine;
@@ -2950,7 +2950,7 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 	unsigned long long current;
 	struct request *request;
 	timeout = MBUS_CLIENT_DEFAULT_RUN_TIMEOUT;
-	current = mbus_clock_get();
+	current = mbus_clock_monotonic();
 	if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
@@ -3075,10 +3075,10 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 
 	if (client->state == mbus_client_state_connecting) {
 		if (client->socket == NULL) {
-			current = mbus_clock_get();
+			current = mbus_clock_monotonic();
 			if (client->options->connect_interval <= 0 ||
 			    mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
-				client->connect_tsms = mbus_clock_get();
+				client->connect_tsms = mbus_clock_monotonic();
 				rc = mbus_client_run_connect(client);
 				if (rc != 0) {
 					mbus_errorf("can not connect client");;
@@ -3456,7 +3456,7 @@ incoming_bail:		if (json != NULL) {
 	}
 
 out:
-	current = mbus_clock_get();
+	current = mbus_clock_monotonic();
 	if (client->state == mbus_client_state_connecting &&
 	    client->socket != NULL &&
 	    client->socket_connected == 0) {

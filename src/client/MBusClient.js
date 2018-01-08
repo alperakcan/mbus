@@ -54,7 +54,7 @@ String.prototype.format = function() {
 	return a
 }
 
-function mbus_clock_get () {
+function mbus_clock_monotonic () {
 	var d = new Date();
 	return d.getTime();
 }
@@ -367,7 +367,7 @@ function MBusClientRequest (type, destination, identifier, sequence, payload, ca
     this.callback    = callback;
     this.context     = context;
     this.timeout     = timeout;
-    this.createdAt   = mbus_clock_get();
+    this.createdAt   = mbus_clock_monotonic();
 }
 
 MBusClientRequest.prototype.stringify = function () {
@@ -517,7 +517,7 @@ function MBusClient (options = null) {
 	this.__pingTimer = setInterval(function __pingTimerCallback(thiz) {
 		if (thiz.__state == MBusClientState.Connected &&
 			thiz.__pingInterval > 0) {
-			current = mbus_clock_get();
+			current = mbus_clock_monotonic();
 			if (mbus_clock_after(current, thiz.__pingSendTsms + thiz.__pingInterval)) {
 				thiz.__pingSendTsms = current;
 				thiz.__pongRecvTsms = 0;
@@ -768,7 +768,7 @@ function MBusClient (options = null) {
 			identifier == MBUS_SERVER_EVENT_PONG) {
 			this.__pingWaitPong = 0;
 			this.__pingMissedCount = 0;
-			this.__pongRecvTsms = mbus_clock_get();
+			this.__pongRecvTsms = mbus_clock_monotonic();
 		} else {
 			callback = this.__options.onMessage;
 			callbackContext = this.__options.onContext

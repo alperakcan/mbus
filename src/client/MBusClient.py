@@ -86,9 +86,9 @@ MBUS_SERVER_EVENT_PING                      = "org.mbus.server.event.ping"
 MBUS_SERVER_EVENT_PONG                      = "org.mbus.server.event.pong"
 
 try:
-    mbus_clock_get = time.monotonic
+    mbus_clock_monotonic = time.monotonic
 except AttributeError:
-    def mbus_clock_get ():
+    def mbus_clock_monotonic ():
         return time.time() * 1000
 
 def mbus_clock_after (a, b):
@@ -354,7 +354,7 @@ class MBusClientRequest (object):
         self.callback    = callback
         self.context     = context
         self.timeout     = timeout
-        self.createdAt   = mbus_clock_get()
+        self.createdAt   = mbus_clock_monotonic()
     
     def stringify (self):
         request = {}
@@ -702,7 +702,7 @@ class MBusClient (object):
             identifier == MBUS_SERVER_EVENT_PONG):
             self.__pingWaitPong = 0
             self.__pingMissedCount = 0
-            self.__pongRecvTsms = mbus_clock_get()
+            self.__pongRecvTsms = mbus_clock_monotonic()
         else:
             callback = self.__options.onMessage
             callbackContext = self.__options.onContext
@@ -969,7 +969,7 @@ class MBusClient (object):
         return 0
 
     def getRunTimeout (self):
-        current = mbus_clock_get()
+        current = mbus_clock_monotonic()
         timeout = MBusClientDefaults.RunTimeout
         if (self.__state == MBusClientState.Connecting):
             if (self.__socket == None):
@@ -1019,10 +1019,10 @@ class MBusClient (object):
     def run (self, timeout = -1):
         if (self.__state == MBusClientState.Connecting):
             if (self.__socket == None):
-                current = mbus_clock_get()
+                current = mbus_clock_monotonic()
                 if (self.__options.connectInterval <= 0 or
                     mbus_clock_after(current, self.__connectTsms + self.__options.connectInterval)):
-                    self.__connectTsms = mbus_clock_get()
+                    self.__connectTsms = mbus_clock_monotonic()
                     rc = self.__runConnect()
                     if (rc != 0):
                         raise ValueError("can not connect client")
@@ -1136,7 +1136,7 @@ class MBusClient (object):
                         if (dlen > 0):
                             self.__outgoing = self.__outgoing[dlen:]
         
-        current = mbus_clock_get()
+        current = mbus_clock_monotonic()
 
         while len(self.__incoming) >= 4:
             dlen, = struct.unpack("!I", self.__incoming[0:4])

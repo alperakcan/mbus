@@ -26,7 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-unsigned long long mbus_clock_get (void);
+unsigned long long mbus_clock_monotonic (void);
 
 static inline int mbus_clock_after (unsigned long long a, unsigned long long b)
 {

@@ -28,7 +28,7 @@
 
 #include <time.h>
 
-unsigned long long mbus_clock_get (void)
+unsigned long long mbus_clock_monotonic (void)
 {
 	struct timespec ts;
 	unsigned long long tsec;
