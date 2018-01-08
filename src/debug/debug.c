@@ -36,7 +36,7 @@
 
 #include "debug.h"
 
-enum mbus_debug_level mbus_debug_level = mbus_debug_level_error;
+enum mbus_debug_level mbus_debug_level = mbus_debug_level_silent;
 
 const char * mbus_debug_level_to_string (enum mbus_debug_level level)
 {
