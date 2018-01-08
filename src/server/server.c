@@ -2840,50 +2840,6 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				mbus_errorf("can not push in");
 				goto bail;
 			}
-			{
-				uint8_t *ptr;
-				uint8_t *end;
-				uint32_t expected;
-				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", mbus_buffer_get_length(data->client->buffer.in));
-				mbus_debugf("        size    : %d", mbus_buffer_get_size(data->client->buffer.in));
-				while (1) {
-					char *string;
-					ptr = mbus_buffer_get_base(data->client->buffer.in);
-					end = ptr + mbus_buffer_get_length(data->client->buffer.in);
-					if (end - ptr < 4) {
-						break;
-					}
-					expected  = *ptr++ << 0x00;
-					expected |= *ptr++ << 0x08;
-					expected |= *ptr++ << 0x10;
-					expected |= *ptr++ << 0x18;
-					expected = ntohl(expected);
-					mbus_debugf("expected %d", expected);
-					if (end - ptr < (int32_t) expected) {
-						break;
-					}
-					mbus_debugf("message: '%.*s'", expected, ptr);
-					string = _strndup((char *) ptr, expected);
-					if (string == NULL) {
-						mbus_errorf("can not allocate memory");
-						goto bail;
-					}
-					mbus_debugf("new request from client: '%s', '%s'", client_get_identifier(data->client), string);
-					rc = server_handle_method(server, data->client, string);
-					if (rc != 0) {
-						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_identifier(data->client));
-						free(string);
-						goto bail;
-					}
-					free(string);
-					rc = mbus_buffer_shift(data->client->buffer.in, sizeof(uint32_t) + expected);
-					if (rc != 0) {
-						mbus_errorf("can not shift in");
-						goto bail;
-					}
-				}
-			}
 			break;
 		case LWS_CALLBACK_SERVER_WRITEABLE:
 			mbus_debugf("  server writable");
@@ -3282,7 +3238,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			if (rc != 0) {
 				mbus_errorf("can not reserve client buffer");
 				client_set_socket(client, NULL);
-				break;
+				goto bail;
 			}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			if (client->ssl.ssl == NULL) {
@@ -3334,101 +3290,21 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			}
 #endif
 			if (read_rc <= 0) {
-				if (errno == EINTR) {
-					goto skip_in;
-				} else if (errno == EAGAIN) {
-					goto skip_in;
-				} else if (errno == EWOULDBLOCK) {
-					goto skip_in;
+				if (errno != EINTR ||
+				    errno != EAGAIN ||
+				    errno != EWOULDBLOCK) {
+					mbus_debugf("can not read data from client");
+					client_set_socket(client, NULL);
+					mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
 				}
-				mbus_debugf("can not read data from client");
-				client_set_socket(client, NULL);
-				mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
-				break;
 			} else {
-				uint8_t *ptr;
-				uint8_t *end;
-				uint8_t *data;
-				uint32_t expected;
-				uint32_t uncompressed;
 				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + read_rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
 					client_set_socket(client, NULL);
-					break;
-				}
-				mbus_debugf("      buffer.in:");
-				mbus_debugf("        length  : %d", mbus_buffer_get_length(client->buffer.in));
-				mbus_debugf("        size    : %d", mbus_buffer_get_size(client->buffer.in));
-				while (1) {
-					char *string;
-					ptr = mbus_buffer_get_base(client->buffer.in);
-					end = ptr + mbus_buffer_get_length(client->buffer.in);
-					if (end - ptr < 4) {
-						break;
-					}
-					memcpy(&expected, ptr, sizeof(expected));
-					ptr += sizeof(expected);
-					expected = ntohl(expected);
-					mbus_debugf("        expected: %d", expected);
-					if (end - ptr < (int32_t) expected) {
-						break;
-					}
-					data = ptr;
-					if (client_get_compression(client) == mbus_compress_method_none) {
-						data = ptr;
-						uncompressed = expected;
-					} else {
-						int uncompressedlen;
-						memcpy(&uncompressed, ptr, sizeof(uncompressed));
-						uncompressed = ntohl(uncompressed);
-						mbus_debugf("        uncompressed: %d", uncompressed);
-						uncompressedlen = uncompressed;
-						rc = mbus_uncompress_data(client_get_compression(client), (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
-						if (rc != 0) {
-							mbus_errorf("can not uncompress data");
-							goto bail;
-						}
-						if (uncompressedlen != (int) uncompressed) {
-							mbus_errorf("can not uncompress data");
-							goto bail;
-						}
-					}
-					mbus_debugf("        message: %s, e: %d, u: %d, '%.*s'", mbus_compress_method_string(client_get_compression(client)), expected, uncompressed, uncompressed, data);
-					string = _strndup((char *) data, uncompressed);
-					if (string == NULL) {
-						mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_identifier(client));
-						client_set_socket(client, NULL);
-						break;
-					}
-					rc = server_handle_method(server, client, string);
-					if (rc != 0) {
-						mbus_errorf("can not handle request, closing client: '%s' connection", client_get_identifier(client));
-						client_set_socket(client, NULL);
-						free(string);
-						if (data != ptr) {
-							free(data);
-						}
-						break;
-					}
-					rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
-					if (rc != 0) {
-						mbus_errorf("can not shift in, closing client: '%s' connection", client_get_identifier(client));
-						client_set_socket(client, NULL);
-						free(string);
-						if (data != ptr) {
-							free(data);
-						}
-						break;
-					}
-					free(string);
-					if (data != ptr) {
-						free(data);
-					}
 				}
 			}
 		}
-skip_in:
 		if (server->pollfds.pollfds[c].revents & POLLOUT) {
 			if (mbus_buffer_get_length(client->buffer.out) <= 0) {
 				mbus_errorf("logic error");
@@ -3471,31 +3347,24 @@ skip_in:
 			}
 #endif
 			if (rc <= 0) {
-				if (errno == EINTR) {
-					goto skip_out;
-				} else if (errno == EAGAIN) {
-					goto skip_out;
-				} else if (errno == EWOULDBLOCK) {
-					goto skip_out;
+				if (errno != EINTR ||
+				    errno != EAGAIN ||
+				    errno != EWOULDBLOCK) {
+					mbus_debugf("can not write string to client");
+					client_set_socket(client, NULL);
+					mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
 				}
-				mbus_debugf("can not write string to client");
-				client_set_socket(client, NULL);
-				mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-				break;
 			} else {
 				rc = mbus_buffer_shift(client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
 					client_set_socket(client, NULL);
-					break;
 				}
 			}
 		}
-skip_out:
 		if (server->pollfds.pollfds[c].revents & (POLLERR | POLLHUP | POLLNVAL)) {
 			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-			break;
 		}
 	}
 out:
@@ -3509,6 +3378,85 @@ out:
 		}
 	}
 #endif
+	TAILQ_FOREACH(client, &server->clients, clients) {
+		uint8_t *ptr;
+		uint8_t *end;
+		uint8_t *data;
+		uint32_t expected;
+		uint32_t uncompressed;
+		if (mbus_buffer_get_length(client->buffer.in) < 4) {
+			continue;
+		}
+		mbus_debugf("%s buffer.in:", client_get_identifier(client));
+		mbus_debugf("  length  : %d", mbus_buffer_get_length(client->buffer.in));
+		mbus_debugf("  size    : %d", mbus_buffer_get_size(client->buffer.in));
+		while (1) {
+			char *string;
+			ptr = mbus_buffer_get_base(client->buffer.in);
+			end = ptr + mbus_buffer_get_length(client->buffer.in);
+			if (end - ptr < 4) {
+				break;
+			}
+			memcpy(&expected, ptr, sizeof(expected));
+			ptr += sizeof(expected);
+			expected = ntohl(expected);
+			mbus_debugf("        expected: %d", expected);
+			if (end - ptr < (int32_t) expected) {
+				break;
+			}
+			data = ptr;
+			if (client_get_compression(client) == mbus_compress_method_none) {
+				data = ptr;
+				uncompressed = expected;
+			} else {
+				int uncompressedlen;
+				memcpy(&uncompressed, ptr, sizeof(uncompressed));
+				uncompressed = ntohl(uncompressed);
+				mbus_debugf("        uncompressed: %d", uncompressed);
+				uncompressedlen = uncompressed;
+				rc = mbus_uncompress_data(client_get_compression(client), (void **) &data, &uncompressedlen, ptr + sizeof(uncompressed), expected - sizeof(uncompressed));
+				if (rc != 0) {
+					mbus_errorf("can not uncompress data");
+					goto bail;
+				}
+				if (uncompressedlen != (int) uncompressed) {
+					mbus_errorf("can not uncompress data");
+					goto bail;
+				}
+			}
+			mbus_debugf("        message: %s, e: %d, u: %d, '%.*s'", mbus_compress_method_string(client_get_compression(client)), expected, uncompressed, uncompressed, data);
+			string = _strndup((char *) data, uncompressed);
+			if (string == NULL) {
+				mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_identifier(client));
+				client_set_socket(client, NULL);
+				goto bail;
+			}
+			rc = server_handle_method(server, client, string);
+			if (rc != 0) {
+				mbus_errorf("can not handle request, closing client: '%s' connection", client_get_identifier(client));
+				client_set_socket(client, NULL);
+				free(string);
+				if (data != ptr) {
+					free(data);
+				}
+				break;
+			}
+			rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
+			if (rc != 0) {
+				mbus_errorf("can not shift in, closing client: '%s' connection", client_get_identifier(client));
+				client_set_socket(client, NULL);
+				free(string);
+				if (data != ptr) {
+					free(data);
+				}
+				goto bail;
+			}
+			free(string);
+			if (data != ptr) {
+				free(data);
+			}
+		}
+	}
 	rc = server_handle_methods(server);
 	if (rc != 0) {
 		mbus_errorf("can not handle methods");
