@@ -172,7 +172,7 @@ struct client {
 		int interval;
 		int timeout;
 		int threshold;
-		unsigned long ping_recv_tsms;
+		unsigned long long ping_recv_tsms;
 		int ping_missed_count;
 	} ping;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
@@ -2905,7 +2905,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	char *string;
 	unsigned int c;
 	unsigned int n;
-	unsigned long current;
+	unsigned long long current;
 	struct client *client;
 	struct client *nclient;
 	struct client *wclient;

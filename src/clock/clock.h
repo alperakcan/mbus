@@ -26,10 +26,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-unsigned long mbus_clock_get (void);
+unsigned long long mbus_clock_get (void);
 
-static inline int mbus_clock_after (unsigned long a, unsigned long b)
+static inline int mbus_clock_after (unsigned long long a, unsigned long long b)
 {
-	return (((long) ((b) - (a)) < 0)) ? 1 : 0;
+	return (((long long) ((b) - (a)) < 0)) ? 1 : 0;
 }
 #define mbus_clock_before(a, b)        mbus_clock_after(b, a)

@@ -111,7 +111,7 @@ struct request {
 	struct mbus_json *json;
 	void (*callback) (struct mbus_client *client, void *context, struct mbus_client_message_command *message, enum mbus_client_command_status status);
 	void *context;
-	unsigned long created_at;
+	unsigned long long created_at;
 	int timeout;
 };
 
@@ -143,12 +143,12 @@ struct mbus_client {
 	struct mbus_buffer *incoming;
 	struct mbus_buffer *outgoing;
 	char *identifier;
-	unsigned long connect_tsms;
+	unsigned long long connect_tsms;
 	int ping_interval;
 	int ping_timeout;
 	int ping_threshold;
-	unsigned long ping_send_tsms;
-	unsigned long pong_recv_tsms;
+	unsigned long long ping_send_tsms;
+	unsigned long long pong_recv_tsms;
 	int ping_wait_pong;
 	int pong_missed_count;
 	enum mbus_compress_method compression;
@@ -2947,7 +2947,7 @@ bail:	return -1;
 int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 {
 	int timeout;
-	unsigned long current;
+	unsigned long long current;
 	struct request *request;
 	timeout = MBUS_CLIENT_DEFAULT_RUN_TIMEOUT;
 	current = mbus_clock_get();
@@ -2960,13 +2960,13 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
 				timeout = MIN(timeout, client->options->connect_interval);
 			} else {
-				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_interval) - (current)));
+				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
 			}
 		} else if (client->socket_connected == 0) {
 			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_timeout)) {
 				timeout = MIN(timeout, client->options->connect_timeout);
 			} else {
-				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_timeout) - (current)));
+				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_timeout) - (current)));
 			}
 		}
 	} else if (client->state == mbus_client_state_connected) {
@@ -2974,7 +2974,7 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 			if (mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
 				timeout = 0;
 			} else {
-				timeout = MIN(timeout, (long) ((client->ping_send_tsms + client->ping_interval) - (current)));
+				timeout = MIN(timeout, (long long) ((client->ping_send_tsms + client->ping_interval) - (current)));
 			}
 		}
 		TAILQ_FOREACH(request, &client->requests, requests) {
@@ -2982,7 +2982,7 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
 					timeout = 0;
 				} else {
-					timeout = MIN(timeout, (long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+					timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
 				}
 			}
 		}
@@ -2991,7 +2991,7 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
 					timeout = 0;
 				} else {
-					timeout = MIN(timeout, (long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+					timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
 				}
 			}
 		}
@@ -3002,7 +3002,7 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
 				timeout = 0;
 			} else {
-				timeout = MIN(timeout, (long) ((client->connect_tsms + client->options->connect_interval) - (current)));
+				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
 			}
 		}
 	}
@@ -3055,7 +3055,7 @@ bail:	if (client != NULL) {
 int mbus_client_run (struct mbus_client *client, int timeout)
 {
 	int rc;
-	unsigned long current;
+	unsigned long long current;
 
 	struct request *request;
 	struct request *nrequest;
