@@ -3296,12 +3296,14 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					mbus_debugf("can not read data from client");
 					client_set_socket(client, NULL);
 					mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
+					continue;
 				}
 			} else {
 				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + read_rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
 					client_set_socket(client, NULL);
+					continue;
 				}
 			}
 		}
@@ -3353,18 +3355,21 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 					mbus_debugf("can not write string to client");
 					client_set_socket(client, NULL);
 					mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+					continue;
 				}
 			} else {
 				rc = mbus_buffer_shift(client->buffer.out, rc);
 				if (rc != 0) {
 					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
 					client_set_socket(client, NULL);
+					continue;
 				}
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & (POLLERR | POLLHUP | POLLNVAL)) {
 			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+			continue;
 		}
 	}
 out:
