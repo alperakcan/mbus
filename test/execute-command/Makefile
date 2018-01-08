@@ -5,7 +5,6 @@ target-y = \
 	mbus-test-execute-command
 
 mbus-test-execute-command_files-y = \
-	clock.c \
 	exec.c \
 	execute-command.c
 

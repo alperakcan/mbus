@@ -39,10 +39,10 @@
 #include <fcntl.h>
 
 #include <mbus/debug.h>
+#include <mbus/clock.h>
 #include <mbus/client.h>
 #include <mbus/json.h>
 
-#include "clock.h"
 #include "exec.h"
 
 #define DEFAULT_MODE		mode_receiver
@@ -184,11 +184,11 @@ static int mbus_client_receiver_callback_command_execute (struct mbus_client *cl
 		goto bail;
 	}
 
-	execute_time = command_clock_monotonic();
+	execute_time = mbus_clock_monotonic();
 	while (1) {
-		current_time = command_clock_monotonic();
+		current_time = mbus_clock_monotonic();
 		if (timeout > 0 &&
-		    command_clock_after(current_time, execute_time + timeout)) {
+		    mbus_clock_after(current_time, execute_time + timeout)) {
 			command_kill(pid, SIGKILL);
 			break;
 		}
@@ -238,11 +238,11 @@ static int mbus_client_receiver_callback_command_execute (struct mbus_client *cl
 	}
 
 	timeout = 1000;
-	stopped_time = command_clock_monotonic();
+	stopped_time = mbus_clock_monotonic();
 	while (1) {
-		current_time = command_clock_monotonic();
+		current_time = mbus_clock_monotonic();
 		if (timeout > 0 &&
-		    command_clock_after(current_time, stopped_time + timeout)) {
+		    mbus_clock_after(current_time, stopped_time + timeout)) {
 			command_kill(pid, SIGKILL);
 			break;
 		}
