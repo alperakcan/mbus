@@ -600,7 +600,7 @@ function MBusClient (options = null) {
 			callback = request.callback;
 			context = request.context;
 		}
-		if (callback != null)
+		if (callback != null) {
 			message = new MBusClientMessageCommand(request, response);
 			callback(this, context, message, status);
 		}
@@ -620,6 +620,7 @@ function MBusClient (options = null) {
 
 	this.__reset = function () {
 		if (this.__socket != null) {
+			this.__socket.close();
 			this.__socket = null;
 		}
 		
@@ -714,13 +715,13 @@ function MBusClient (options = null) {
 	this.__commandCreateResponse = function (thiz, context, message, status) {
 		if (status != MBusClientCommandStatus.Success) {
 			if (status == MBusClientCommandStatus.InternalError) {
-				thiz.__notifyConnect(MBusClientConnectStatus.ServerError);
+				thiz.__notifyConnect(MBusClientConnectStatus.InternalError);
 			} else if (status == MBusClientCommandStatus.Timeout) {
 				thiz.__notifyConnect(MBusClientConnectStatus.Timeout);
 			} else if (status == MBusClientCommandStatus.Canceled) {
 				thiz.__notifyConnect(MBusClientConnectStatus.Canceled);
 			} else {
-				thiz.__notifyConnect(MBusClientConnectStatus.ServerError);
+				thiz.__notifyConnect(MBusClientConnectStatus.InternalError);
 			}
 			thiz.__reset();
 			thiz.__state = MBusClientState.Disconnected;

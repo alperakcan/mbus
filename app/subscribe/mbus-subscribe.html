@@ -26,6 +26,7 @@
 				output = document.getElementById("output");
 				
 				mbcOptions = new MBusClientOptions();
+				mbcOptions.identifier = "alper";
 				mbcOptions.connectInterval = 1000;
 				mbcOptions.serverAddress = address;
 				mbcOptions.onConnect = function (client, context, status) {

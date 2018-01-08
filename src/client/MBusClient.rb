@@ -763,40 +763,52 @@ module MBusClient
     def commandCreateResponse (this, context, message, status)
       if (status != MBusClientCommandStatus::SUCCESS)
         if (status == MBusClientCommandStatus::INTERNAL_ERROR)
-          notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+          notifyConnect(MBusClientConnectStatus::INTERNAL_ERROR)
         elsif (status == MBusClientCommandStatus::TIMEOUT)
           notifyConnect(MBusClientConnectStatus::TIMEOUT)
         elsif (status == MBusClientCommandStatus::CANCELED)
           notifyConnect(MBusClientConnectStatus::CANCELED)
         else
-          notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
+          notifyConnect(MBusClientConnectStatus::INTERNAL_ERROR)
         end
         reset()
-        @state = MBusClientState::DISCONNECTED
-        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        if (@options.connectInterval > 0)
+          @state = MBusClientState::CONNECTING
+        else
+          @state = MBusClientState::DISCONNECTED
+        end
         return
       end
       if (message.getResponseStatus() != 0)
         notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
         reset()
-        @state = MBusClientState::DISCONNECTED
-        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        if (@options.connectInterval > 0)
+          @state = MBusClientState::CONNECTING
+        else
+          @state = MBusClientState::DISCONNECTED
+        end
         return
       end
       payload = message.getResponsePayload()
       if (payload == nil)
         notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
         reset()
-        @state = MBusClientState::DISCONNECTED
-        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        if (@options.connectInterval > 0)
+          @state = MBusClientState::CONNECTING
+        else
+          @state = MBusClientState::DISCONNECTED
+        end
         return
       end
       @identifier = payload["identifier"]
       if (@identifier == nil)
         notifyConnect(MBusClientConnectStatus::SERVER_ERROR)
         reset()
-        @state = MBusClientState::DISCONNECTED
-        notifyDisonnect(MBusClientDisconnectStatus::INTERNAL_ERROR)
+        if (@options.connectInterval > 0)
+          @state = MBusClientState::CONNECTING
+        else
+          @state = MBusClientState::DISCONNECTED
+        end
         return
       end
       @pingInterval = payload["ping"]["interval"]

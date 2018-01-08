@@ -867,13 +867,13 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	if (status != mbus_client_command_status_success) {
 		mbus_errorf("client command create failed: %s", mbus_client_command_status_string(status));
 		if (status == mbus_client_command_status_internal_error) {
-			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
+			mbus_client_notify_connect(client, mbus_client_connect_status_internal_error);
 		} else if (status == mbus_client_command_status_timeout) {
 			mbus_client_notify_connect(client, mbus_client_connect_status_timeout);
 		} else if (status == mbus_client_command_status_canceled) {
 			mbus_client_notify_connect(client, mbus_client_connect_status_canceled);
 		} else {
-			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
+			mbus_client_notify_connect(client, mbus_client_connect_status_internal_error);
 		}
 		goto bail;
 	}
@@ -928,7 +928,11 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 	return;
 bail:	mbus_client_reset(client);
 	client->state = mbus_client_state_disconnected;
-	mbus_client_notify_disconnect(client, mbus_client_disconnect_status_internal_error);
+	if (client->options->connect_interval > 0) {
+		client->state = mbus_client_state_connecting;
+	} else {
+		client->state = mbus_client_state_disconnected;
+	}
 	mbus_client_unlock(client);
 	return;
 }

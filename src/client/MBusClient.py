@@ -573,36 +573,44 @@ class MBusClient (object):
     def __commandCreateResponse (self, this, context, message, status):
         if (status != MBusClientCommandStatus.Success):
             if (status == MBusClientCommandStatus.InternalError):
-                this.__notifyConnect(MBusClientConnectStatus.ServerError)
+                this.__notifyConnect(MBusClientConnectStatus.InternalError)
             elif (status == MBusClientCommandStatus.Timeout):
                 this.__notifyConnect(MBusClientConnectStatus.Timeout)
             elif (status == MBusClientCommandStatus.Canceled):
                 this.__notifyConnect(MBusClientConnectStatus.Canceled)
             else:
-                this.__notifyConnect(MBusClientConnectStatus.ServerError)
+                this.__notifyConnect(MBusClientConnectStatus.InternalError)
             this.__reset()
-            this.__state = MBusClientState.Disconnected
-            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
+            if (this.__options.connectInterval > 0):
+                this.__state = MBusClientState.Connecting
+            else:
+                this.__state = MBusClientState.Disconnected
             return
         if (message.getResponseStatus() != 0):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
-            this.__state = MBusClientState.Disconnected
-            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
+            if (this.__options.connectInterval > 0):
+                this.__state = MBusClientState.Connecting
+            else:
+                this.__state = MBusClientState.Disconnected
             return
         payload = message.getResponsePayload()
         if (payload == None):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
-            this.__state = MBusClientState.Disconnected
-            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
+            if (this.__options.connectInterval > 0):
+                this.__state = MBusClientState.Connecting
+            else:
+                this.__state = MBusClientState.Disconnected
             return
         this.__identifier = payload["identifier"]
         if (this.__identifier == None):
             this.__notifyConnect(MBusClientConnectStatus.ServerError)
             this.__reset()
-            this.__state = MBusClientState.Disconnected
-            this.__notifyDisonnect(MBusClientDisconnectStatus.InternalError)
+            if (this.__options.connectInterval > 0):
+                this.__state = MBusClientState.Connecting
+            else:
+                this.__state = MBusClientState.Disconnected
             return
         this.__pingInterval = payload["ping"]["interval"]
         this.__pingTimeout = payload["ping"]["timeout"]
