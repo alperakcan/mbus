@@ -179,11 +179,11 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 	}
 }
 
-#define OPTION_HELP		0x100
-#define OPTION_SUBSCRIBE		0x101
+#define OPTION_HELP	'h'
+#define OPTION_EVENT	'e'
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "event",			required_argument,	NULL,	OPTION_SUBSCRIBE },
+	{ "event",			required_argument,	NULL,	OPTION_EVENT },
 	{ NULL,				0,			NULL,	0 },
 };
 
@@ -198,8 +198,8 @@ static void signal_handler (int signal)
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
-	fprintf(stdout, "  --event    : event identifier to subscribe\n");
-	fprintf(stdout, "  --help     : this text\n");
+	fprintf(stdout, "  -e, --event: event identifier to subscribe\n");
+	fprintf(stdout, "  -h, --help : this text\n");
 	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_client_usage();
 }
@@ -243,9 +243,9 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":e:h", longopts, NULL)) != -1) {
 		switch (c) {
-			case OPTION_SUBSCRIBE:
+			case OPTION_EVENT:
 				subscription = subscription_create(optarg);
 				if (subscription == NULL) {
 					fprintf(stderr, "can not create subscription\n");
