@@ -14,14 +14,18 @@ include Makefile.lib
 
 install: app src test
 	install -d ${DESTDIR}/usr/local/bin
+	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
+	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
+	install -m 0755 dist/bin/mbus-client ${DESTDIR}/usr/local/bin/mbus-client
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
 	install -m 0755 dist/bin/mbus-command.py ${DESTDIR}/usr/local/bin/mbus-command.py
-	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
+	install -m 0755 dist/bin/mbus-command.rb ${DESTDIR}/usr/local/bin/mbus-command.rb
 	install -m 0755 dist/bin/mbus-publish ${DESTDIR}/usr/local/bin/mbus-publish
 	install -m 0755 dist/bin/mbus-publish.py ${DESTDIR}/usr/local/bin/mbus-publish.py
+	install -m 0755 dist/bin/mbus-publish.rb ${DESTDIR}/usr/local/bin/mbus-publish.rb
 	install -m 0755 dist/bin/mbus-subscribe ${DESTDIR}/usr/local/bin/mbus-subscribe
 	install -m 0755 dist/bin/mbus-subscribe.py ${DESTDIR}/usr/local/bin/mbus-subscribe.py
-	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
+	install -m 0755 dist/bin/mbus-subscribe.rb ${DESTDIR}/usr/local/bin/mbus-subscribe.rb
 
 	install -m 0755 dist/bin/mbus-test-file-transfer ${DESTDIR}/usr/local/bin/mbus-test-file-transfer
 	install -m 0755 dist/bin/mbus-test-execute-command ${DESTDIR}/usr/local/bin/mbus-test-execute-command
@@ -68,6 +72,7 @@ install: app src test
 	install -d ${DESTDIR}/usr/local/lib
 	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/usr/local/lib/MBusClient.js
 	install -m 0644 dist/lib/MBusClient.py ${DESTDIR}/usr/local/lib/MBusClient.py
+	install -m 0644 dist/lib/MBusClient.rb ${DESTDIR}/usr/local/lib/MBusClient.rb
 
 	install -d ${DESTDIR}/var/www/html/mbus
 	install -m 0644 dist/lib/MBusClient.js ${DESTDIR}/var/www/html/mbus/MBusClient.js
@@ -79,14 +84,18 @@ install: app src test
 	sed 's?'prefix=/usr/local'?'prefix=${DESTDIR}/usr/local'?g' libmbus-json.pc > ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-json.pc
 
 uninstall:
+	rm -f ${DESTDIR}/usr/local/bin/mbus-version
+	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
+	rm -f ${DESTDIR}/usr/local/bin/mbus-client
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command.py
-	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
+	rm -f ${DESTDIR}/usr/local/bin/mbus-command.rb
 	rm -f ${DESTDIR}/usr/local/bin/mbus-publish
 	rm -f ${DESTDIR}/usr/local/bin/mbus-publish.py
+	rm -f ${DESTDIR}/usr/local/bin/mbus-publish.rb
 	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe
 	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe.py
-	rm -f ${DESTDIR}/usr/local/bin/mbus-version
+	rm -f ${DESTDIR}/usr/local/bin/mbus-subscribe.rb
 	
 	rm -f ${DESTDIR}/usr/local/include/mbus/buffer.h
 	rm -f ${DESTDIR}/usr/local/include/mbus/client.h
@@ -125,6 +134,7 @@ uninstall:
 	
 	rm -f ${DESTDIR}/usr/local/lib/MBusClient.js
 	rm -f ${DESTDIR}/usr/local/lib/MBusClient.py
+	rm -f ${DESTDIR}/usr/local/lib/MBusClient.rb
 
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-server.pc
 	rm -f ${DESTDIR}/usr/local/lib/pkgconfig/libmbus-client.pc
