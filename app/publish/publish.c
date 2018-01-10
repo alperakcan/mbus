@@ -156,7 +156,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":d:e:p:f:", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":d:e:p:f:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_DESTINATION:
 				arg.destination = optarg;
