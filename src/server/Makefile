@@ -8,9 +8,13 @@ target.so-${SHARED_ENABLE} = \
 	libmbus-server.so
 
 libmbus-server.so_files-y = \
+	command.c \
+	subscription.c \
+	method.c \
 	server.c
 
 libmbus-server.so_cflags-y += \
+	-fvisibility=hidden \
 	-I../../dist/include \
 	-Wno-unused-parameter
 
