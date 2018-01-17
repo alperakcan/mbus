@@ -289,11 +289,12 @@ static int client_set_connection (struct client *client, struct connection *conn
 	}
 	if (connection == NULL) {
 		if (client->connection != NULL) {
-			rc = listener_connection_close(client_get_listener(client), client_get_connection(client));
+			rc = connection_close(client->connection);
 			if (rc != 0) {
 				mbus_errorf("can not close connection");
 				goto bail;
 			}
+			client->connection = NULL;
 		}
 	} else {
 		if (client->connection != NULL) {
@@ -641,7 +642,7 @@ static void client_destroy (struct client *client)
 		return;
 	}
 	if (client->connection != NULL) {
-		listener_connection_close(client_get_listener(client), client_get_connection(client));
+		connection_close(client_get_connection(client));
 	}
 	if (client->identifier != NULL) {
 		free(client->identifier);
@@ -762,7 +763,7 @@ static struct client * server_find_client_by_fd (struct mbus_server *server, int
 		if (client_get_connection(client) == NULL) {
 			continue;
 		}
-		cfd = listener_connection_get_fd(client_get_listener(client), client_get_connection(client));
+		cfd = connection_get_fd(client_get_connection(client));
 		if (cfd < 0) {
 			mbus_errorf("connection fd is invalid");
 			continue;
@@ -1400,7 +1401,7 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 		}
 		mbus_json_add_item_to_array(clients, source);
 		mbus_json_add_string_to_object_cs(source, "source", client_get_identifier(client));
-		mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(listener_connection_get_fd(client_get_listener(client), client_get_connection(client)), address, sizeof(address)));
+		mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(connection_get_fd(client_get_connection(client)), address, sizeof(address)));
 		subscribes = mbus_json_create_array();
 		if (subscribes == NULL) {
 			goto bail;
@@ -1472,7 +1473,7 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(result, "source", client_get_identifier(client));
-	mbus_json_add_string_to_object_cs(result, "address", mbus_socket_fd_get_address(listener_connection_get_fd(client_get_listener(client), client_get_connection(client)), address, sizeof(address)));
+	mbus_json_add_string_to_object_cs(result, "address", mbus_socket_fd_get_address(connection_get_fd(client_get_connection(client)), address, sizeof(address)));
 	subscribes = mbus_json_create_array();
 	if (subscribes == NULL) {
 		goto bail;
@@ -2088,7 +2089,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				if (server->pollfds.pollfds[c].fd != listener_get_fd(listener)) {
 					continue;
 				}
-				connection = listener_connection_accept(listener);
+				connection = connection_accept(listener);
 				if (connection == NULL) {
 					mbus_errorf("can not accept new connection on listener: %s", listener_get_name(listener));
 					goto bail;
@@ -2096,7 +2097,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				rc = server_client_connection_establish(server, listener, connection);
 				if (rc != 0) {
 					mbus_errorf("can not establish new connection on listener: %s", listener_get_name(listener));
-					listener_connection_close(connection);
+					connection_close(connection);
 					goto bail;
 				}
 			}

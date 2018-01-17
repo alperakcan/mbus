@@ -50,6 +50,10 @@ static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_OUT_CHU
 
 struct connection_private {
 	struct connection connection;
+	int (*close) (struct connection *connection);
+	int (*get_fd) (struct connection *connection);
+	int (*get_want_read) (struct connection *connection);
+	int (*get_want_write) (struct connection *connection);
 };
 
 struct listener_private {
@@ -58,8 +62,6 @@ struct listener_private {
 	enum listener_type (*get_type) (struct listener *listener);
 	int (*get_fd) (struct listener *listener);
 	struct connection * (*connection_accept) (struct listener *listener);
-	int (*connection_close) (struct listener *listener, struct connection *connection);
-	int (*connection_get_fd) (struct listener *listener, struct connection *connection);
 	void (*destroy) (struct listener *listener);
 };
 
@@ -113,6 +115,64 @@ static int listener_tcp_get_fd (struct listener *listener)
 	}
 	listener_tcp = (struct listener_tcp *) listener;
 	return mbus_socket_get_fd(listener_tcp->socket);
+bail:	return -1;
+}
+
+static int connection_tcp_close (struct connection *connection)
+{
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+	mbus_socket_shutdown(connection_tcp->socket, mbus_socket_shutdown_rdwr);
+	mbus_socket_destroy(connection_tcp->socket);
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_tcp->ssl != NULL) {
+		SSL_free(connection_tcp->ssl);
+	}
+#endif
+	free(connection_tcp);
+	return 0;
+bail:	return -1;
+}
+
+static int connection_tcp_get_fd (struct connection *connection)
+{
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+	return mbus_socket_get_fd(connection_tcp->socket);
+bail:	return -1;
+}
+
+static int connection_tcp_get_want_read (struct connection *connection)
+{
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+	(void) connection_tcp;
+	return 0;
+bail:	return -1;
+}
+
+static int connection_tcp_get_want_write (struct connection *connection)
+{
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+	(void) connection_tcp;
+	return 0;
 bail:	return -1;
 }
 
@@ -174,52 +234,16 @@ static struct connection * listener_tcp_connection_accept (struct listener *list
 		}
 	}
 #endif
+	connection_tcp->private.get_fd         = connection_tcp_get_fd;
+	connection_tcp->private.get_want_read  = connection_tcp_get_want_read;
+	connection_tcp->private.get_want_write = connection_tcp_get_want_write;
 	return &connection_tcp->private.connection;
 bail:	if (connection_tcp != NULL) {
-		listener_connection_close(listener, &connection_tcp->private.connection);
+		connection_tcp_close(&connection_tcp->private.connection);
 	}
 	return NULL;
 }
 
-static int listener_tcp_connection_close (struct listener *listener, struct connection *connection)
-{
-	struct connection_tcp *connection_tcp;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_tcp = (struct connection_tcp *) connection;
-	mbus_socket_shutdown(connection_tcp->socket, mbus_socket_shutdown_rdwr);
-	mbus_socket_destroy(connection_tcp->socket);
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (connection_tcp->ssl != NULL) {
-		SSL_free(connection_tcp->ssl);
-	}
-#endif
-	free(connection_tcp);
-	return 0;
-bail:	return -1;
-}
-
-static int listener_tcp_connection_get_fd (struct listener *listener, struct connection *connection)
-{
-	struct connection_tcp *connection_tcp;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_tcp = (struct connection_tcp *) connection;
-	return mbus_socket_get_fd(connection_tcp->socket);
-bail:	return -1;
-}
 
 static void listener_tcp_destroy (struct listener *listener)
 {
@@ -343,8 +367,6 @@ struct listener * listener_tcp_create (const struct listener_tcp_options *option
 	listener_tcp->private.get_type          = listener_tcp_get_type;
 	listener_tcp->private.get_fd            = listener_tcp_get_fd;
 	listener_tcp->private.connection_accept = listener_tcp_connection_accept;
-	listener_tcp->private.connection_close  = listener_tcp_connection_close;
-	listener_tcp->private.connection_get_fd = listener_tcp_connection_get_fd;
 	listener_tcp->private.destroy           = listener_tcp_destroy;
 	return &listener_tcp->private.listener;
 bail:	if (listener_tcp != NULL) {
@@ -406,7 +428,65 @@ static int listener_uds_get_fd (struct listener *listener)
 bail:	return -1;
 }
 
-static struct connection * listener_uds_connection_accept (struct listener *listener)
+static int connection_uds_close (struct connection *connection)
+{
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+	mbus_socket_shutdown(connection_uds->socket, mbus_socket_shutdown_rdwr);
+	mbus_socket_destroy(connection_uds->socket);
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_uds->ssl != NULL) {
+		SSL_free(connection_uds->ssl);
+	}
+#endif
+	free(connection_uds);
+	return 0;
+bail:	return -1;
+}
+
+static int connection_uds_get_fd (struct connection *connection)
+{
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+	return mbus_socket_get_fd(connection_uds->socket);
+bail:	return -1;
+}
+
+static int connection_uds_get_want_read (struct connection *connection)
+{
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+	(void) connection_uds;
+	return 0;
+bail:	return -1;
+}
+
+static int connection_uds_get_want_write (struct connection *connection)
+{
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+	(void) connection_uds;
+	return 0;
+bail:	return -1;
+}
+
+static struct connection * connection_uds_accept (struct listener *listener)
 {
 	int rc;
 	struct listener_uds *listener_uds;
@@ -464,51 +544,14 @@ static struct connection * listener_uds_connection_accept (struct listener *list
 		}
 	}
 #endif
+	connection_uds->private.get_fd         = connection_uds_get_fd;
+	connection_uds->private.get_want_read  = connection_uds_get_want_read;
+	connection_uds->private.get_want_write = connection_uds_get_want_write;
 	return &connection_uds->private.connection;
 bail:	if (connection_uds != NULL) {
-		listener_connection_close(listener, &connection_uds->private.connection);
+		connection_uds_close(&connection_uds->private.connection);
 	}
 	return NULL;
-}
-
-static int listener_uds_connection_close (struct listener *listener, struct connection *connection)
-{
-	struct connection_uds *connection_uds;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_uds = (struct connection_uds *) connection;
-	mbus_socket_shutdown(connection_uds->socket, mbus_socket_shutdown_rdwr);
-	mbus_socket_destroy(connection_uds->socket);
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (connection_uds->ssl != NULL) {
-		SSL_free(connection_uds->ssl);
-	}
-#endif
-	free(connection_uds);
-	return 0;
-bail:	return -1;
-}
-
-static int listener_uds_connection_get_fd (struct listener *listener, struct connection *connection)
-{
-	struct connection_uds *connection_uds;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_uds = (struct connection_uds *) connection;
-	return mbus_socket_get_fd(connection_uds->socket);
-bail:	return -1;
 }
 
 static void listener_uds_destroy (struct listener *listener)
@@ -632,9 +675,7 @@ struct listener * listener_uds_create (const struct listener_uds_options *option
 	listener_uds->private.get_name          = listener_uds_get_name;
 	listener_uds->private.get_type          = listener_uds_get_type;
 	listener_uds->private.get_fd            = listener_uds_get_fd;
-	listener_uds->private.connection_accept = listener_uds_connection_accept;
-	listener_uds->private.connection_close  = listener_uds_connection_close;
-	listener_uds->private.connection_get_fd = listener_uds_connection_get_fd;
+	listener_uds->private.connection_accept = connection_uds_accept;
 	listener_uds->private.destroy           = listener_uds_destroy;
 	return &listener_uds->private.listener;
 bail:	if (listener_uds != NULL) {
@@ -679,6 +720,58 @@ static void ws_log_callback (int level, const char *line)
 	} else if (level >= LLL_DEBUG) {
 		mbus_debugf("ws: %.*s", len, line);
 	}
+}
+
+static int listener_ws_connection_close (struct connection *connection)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	lws_callback_on_writable(connection_ws->wsi);
+	connection_ws->wsi = NULL;
+	return 0;
+bail:	return -1;
+}
+
+static int listener_ws_connection_get_fd (struct connection *connection)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	return lws_get_socket_fd(connection_ws->wsi);
+bail:	return -1;
+}
+
+static int listener_ws_connection_get_want_read (struct connection *connection)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	(void) connection_ws;
+	return 0;
+bail:	return -1;
+}
+
+static int listener_ws_connection_get_want_write (struct connection *connection)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	(void) connection_ws;
+	return 0;
+bail:	return -1;
 }
 
 static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
@@ -764,6 +857,10 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			mbus_debugf("  established");
 			memset(connection_ws, 0, sizeof(struct connection_ws));
 			connection_ws->wsi = wsi;
+			connection_ws->private.close          = listener_ws_connection_close;
+			connection_ws->private.get_fd         = listener_ws_connection_get_fd;
+			connection_ws->private.get_want_read  = listener_ws_connection_get_want_read;
+			connection_ws->private.get_want_write = listener_ws_connection_get_want_write;
 			rc = listener_ws->callbacks.connection_established(
 					listener_ws->callbacks.context,
 					&listener_ws->private.listener,
@@ -1028,40 +1125,6 @@ static int listener_ws_get_fd (struct listener *listener)
 bail:	return -1;
 }
 
-static int listener_ws_connection_close (struct listener *listener, struct connection *connection)
-{
-	struct connection_ws *connection_ws;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_ws = (struct connection_ws *) connection;
-	lws_callback_on_writable(connection_ws->wsi);
-	connection_ws->wsi = NULL;
-	return 0;
-bail:	return -1;
-}
-
-static int listener_ws_connection_get_fd (struct listener *listener, struct connection *connection)
-{
-	struct connection_ws *connection_ws;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
-		goto bail;
-	}
-	if (connection == NULL) {
-		mbus_errorf("connection is invalid");
-		goto bail;
-	}
-	connection_ws = (struct connection_ws *) connection;
-	return lws_get_socket_fd(connection_ws->wsi);
-bail:	return -1;
-}
-
 static void listener_ws_destroy (struct listener *listener)
 {
 	struct listener_ws *listener_ws;
@@ -1215,8 +1278,6 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 	listener_ws->private.get_type          = listener_ws_get_type;
 	listener_ws->private.get_fd            = listener_ws_get_fd;
 	listener_ws->private.connection_accept = NULL;
-	listener_ws->private.connection_close  = listener_ws_connection_close;
-	listener_ws->private.connection_get_fd = listener_ws_connection_get_fd;
 	listener_ws->private.destroy           = listener_ws_destroy;
 	return &listener_ws->private.listener;
 bail:	if (listener_ws != NULL) {
@@ -1289,34 +1350,65 @@ struct connection * listener_connection_accept (struct listener *listener)
 bail:	return NULL;
 }
 
-int listener_connection_close (struct listener *listener, struct connection *connection)
+int connection_close (struct connection *connection)
 {
-	struct listener_private *private;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
 		goto bail;
 	}
-	private = (struct listener_private *) listener;
-	if (private->connection_close == NULL) {
-		mbus_errorf("listener->connection_close is invalid");
+	private = (struct connection_private *) connection;
+	if (private->close == NULL) {
+		mbus_errorf("connection->close is invalid");
 		goto bail;
 	}
-	return private->connection_close(listener, connection);
+	return private->close(connection);
 bail:	return -1;
 }
 
-int listener_connection_get_fd (struct listener *listener, struct connection *connection)
+int connection_get_fd (struct connection *connection)
 {
-	struct listener_private *private;
-	if (listener == NULL) {
-		mbus_errorf("listener is invalid");
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
 		goto bail;
 	}
-	private = (struct listener_private *) listener;
-	if (private->connection_get_fd == NULL) {
-		mbus_errorf("listener->connection_get_fd is invalid");
+	private = (struct connection_private *) connection;
+	if (private->get_fd == NULL) {
+		mbus_errorf("connection->get_fd is invalid");
 		goto bail;
 	}
-	return private->connection_get_fd(listener, connection);
+	return private->get_fd(connection);
+bail:	return -1;
+}
+
+int connection_get_want_read (struct connection *connection)
+{
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	private = (struct connection_private *) connection;
+	if (private->get_want_read == NULL) {
+		mbus_errorf("connection->get_want_read is invalid");
+		goto bail;
+	}
+	return private->get_want_read(connection);
+bail:	return -1;
+}
+int connection_get_want_write (struct connection *connection)
+{
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	private = (struct connection_private *) connection;
+	if (private->get_want_write == NULL) {
+		mbus_errorf("connection->get_want_write is invalid");
+		goto bail;
+	}
+	return private->get_want_write(connection);
 bail:	return -1;
 }

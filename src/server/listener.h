@@ -89,7 +89,7 @@ enum listener_type listener_get_type (struct listener *listener);
 int listener_get_fd (struct listener *listener);
 
 struct connection * listener_connection_accept (struct listener *listener);
-int listener_connection_close (struct listener *listener, struct connection *connection);
-int listener_connection_get_fd (struct listener *listener, struct connection *connection);
-int listener_connection_get_want_read (struct listener *listener, struct connection *connection);
-int listener_connection_get_want_write (struct listener *listener, struct connection *connection);
+int connection_close (struct connection *connection);
+int connection_get_fd (struct connection *connection);
+int connection_get_want_read (struct connection *connection);
+int connection_get_want_write (struct connection *connection);
