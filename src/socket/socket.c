@@ -556,6 +556,10 @@ char * mbus_socket_fd_get_address (int fd, char *buffer, int length)
 			if (inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &addr)->sin6_addr.s6_addr, buffer, length)) {
 				return buffer;
 			}
+		} else if (addr.ss_family == AF_UNIX) {
+			if (inet_ntop(AF_INET6, &((struct sockaddr_un *) &addr)->sun_path, buffer, length)) {
+				return buffer;
+			}
 		}
 	}
 	return NULL;

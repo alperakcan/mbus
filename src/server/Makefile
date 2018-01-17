@@ -11,6 +11,7 @@ libmbus-server.so_files-y = \
 	command.c \
 	subscription.c \
 	method.c \
+	listener.c \
 	server.c
 
 libmbus-server.so_cflags-y += \
