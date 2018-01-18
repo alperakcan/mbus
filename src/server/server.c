@@ -2821,7 +2821,7 @@ bail:	mbus_server_destroy(server);
 	return NULL;
 }
 
-int mbus_server_tcp_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_tcp_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2831,7 +2831,7 @@ int mbus_server_tcp_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_tcp_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_tcp_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2841,7 +2841,7 @@ const char * mbus_server_tcp_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_tcp_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_tcp_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2851,7 +2851,7 @@ int mbus_server_tcp_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_uds_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_uds_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2861,7 +2861,7 @@ int mbus_server_uds_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_uds_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_uds_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2871,7 +2871,7 @@ const char * mbus_server_uds_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_uds_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_uds_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2881,7 +2881,7 @@ int mbus_server_uds_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_ws_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_ws_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2893,7 +2893,7 @@ int mbus_server_ws_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_ws_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_ws_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2905,7 +2905,7 @@ const char * mbus_server_ws_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_ws_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_ws_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2917,7 +2917,7 @@ int mbus_server_ws_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_tcps_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_tcps_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2927,7 +2927,7 @@ int mbus_server_tcps_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_udss_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_udss_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2937,7 +2937,7 @@ int mbus_server_udss_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_udss_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_udss_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2947,7 +2947,7 @@ const char * mbus_server_udss_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_udss_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_udss_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2957,7 +2957,7 @@ int mbus_server_udss_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_wss_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_wss_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2969,7 +2969,7 @@ int mbus_server_wss_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_wss_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_wss_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2981,7 +2981,7 @@ const char * mbus_server_wss_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_wss_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_wss_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
