@@ -1302,6 +1302,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				goto bail;
 			}
 			if (connection_ws->wsi != NULL) {
+				lws_callback_on_writable(connection_ws->wsi);
 				rc = listener_ws->callbacks.connection_closed(
 						listener_ws->callbacks.context,
 						&listener_ws->private.listener,
@@ -1310,7 +1311,6 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 					mbus_errorf("can not close client");
 					goto bail;
 				}
-				lws_callback_on_writable(connection_ws->wsi);
 				connection_ws->wsi = NULL;
 			}
 			break;

@@ -1090,6 +1090,118 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
+static int server_listener_connection_established_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	return server_client_connection_establish(context, listener, connection);
+}
+
+static int server_listener_connection_receive_callback (void *context, struct listener *listener, struct connection *connection, void *in, int len)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return -1;
+	}
+	return mbus_buffer_push(client->buffer.in, in, len);
+}
+
+static struct mbus_buffer * server_listener_connection_writable_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return NULL;
+	}
+	return client->buffer.out;
+}
+
+static int server_listener_connection_closed_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return -1;
+	}
+	return client_set_connection(client, NULL);
+}
+
+static int server_listener_poll_add_callback (void *context, struct listener *listener, int fd, unsigned int events)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				server->ws_pollfds.pollfds[i].events = events;
+				break;
+			}
+		}
+		if (i < server->ws_pollfds.length) {
+			return 0;
+		}
+	}
+	if (server->ws_pollfds.length + 1 > server->ws_pollfds.size) {
+		struct pollfd *tmp;
+		while (server->ws_pollfds.length + 1 > server->ws_pollfds.size) {
+			server->ws_pollfds.size += 1024;
+		}
+		tmp = realloc(server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.size);
+		if (tmp == NULL) {
+			tmp = malloc(sizeof(int) * server->ws_pollfds.size);
+			if (tmp == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+			memcpy(tmp, server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.length);
+			free(server->ws_pollfds.pollfds);
+		}
+		server->ws_pollfds.pollfds = tmp;
+	}
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].fd = fd;
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].events = events;
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].revents = 0;
+	server->ws_pollfds.length += 1;
+	return 0;
+bail:	return -1;
+}
+
+static int server_listener_poll_mod_callback (void *context, struct listener *listener, int fd, unsigned int events)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				server->ws_pollfds.pollfds[i].events = events;
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+static int server_listener_poll_del_callback (void *context, struct listener *listener, int fd)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				memmove(&server->ws_pollfds.pollfds[i], &server->ws_pollfds.pollfds[i + 1], sizeof(struct pollfd) * (server->ws_pollfds.length - i - 1));
+				server->ws_pollfds.length -= 1;
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
 static int server_handle_command_create (struct mbus_server *server, struct method *method)
 {
 	int rc;
@@ -2311,6 +2423,9 @@ __attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbu
 	if (server->pollfds.pollfds != NULL) {
 		free(server->pollfds.pollfds);
 	}
+	if (server->ws_pollfds.pollfds != NULL) {
+		free(server->ws_pollfds.pollfds);
+	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	EVP_cleanup();
 #endif
@@ -2608,6 +2723,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 		listener_ws_options.port        = server->options.ws.port;
 		listener_ws_options.certificate = NULL;
 		listener_ws_options.privatekey  = NULL;
+		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
+		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
+		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
+		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
+		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
+		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
+		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.context                = server;
 		listener = listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: ws");
@@ -2662,6 +2785,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 		listener_ws_options.port        = server->options.wss.port;
 		listener_ws_options.certificate = server->options.wss.certificate;
 		listener_ws_options.privatekey  = server->options.wss.privatekey;
+		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
+		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
+		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
+		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
+		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
+		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
+		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.context                = server;
 		listener = listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
