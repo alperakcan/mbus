@@ -2130,7 +2130,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			continue;
 		}
 		mbus_debugf("    fd: %d, events: 0x%08x, revents: 0x%08x", server->pollfds.pollfds[c].fd, server->pollfds.pollfds[c].events, server->pollfds.pollfds[c].revents);
-		{
+		if (mbus_debug_level >= mbus_debug_level_debug) {
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
 				if (server->pollfds.pollfds[c].fd == mbus_server_listener_get_fd(listener)) {
 					mbus_debugf("      listener: %s", mbus_server_listener_get_name(listener));
@@ -2187,9 +2187,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			continue;
 		}
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
-			mbus_errorf("connection read %d", mbus_buffer_get_length(client->buffer.in));
 			rc = mbus_server_connection_read(connection, client->buffer.in);
-			mbus_errorf("connection read %d", mbus_buffer_get_length(client->buffer.in));
 			if ((rc <= 0) &&
 			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
 				mbus_debugf("can not read data from client");
@@ -2232,7 +2230,7 @@ out:
 		uint8_t *data;
 		uint32_t expected;
 		uint32_t uncompressed;
-		if (mbus_buffer_get_length(client->buffer.in) < 4) {
+		if (mbus_buffer_get_length(client->buffer.in) < sizeof(expected)) {
 			continue;
 		}
 		mbus_debugf("%s buffer.in:", client_get_identifier(client));
@@ -2242,7 +2240,7 @@ out:
 			char *string;
 			ptr = mbus_buffer_get_base(client->buffer.in);
 			end = ptr + mbus_buffer_get_length(client->buffer.in);
-			if (end - ptr < 4) {
+			if (end - ptr < (int32_t) sizeof(expected)) {
 				break;
 			}
 			memcpy(&expected, ptr, sizeof(expected));
