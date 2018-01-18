@@ -396,6 +396,18 @@ int mbus_server_uds_enabled (struct mbus_server *server);
 const char * mbus_server_uds_address (struct mbus_server *server);
 int mbus_server_uds_port (struct mbus_server *server);
 
-int mbus_server_websocket_enabled (struct mbus_server *server);
-const char * mbus_server_websocket_address (struct mbus_server *server);
-int mbus_server_websocket_port (struct mbus_server *server);
+int mbus_server_ws_enabled (struct mbus_server *server);
+const char * mbus_server_ws_address (struct mbus_server *server);
+int mbus_server_ws_port (struct mbus_server *server);
+
+int mbus_server_tcps_enabled (struct mbus_server *server);
+const char * mbus_server_tcps_address (struct mbus_server *server);
+int mbus_server_tcps_port (struct mbus_server *server);
+
+int mbus_server_udss_enabled (struct mbus_server *server);
+const char * mbus_server_udss_address (struct mbus_server *server);
+int mbus_server_udss_port (struct mbus_server *server);
+
+int mbus_server_wss_enabled (struct mbus_server *server);
+const char * mbus_server_wss_address (struct mbus_server *server);
+int mbus_server_wss_port (struct mbus_server *server);

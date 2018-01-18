@@ -42,6 +42,8 @@
 #include <libwebsockets.h>
 #endif
 
+#define MBUS_DEBUG_NAME	"mbus-listener"
+
 #include "mbus/debug.h"
 #include "mbus/tailq.h"
 #include "mbus/socket.h"

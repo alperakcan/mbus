@@ -2916,3 +2916,79 @@ int mbus_server_ws_port (struct mbus_server *server)
 #endif
 bail:	return -1;
 }
+
+int mbus_server_tcps_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.tcps.port;
+bail:	return -1;
+}
+
+int mbus_server_udss_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.enabled;
+bail:	return -1;
+}
+
+const char * mbus_server_udss_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.address;
+bail:	return NULL;
+}
+
+int mbus_server_udss_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.port;
+bail:	return -1;
+}
+
+int mbus_server_wss_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.enabled;
+#endif
+bail:	return -1;
+}
+
+const char * mbus_server_wss_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.address;
+#endif
+bail:	return NULL;
+}
+
+int mbus_server_wss_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.port;
+#endif
+bail:	return -1;
+}
