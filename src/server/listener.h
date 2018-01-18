@@ -87,9 +87,13 @@ void listener_destroy (struct listener *listener);
 const char * listener_get_name (struct listener *listener);
 enum listener_type listener_get_type (struct listener *listener);
 int listener_get_fd (struct listener *listener);
+int listener_service (struct listener *listener);
 
-struct connection * listener_connection_accept (struct listener *listener);
+struct connection * listener_accept (struct listener *listener);
 int connection_close (struct connection *connection);
 int connection_get_fd (struct connection *connection);
-int connection_get_want_read (struct connection *connection);
-int connection_get_want_write (struct connection *connection);
+int connection_wants_read (struct connection *connection);
+int connection_wants_write (struct connection *connection);
+int connection_request_write (struct connection *connection);
+int connection_read (struct connection *connection, struct mbus_buffer *buffer);
+int connection_write (struct connection *connection, struct mbus_buffer *buffer);

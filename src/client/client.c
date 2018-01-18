@@ -3335,7 +3335,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				} else if (errno == EAGAIN) {
 				} else if (errno == EWOULDBLOCK) {
 				} else {
-					mbus_errorf("can not write string to client");
+					mbus_errorf("can not write string to client: %s", strerror(errno));
 					goto bail;
 				}
 			} else {

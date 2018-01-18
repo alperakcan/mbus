@@ -107,7 +107,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	struct subscription *subscription;
 	struct mbus_client_subscribe_options subscribe_options;
 	arg = context;
-	fprintf(stdout, "connect: %s\n", mbus_client_connect_status_string(status));
+	fprintf(stdout, "connect status: %s\n", mbus_client_connect_status_string(status));
 	if (status == mbus_client_connect_status_success) {
 		arg->connected = 1;
 		if (arg->subscriptions->count > 0) {
@@ -152,7 +152,7 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 {
 	struct arg *arg = context;
 	(void) client;
-	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
+	fprintf(stdout, "disconnect status: %s\n", mbus_client_disconnect_status_string(status));
 	if (mbus_client_get_options(client)->connect_interval <= 0) {
 		arg->disconnected = 1;
 	}

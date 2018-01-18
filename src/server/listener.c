@@ -45,15 +45,20 @@
 
 #include "listener.h"
 
-#define BUFFER_OUT_CHUNK_SIZE (64 * 1024)
+#define BUFFER_IN_CHUNK_SIZE (16 * 1024)
+#define BUFFER_OUT_CHUNK_SIZE (16 * 1024)
+static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_IN_CHUNK_SIZE < LWS_PRE ? -1 : 0];
 static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_OUT_CHUNK_SIZE < LWS_PRE ? -1 : 0];
 
 struct connection_private {
 	struct connection connection;
 	int (*close) (struct connection *connection);
 	int (*get_fd) (struct connection *connection);
-	int (*get_want_read) (struct connection *connection);
-	int (*get_want_write) (struct connection *connection);
+	int (*wants_read) (struct connection *connection);
+	int (*wants_write) (struct connection *connection);
+	int (*request_write) (struct connection *connection);
+	int (*read) (struct connection *connection, struct mbus_buffer *buffer);
+	int (*write) (struct connection *connection, struct mbus_buffer *buffer);
 };
 
 struct listener_private {
@@ -61,7 +66,8 @@ struct listener_private {
 	const char * (*get_name) (struct listener *listener);
 	enum listener_type (*get_type) (struct listener *listener);
 	int (*get_fd) (struct listener *listener);
-	struct connection * (*connection_accept) (struct listener *listener);
+	int (*service) (struct listener *listener);
+	struct connection * (*accept) (struct listener *listener);
 	void (*destroy) (struct listener *listener);
 };
 
@@ -70,8 +76,8 @@ struct connection_tcp {
 	struct mbus_socket *socket;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL *ssl;
-	int want_read;
-	int want_write;
+	int wants_read;
+	int wants_write;
 #endif
 };
 
@@ -150,7 +156,7 @@ static int connection_tcp_get_fd (struct connection *connection)
 bail:	return -1;
 }
 
-static int connection_tcp_get_want_read (struct connection *connection)
+static int connection_tcp_wants_read (struct connection *connection)
 {
 	struct connection_tcp *connection_tcp;
 	if (connection == NULL) {
@@ -163,7 +169,7 @@ static int connection_tcp_get_want_read (struct connection *connection)
 bail:	return -1;
 }
 
-static int connection_tcp_get_want_write (struct connection *connection)
+static int connection_tcp_wants_write (struct connection *connection)
 {
 	struct connection_tcp *connection_tcp;
 	if (connection == NULL) {
@@ -176,7 +182,163 @@ static int connection_tcp_get_want_write (struct connection *connection)
 bail:	return -1;
 }
 
-static struct connection * listener_tcp_connection_accept (struct listener *listener)
+static int connection_tcp_request_write (struct connection *connection)
+{
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+	(void) connection_tcp;
+	return 0;
+bail:	return -1;
+}
+
+static int connection_tcp_read (struct connection *connection, struct mbus_buffer *buffer)
+{
+	int rc;
+	int read_rc;
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_tcp->ssl == NULL) {
+#endif
+		rc = mbus_buffer_reserve(buffer, mbus_buffer_get_length(buffer) + BUFFER_IN_CHUNK_SIZE);
+		if (rc != 0) {
+			mbus_errorf("can not reserve client buffer");
+			goto bail;
+		}
+		read_rc = read(mbus_socket_get_fd(connection_tcp->socket),
+				mbus_buffer_get_base(buffer) + mbus_buffer_get_length(buffer),
+				mbus_buffer_get_size(buffer) - mbus_buffer_get_length(buffer));
+		rc = mbus_buffer_set_length(buffer, mbus_buffer_get_length(buffer) + read_rc);
+		if (rc != 0) {
+			mbus_errorf("can not set buffer length");
+			goto bail;
+		}
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	} else {
+		read_rc = 0;
+		do {
+			rc = mbus_buffer_reserve(buffer, mbus_buffer_get_length(buffer) + BUFFER_IN_CHUNK_SIZE);
+			if (rc != 0) {
+				mbus_errorf("can not reserve client buffer");
+				goto bail;
+			}
+			connection_tcp->wants_read = 0;
+			rc = SSL_read(connection_tcp->ssl,
+					mbus_buffer_get_base(buffer) + mbus_buffer_get_length(buffer),
+					mbus_buffer_get_size(buffer) - mbus_buffer_get_length(buffer));
+			if (rc <= 0) {
+				int error;
+				error = SSL_get_error(connection_tcp->ssl, rc);
+				if (error == SSL_ERROR_WANT_READ) {
+					errno = EAGAIN;
+					connection_tcp->wants_read = 1;
+				} else if (error == SSL_ERROR_WANT_WRITE) {
+					errno = EAGAIN;
+					connection_tcp->wants_write = 1;
+				} else if (error == SSL_ERROR_SYSCALL) {
+					read_rc = -1;
+					errno = EIO;
+				} else {
+					char ebuf[256];
+					mbus_errorf("can not read ssl: %d", error);
+					error = ERR_get_error();
+					while (error) {
+						mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+						error = ERR_get_error();
+					}
+					read_rc = -1;
+					errno = EIO;
+				}
+				break;
+			}
+			read_rc += rc;
+			rc = mbus_buffer_set_length(buffer, mbus_buffer_get_length(buffer) + rc);
+			if (rc != 0) {
+				mbus_errorf("can not set buffer length");
+				goto bail;
+			}
+		} while (read_rc >= 0 &&
+			 SSL_pending(connection_tcp->ssl));
+	}
+#endif
+	return read_rc;
+bail:	errno = EIO;
+	return -1;
+}
+
+static int connection_tcp_write (struct connection *connection, struct mbus_buffer *buffer)
+{
+	int rc;
+	int write_rc;
+	struct connection_tcp *connection_tcp;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_tcp = (struct connection_tcp *) connection;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_tcp->ssl == NULL) {
+#endif
+		write_rc = write(mbus_socket_get_fd(connection_tcp->socket), mbus_buffer_get_base(buffer), mbus_buffer_get_length(buffer));
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	} else {
+		connection_tcp->wants_write = 0;
+		write_rc = SSL_write(connection_tcp->ssl, mbus_buffer_get_base(buffer), mbus_buffer_get_length(buffer));
+		if (write_rc <= 0) {
+			int error;
+			error = SSL_get_error(connection_tcp->ssl, write_rc);
+			mbus_errorf("can not write ssl: %d", error);
+			if (error == SSL_ERROR_WANT_READ) {
+				write_rc = 0;
+				errno = EAGAIN;
+				connection_tcp->wants_read = 1;
+			} else if (error == SSL_ERROR_WANT_WRITE) {
+				write_rc = 0;
+				errno = EAGAIN;
+				connection_tcp->wants_write = 1;
+			} else if (error == SSL_ERROR_SYSCALL) {
+				write_rc = -1;
+				errno = EIO;
+			} else {
+				char ebuf[256];
+				mbus_errorf("can not read ssl: %d", error);
+				error = ERR_get_error();
+				while (error) {
+					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+					error = ERR_get_error();
+				}
+				goto bail;
+			}
+		}
+	}
+#endif
+	rc = mbus_buffer_shift(buffer, write_rc);
+	if (rc != 0) {
+		mbus_errorf("can not shift buffer");
+		goto bail;
+	}
+	return write_rc;
+bail:	errno = EIO;
+	return -1;
+}
+
+static struct connection * listener_tcp_accept (struct listener *listener)
 {
 	int rc;
 	struct listener_tcp *listener_tcp;
@@ -216,11 +378,11 @@ static struct connection * listener_tcp_connection_accept (struct listener *list
 			int error;
 			error = SSL_get_error(connection_tcp->ssl, rc);
 			if (error == SSL_ERROR_WANT_READ) {
-				connection_tcp->want_read = 1;
+				connection_tcp->wants_read = 1;
 			} else if (error == SSL_ERROR_WANT_WRITE) {
-				connection_tcp->want_write = 1;
+				connection_tcp->wants_write = 1;
 			} else if (error == SSL_ERROR_SYSCALL) {
-				connection_tcp->want_read = 1;
+				connection_tcp->wants_read = 1;
 			} else {
 				char ebuf[256];
 				mbus_errorf("can not accept ssl: %d", error);
@@ -234,9 +396,13 @@ static struct connection * listener_tcp_connection_accept (struct listener *list
 		}
 	}
 #endif
-	connection_tcp->private.get_fd         = connection_tcp_get_fd;
-	connection_tcp->private.get_want_read  = connection_tcp_get_want_read;
-	connection_tcp->private.get_want_write = connection_tcp_get_want_write;
+	connection_tcp->private.close         = connection_tcp_close;
+	connection_tcp->private.get_fd        = connection_tcp_get_fd;
+	connection_tcp->private.wants_read    = connection_tcp_wants_read;
+	connection_tcp->private.wants_write   = connection_tcp_wants_write;
+	connection_tcp->private.request_write = connection_tcp_request_write;
+	connection_tcp->private.read          = connection_tcp_read;
+	connection_tcp->private.write         = connection_tcp_write;
 	return &connection_tcp->private.connection;
 bail:	if (connection_tcp != NULL) {
 		connection_tcp_close(&connection_tcp->private.connection);
@@ -244,6 +410,18 @@ bail:	if (connection_tcp != NULL) {
 	return NULL;
 }
 
+static int listener_tcp_service (struct listener *listener)
+{
+	struct listener_tcp *listener_tcp;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	listener_tcp = (struct listener_tcp *) listener;
+	(void) listener_tcp;
+	return 0;
+bail:	return -1;
+}
 
 static void listener_tcp_destroy (struct listener *listener)
 {
@@ -263,6 +441,7 @@ static void listener_tcp_destroy (struct listener *listener)
 		SSL_CTX_free(listener_tcp->ssl);
 	}
 #endif
+	free(listener_tcp);
 }
 
 struct listener * listener_tcp_create (const struct listener_tcp_options *options)
@@ -363,11 +542,12 @@ struct listener * listener_tcp_create (const struct listener_tcp_options *option
 		}
 	}
 #endif
-	listener_tcp->private.get_name          = listener_tcp_get_name;
-	listener_tcp->private.get_type          = listener_tcp_get_type;
-	listener_tcp->private.get_fd            = listener_tcp_get_fd;
-	listener_tcp->private.connection_accept = listener_tcp_connection_accept;
-	listener_tcp->private.destroy           = listener_tcp_destroy;
+	listener_tcp->private.get_name = listener_tcp_get_name;
+	listener_tcp->private.get_type = listener_tcp_get_type;
+	listener_tcp->private.get_fd   = listener_tcp_get_fd;
+	listener_tcp->private.accept   = listener_tcp_accept;
+	listener_tcp->private.service  = listener_tcp_service;
+	listener_tcp->private.destroy  = listener_tcp_destroy;
 	return &listener_tcp->private.listener;
 bail:	if (listener_tcp != NULL) {
 		listener_tcp_destroy(&listener_tcp->private.listener);
@@ -380,8 +560,8 @@ struct connection_uds {
 	struct mbus_socket *socket;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	SSL *ssl;
-	int want_read;
-	int want_write;
+	int wants_read;
+	int wants_write;
 #endif
 };
 
@@ -460,7 +640,7 @@ static int connection_uds_get_fd (struct connection *connection)
 bail:	return -1;
 }
 
-static int connection_uds_get_want_read (struct connection *connection)
+static int connection_uds_wants_read (struct connection *connection)
 {
 	struct connection_uds *connection_uds;
 	if (connection == NULL) {
@@ -473,7 +653,7 @@ static int connection_uds_get_want_read (struct connection *connection)
 bail:	return -1;
 }
 
-static int connection_uds_get_want_write (struct connection *connection)
+static int connection_uds_wants_write (struct connection *connection)
 {
 	struct connection_uds *connection_uds;
 	if (connection == NULL) {
@@ -486,7 +666,163 @@ static int connection_uds_get_want_write (struct connection *connection)
 bail:	return -1;
 }
 
-static struct connection * connection_uds_accept (struct listener *listener)
+static int connection_uds_request_write (struct connection *connection)
+{
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+	(void) connection_uds;
+	return 0;
+bail:	return -1;
+}
+
+static int connection_uds_read (struct connection *connection, struct mbus_buffer *buffer)
+{
+	int rc;
+	int read_rc;
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_uds->ssl == NULL) {
+#endif
+		rc = mbus_buffer_reserve(buffer, mbus_buffer_get_length(buffer) + BUFFER_IN_CHUNK_SIZE);
+		if (rc != 0) {
+			mbus_errorf("can not reserve client buffer");
+			goto bail;
+		}
+		read_rc = read(mbus_socket_get_fd(connection_uds->socket),
+				mbus_buffer_get_base(buffer) + mbus_buffer_get_length(buffer),
+				mbus_buffer_get_size(buffer) - mbus_buffer_get_length(buffer));
+		rc = mbus_buffer_set_length(buffer, mbus_buffer_get_length(buffer) + read_rc);
+		if (rc != 0) {
+			mbus_errorf("can not set buffer length");
+			goto bail;
+		}
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	} else {
+		read_rc = 0;
+		do {
+			rc = mbus_buffer_reserve(buffer, mbus_buffer_get_length(buffer) + BUFFER_IN_CHUNK_SIZE);
+			if (rc != 0) {
+				mbus_errorf("can not reserve client buffer");
+				goto bail;
+			}
+			connection_uds->wants_read = 0;
+			rc = SSL_read(connection_uds->ssl,
+					mbus_buffer_get_base(buffer) + mbus_buffer_get_length(buffer),
+					mbus_buffer_get_size(buffer) - mbus_buffer_get_length(buffer));
+			if (rc <= 0) {
+				int error;
+				error = SSL_get_error(connection_uds->ssl, rc);
+				if (error == SSL_ERROR_WANT_READ) {
+					errno = EAGAIN;
+					connection_uds->wants_read = 1;
+				} else if (error == SSL_ERROR_WANT_WRITE) {
+					errno = EAGAIN;
+					connection_uds->wants_write = 1;
+				} else if (error == SSL_ERROR_SYSCALL) {
+					read_rc = -1;
+					errno = EIO;
+				} else {
+					char ebuf[256];
+					mbus_errorf("can not read ssl: %d", error);
+					error = ERR_get_error();
+					while (error) {
+						mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+						error = ERR_get_error();
+					}
+					read_rc = -1;
+					errno = EIO;
+				}
+				break;
+			}
+			read_rc += rc;
+			rc = mbus_buffer_set_length(buffer, mbus_buffer_get_length(buffer) + rc);
+			if (rc != 0) {
+				mbus_errorf("can not set buffer length");
+				goto bail;
+			}
+		} while (read_rc >= 0 &&
+			 SSL_pending(connection_uds->ssl));
+	}
+#endif
+	return read_rc;
+bail:	errno = EIO;
+	return -1;
+}
+
+static int connection_uds_write (struct connection *connection, struct mbus_buffer *buffer)
+{
+	int rc;
+	int write_rc;
+	struct connection_uds *connection_uds;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_uds = (struct connection_uds *) connection;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	if (connection_uds->ssl == NULL) {
+#endif
+		write_rc = write(mbus_socket_get_fd(connection_uds->socket), mbus_buffer_get_base(buffer), mbus_buffer_get_length(buffer));
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+	} else {
+		connection_uds->wants_write = 0;
+		write_rc = SSL_write(connection_uds->ssl, mbus_buffer_get_base(buffer), mbus_buffer_get_length(buffer));
+		if (write_rc <= 0) {
+			int error;
+			error = SSL_get_error(connection_uds->ssl, write_rc);
+			mbus_errorf("can not write ssl: %d", error);
+			if (error == SSL_ERROR_WANT_READ) {
+				write_rc = 0;
+				errno = EAGAIN;
+				connection_uds->wants_read = 1;
+			} else if (error == SSL_ERROR_WANT_WRITE) {
+				write_rc = 0;
+				errno = EAGAIN;
+				connection_uds->wants_write = 1;
+			} else if (error == SSL_ERROR_SYSCALL) {
+				write_rc = -1;
+				errno = EIO;
+			} else {
+				char ebuf[256];
+				mbus_errorf("can not read ssl: %d", error);
+				error = ERR_get_error();
+				while (error) {
+					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
+					error = ERR_get_error();
+				}
+				goto bail;
+			}
+		}
+	}
+#endif
+	rc = mbus_buffer_shift(buffer, write_rc);
+	if (rc != 0) {
+		mbus_errorf("can not shift buffer");
+		goto bail;
+	}
+	return write_rc;
+bail:	errno = EIO;
+	return -1;
+}
+
+static struct connection * listener_uds_accept (struct listener *listener)
 {
 	int rc;
 	struct listener_uds *listener_uds;
@@ -526,11 +862,11 @@ static struct connection * connection_uds_accept (struct listener *listener)
 			int error;
 			error = SSL_get_error(connection_uds->ssl, rc);
 			if (error == SSL_ERROR_WANT_READ) {
-				connection_uds->want_read = 1;
+				connection_uds->wants_read = 1;
 			} else if (error == SSL_ERROR_WANT_WRITE) {
-				connection_uds->want_write = 1;
+				connection_uds->wants_write = 1;
 			} else if (error == SSL_ERROR_SYSCALL) {
-				connection_uds->want_read = 1;
+				connection_uds->wants_read = 1;
 			} else {
 				char ebuf[256];
 				mbus_errorf("can not accept ssl: %d", error);
@@ -544,14 +880,31 @@ static struct connection * connection_uds_accept (struct listener *listener)
 		}
 	}
 #endif
-	connection_uds->private.get_fd         = connection_uds_get_fd;
-	connection_uds->private.get_want_read  = connection_uds_get_want_read;
-	connection_uds->private.get_want_write = connection_uds_get_want_write;
+	connection_uds->private.close         = connection_uds_close;
+	connection_uds->private.get_fd        = connection_uds_get_fd;
+	connection_uds->private.wants_read    = connection_uds_wants_read;
+	connection_uds->private.wants_write   = connection_uds_wants_write;
+	connection_uds->private.request_write = connection_uds_request_write;
+	connection_uds->private.read          = connection_uds_read;
+	connection_uds->private.write         = connection_uds_write;
 	return &connection_uds->private.connection;
 bail:	if (connection_uds != NULL) {
 		connection_uds_close(&connection_uds->private.connection);
 	}
 	return NULL;
+}
+
+static int listener_uds_service (struct listener *listener)
+{
+	struct listener_uds *listener_uds;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	listener_uds = (struct listener_uds *) listener;
+	(void) listener_uds;
+	return 0;
+bail:	return -1;
 }
 
 static void listener_uds_destroy (struct listener *listener)
@@ -572,6 +925,7 @@ static void listener_uds_destroy (struct listener *listener)
 		SSL_CTX_free(listener_uds->ssl);
 	}
 #endif
+	free(listener_uds);
 }
 
 struct listener * listener_uds_create (const struct listener_uds_options *options)
@@ -589,10 +943,6 @@ struct listener * listener_uds_create (const struct listener_uds_options *option
 	}
 	if (options->address == NULL) {
 		mbus_errorf("address is invalid");
-		goto bail;
-	}
-	if (options->port <= 0) {
-		mbus_errorf("port is invalid");
 		goto bail;
 	}
 	if (options->certificate != NULL ||
@@ -672,11 +1022,12 @@ struct listener * listener_uds_create (const struct listener_uds_options *option
 		}
 	}
 #endif
-	listener_uds->private.get_name          = listener_uds_get_name;
-	listener_uds->private.get_type          = listener_uds_get_type;
-	listener_uds->private.get_fd            = listener_uds_get_fd;
-	listener_uds->private.connection_accept = connection_uds_accept;
-	listener_uds->private.destroy           = listener_uds_destroy;
+	listener_uds->private.get_name = listener_uds_get_name;
+	listener_uds->private.get_type = listener_uds_get_type;
+	listener_uds->private.get_fd   = listener_uds_get_fd;
+	listener_uds->private.accept   = listener_uds_accept;
+	listener_uds->private.service  = listener_uds_service;
+	listener_uds->private.destroy  = listener_uds_destroy;
 	return &listener_uds->private.listener;
 bail:	if (listener_uds != NULL) {
 		listener_uds_destroy(&listener_uds->private.listener);
@@ -722,7 +1073,7 @@ static void ws_log_callback (int level, const char *line)
 	}
 }
 
-static int listener_ws_connection_close (struct connection *connection)
+static int connection_ws_close (struct connection *connection)
 {
 	struct connection_ws *connection_ws;
 	if (connection == NULL) {
@@ -736,7 +1087,7 @@ static int listener_ws_connection_close (struct connection *connection)
 bail:	return -1;
 }
 
-static int listener_ws_connection_get_fd (struct connection *connection)
+static int connection_ws_get_fd (struct connection *connection)
 {
 	struct connection_ws *connection_ws;
 	if (connection == NULL) {
@@ -748,7 +1099,7 @@ static int listener_ws_connection_get_fd (struct connection *connection)
 bail:	return -1;
 }
 
-static int listener_ws_connection_get_want_read (struct connection *connection)
+static int connection_ws_wants_read (struct connection *connection)
 {
 	struct connection_ws *connection_ws;
 	if (connection == NULL) {
@@ -761,7 +1112,7 @@ static int listener_ws_connection_get_want_read (struct connection *connection)
 bail:	return -1;
 }
 
-static int listener_ws_connection_get_want_write (struct connection *connection)
+static int connection_ws_wants_write (struct connection *connection)
 {
 	struct connection_ws *connection_ws;
 	if (connection == NULL) {
@@ -772,6 +1123,53 @@ static int listener_ws_connection_get_want_write (struct connection *connection)
 	(void) connection_ws;
 	return 0;
 bail:	return -1;
+}
+
+static int connection_ws_request_write (struct connection *connection)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	lws_callback_on_writable(connection_ws->wsi);
+	return 0;
+bail:	return -1;
+}
+
+static int connection_ws_read (struct connection *connection, struct mbus_buffer *buffer)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	(void) connection_ws;
+bail:	errno = EIO;
+	return -1;
+}
+
+static int connection_ws_write (struct connection *connection, struct mbus_buffer *buffer)
+{
+	struct connection_ws *connection_ws;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	if (buffer == NULL) {
+		mbus_errorf("buffer is invalid");
+		goto bail;
+	}
+	connection_ws = (struct connection_ws *) connection;
+	(void) connection_ws;
+bail:	errno = EIO;
+	return -1;
 }
 
 static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
@@ -857,10 +1255,13 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 			mbus_debugf("  established");
 			memset(connection_ws, 0, sizeof(struct connection_ws));
 			connection_ws->wsi = wsi;
-			connection_ws->private.close          = listener_ws_connection_close;
-			connection_ws->private.get_fd         = listener_ws_connection_get_fd;
-			connection_ws->private.get_want_read  = listener_ws_connection_get_want_read;
-			connection_ws->private.get_want_write = listener_ws_connection_get_want_write;
+			connection_ws->private.close         = connection_ws_close;
+			connection_ws->private.get_fd        = connection_ws_get_fd;
+			connection_ws->private.wants_read    = connection_ws_wants_read;
+			connection_ws->private.wants_write   = connection_ws_wants_write;
+			connection_ws->private.request_write = connection_ws_request_write;
+			connection_ws->private.read          = connection_ws_read;
+			connection_ws->private.write         = connection_ws_write;
 			rc = listener_ws->callbacks.connection_established(
 					listener_ws->callbacks.context,
 					&listener_ws->private.listener,
@@ -913,7 +1314,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				mbus_errorf("connection is invalid");
 				goto bail;
 			}
-			if (connection_ws->wsi != NULL) {
+			if (connection_ws->wsi == NULL) {
 				mbus_errorf("wsi is invalid");
 				goto bail;
 			}
@@ -935,7 +1336,7 @@ static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons
 				mbus_errorf("connection is invalid");
 				goto bail;
 			}
-			if (connection_ws->wsi != NULL) {
+			if (connection_ws->wsi == NULL) {
 				mbus_errorf("wsi is invalid");
 				goto bail;
 			}
@@ -1125,6 +1526,18 @@ static int listener_ws_get_fd (struct listener *listener)
 bail:	return -1;
 }
 
+static int listener_ws_service (struct listener *listener)
+{
+	struct listener_ws *listener_ws;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	listener_ws = (struct listener_ws *) listener;
+	return lws_service(listener_ws->lws, 0);
+bail:	return -1;
+}
+
 static void listener_ws_destroy (struct listener *listener)
 {
 	struct listener_ws *listener_ws;
@@ -1143,6 +1556,7 @@ static void listener_ws_destroy (struct listener *listener)
 		SSL_CTX_free(listener_ws->ssl);
 	}
 #endif
+	free(listener_ws);
 }
 
 struct listener * listener_ws_create (const struct listener_ws_options *options)
@@ -1274,11 +1688,12 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 		}
 	}
 #endif
-	listener_ws->private.get_name          = listener_ws_get_name;
-	listener_ws->private.get_type          = listener_ws_get_type;
-	listener_ws->private.get_fd            = listener_ws_get_fd;
-	listener_ws->private.connection_accept = NULL;
-	listener_ws->private.destroy           = listener_ws_destroy;
+	listener_ws->private.get_name = listener_ws_get_name;
+	listener_ws->private.get_type = listener_ws_get_type;
+	listener_ws->private.get_fd   = listener_ws_get_fd;
+	listener_ws->private.accept   = NULL;
+	listener_ws->private.service  = listener_ws_service;
+	listener_ws->private.destroy  = listener_ws_destroy;
 	return &listener_ws->private.listener;
 bail:	if (listener_ws != NULL) {
 		listener_ws_destroy(&listener_ws->private.listener);
@@ -1334,7 +1749,7 @@ int listener_get_fd (struct listener *listener)
 bail:	return -1;
 }
 
-struct connection * listener_connection_accept (struct listener *listener)
+int listener_service (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1342,11 +1757,43 @@ struct connection * listener_connection_accept (struct listener *listener)
 		goto bail;
 	}
 	private = (struct listener_private *) listener;
-	if (private->connection_accept == NULL) {
-		mbus_errorf("listener->connection_accept is invalid");
+	if (private->service == NULL) {
+		mbus_errorf("listener->service is invalid");
 		goto bail;
 	}
-	return private->connection_accept(listener);
+	return private->service(listener);
+bail:	return -1;
+}
+
+void listener_destroy (struct listener *listener)
+{
+	struct listener_private *private;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	private = (struct listener_private *) listener;
+	if (private->destroy == NULL) {
+		mbus_errorf("listener->destroy is invalid");
+		goto bail;
+	}
+	private->destroy(listener);
+bail:	return;
+}
+
+struct connection * listener_accept (struct listener *listener)
+{
+	struct listener_private *private;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	private = (struct listener_private *) listener;
+	if (private->accept == NULL) {
+		mbus_errorf("listener->accept is invalid");
+		goto bail;
+	}
+	return private->accept(listener);
 bail:	return NULL;
 }
 
@@ -1382,7 +1829,7 @@ int connection_get_fd (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_get_want_read (struct connection *connection)
+int connection_wants_read (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1390,14 +1837,15 @@ int connection_get_want_read (struct connection *connection)
 		goto bail;
 	}
 	private = (struct connection_private *) connection;
-	if (private->get_want_read == NULL) {
-		mbus_errorf("connection->get_want_read is invalid");
+	if (private->wants_read == NULL) {
+		mbus_errorf("connection->wants_read is invalid");
 		goto bail;
 	}
-	return private->get_want_read(connection);
+	return private->wants_read(connection);
 bail:	return -1;
 }
-int connection_get_want_write (struct connection *connection)
+
+int connection_wants_write (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1405,10 +1853,58 @@ int connection_get_want_write (struct connection *connection)
 		goto bail;
 	}
 	private = (struct connection_private *) connection;
-	if (private->get_want_write == NULL) {
-		mbus_errorf("connection->get_want_write is invalid");
+	if (private->wants_write == NULL) {
+		mbus_errorf("connection->wants_write is invalid");
 		goto bail;
 	}
-	return private->get_want_write(connection);
+	return private->wants_write(connection);
+bail:	return -1;
+}
+
+int connection_request_write (struct connection *connection)
+{
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	private = (struct connection_private *) connection;
+	if (private->request_write == NULL) {
+		mbus_errorf("connection->request_write is invalid");
+		goto bail;
+	}
+	return private->request_write(connection);
+bail:	return -1;
+}
+
+int connection_read (struct connection *connection, struct mbus_buffer *buffer)
+{
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	private = (struct connection_private *) connection;
+	if (private->read == NULL) {
+		mbus_errorf("connection->read is invalid");
+		goto bail;
+	}
+	return private->read(connection, buffer);
+bail:	return -1;
+}
+
+int connection_write (struct connection *connection, struct mbus_buffer *buffer)
+{
+	struct connection_private *private;
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
+	private = (struct connection_private *) connection;
+	if (private->write == NULL) {
+		mbus_errorf("connection->write is invalid");
+		goto bail;
+	}
+	return private->write(connection, buffer);
 bail:	return -1;
 }

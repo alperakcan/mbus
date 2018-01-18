@@ -61,8 +61,6 @@
 #include "listener.h"
 #include "server.h"
 
-#define BUFFER_IN_CHUNK_SIZE (64 * 1024)
-
 enum client_status {
 	client_status_accepted		= 0x00000001,
 	client_status_connected		= 0x00000002,
@@ -1806,7 +1804,6 @@ bail:	if (method != NULL) {
 __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
-	int read_rc;
 	char *string;
 	unsigned int c;
 	unsigned int n;
@@ -1817,6 +1814,9 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 	struct client *nwclient;
 	struct method *method;
 	struct method *nmethod;
+	struct listener *listener;
+	enum listener_type listener_type;
+	struct connection *connection;
 	current = mbus_clock_monotonic();
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -1936,9 +1936,9 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		server->pollfds.pollfds = tmp;
 	}
 	n = 0;
+	mbus_debugf("  prepare pollfds (fill listeners)");
 	{
 		int lfd;
-		struct listener *listener;
 		TAILQ_FOREACH(listener, &server->listeners, listeners) {
 			lfd = listener_get_fd(listener);
 			if (lfd < 0) {
@@ -1947,86 +1947,57 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			server->pollfds.pollfds[n].events = POLLIN;
 			server->pollfds.pollfds[n].revents = 0;
 			server->pollfds.pollfds[n].fd = lfd;
+			mbus_debugf("    in : %s", listener_get_name(listener));
 			n += 1;
 		}
 	}
-	mbus_debugf("  prepare pollfds (fill)");
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_connection(client) == NULL) {
-			continue;
-		}
-		if (client_get_listener_type(client) == listener_type_tcp) {
-			server->pollfds.pollfds[n].events = POLLIN;
-			server->pollfds.pollfds[n].revents = 0;
-			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_connection(client));
-			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_get_length(client->buffer.out) > 0
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			    || client->ssl.want_write != 0
-#endif
-			    ) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				server->pollfds.pollfds[n].events |= POLLOUT;
-			}
-			n += 1;
-		}
-		if (client_get_listener_type(client) == listener_type_uds) {
-			server->pollfds.pollfds[n].events = POLLIN;
-			server->pollfds.pollfds[n].revents = 0;
-			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_connection(client));
-			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_get_length(client->buffer.out) > 0
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			    || client->ssl.want_write != 0
-#endif
-			    ) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				server->pollfds.pollfds[n].events |= POLLOUT;
-			}
-			n += 1;
-		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
-			struct ws_client_data *data;
-			data = (struct ws_client_data *) client_get_connection(client);
-			if (mbus_buffer_get_length(client->buffer.out) > 0) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				lws_callback_on_writable(data->wsi);
-			}
-		}
-#endif
-	}
+	mbus_debugf("  prepare pollfds (fill clients)");
 	{
-		mbus_debugf("    pollfds: %d", n);
-		if (0) {
-			unsigned int i;
-			for (i = 0; i < n; i++) {
-				mbus_debugf("      fd: %d, events: 0x%08x", server->pollfds.pollfds[i].fd, server->pollfds.pollfds[i].events);
+		TAILQ_FOREACH(client, &server->clients, clients) {
+			listener = client_get_listener(client);
+			if (listener == NULL) {
+				continue;
 			}
-		}
-	}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	{
-		struct listener *listener;
-		TAILQ_FOREACH(listener, &server->listeners, listeners) {
-			if (listener_get_type(listener) == listener_type_ws) {
-				if (listener->u.ws.pollfds.length > 0) {
-					{
-						mbus_debugf("    ws: %d", listener->u.ws.pollfds.length);
-						if (0) {
-							unsigned int i;
-							for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-								mbus_debugf("      fd: %d, events: 0x%08x", listener->u.ws.pollfds.pollfds[i].fd, listener->u.ws.pollfds.pollfds[i].events);
-							}
-						}
-					}
-					memcpy(&server->pollfds.pollfds[n], listener->u.ws.pollfds.pollfds, sizeof(struct pollfd) * listener->u.ws.pollfds.length);
-					n += listener->u.ws.pollfds.length;
+			connection = client_get_connection(client);
+			if (connection == NULL) {
+				continue;
+			}
+			listener_type = listener_get_type(listener);
+			if (listener_type == listener_type_tcp) {
+				server->pollfds.pollfds[n].events = POLLIN;
+				server->pollfds.pollfds[n].revents = 0;
+				server->pollfds.pollfds[n].fd = connection_get_fd(connection);
+				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
+				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				    connection_wants_write(connection) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
+					server->pollfds.pollfds[n].events |= POLLOUT;
+				}
+				n += 1;
+			} else if (listener_type == listener_type_uds) {
+				server->pollfds.pollfds[n].events = POLLIN;
+				server->pollfds.pollfds[n].revents = 0;
+				server->pollfds.pollfds[n].fd = connection_get_fd(connection);
+				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
+				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				    connection_wants_write(connection) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
+					server->pollfds.pollfds[n].events |= POLLOUT;
+				}
+				n += 1;
+			} else if (listener_type == listener_type_ws) {
+				if (mbus_buffer_get_length(client->buffer.out) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
+					connection_request_write(connection);
 				}
 			}
 		}
 	}
-#endif
+	mbus_debugf("  prepare pollfds (fill ws pollfds)");
+	{
+		memcpy(&server->pollfds.pollfds[n], server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.length);
+		n += server->ws_pollfds.length;
+	}
 	rc = poll(server->pollfds.pollfds, n, milliseconds);
 	if (rc == 0) {
 		goto out;
@@ -2042,54 +2013,29 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		}
 		mbus_debugf("    fd: %d, events: 0x%08x, revents: 0x%08x", server->pollfds.pollfds[c].fd, server->pollfds.pollfds[c].events, server->pollfds.pollfds[c].revents);
 		{
-			struct client *client;
-			struct listener *listener;
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
-				if (listener_get_type(listener) == listener_type_tcp) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
-						mbus_debugf("      listener: tcp");
-					}
-				}
-				if (listener_get_type(listener) == listener_type_uds) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
-						mbus_debugf("      listener: uds");
-					}
+				if (server->pollfds.pollfds[c].fd == listener_get_fd(listener)) {
+					mbus_debugf("      listener: %s", listener_get_name(listener));
 				}
 			}
 			TAILQ_FOREACH(client, &server->clients, clients) {
-				if (client_get_connection(client) == NULL) {
+				listener = client_get_listener(client);
+				if (listener == NULL) {
 					continue;
 				}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-				if (client_get_listener_type(client) == listener_type_ws) {
-					struct ws_client_data *data;
-					data = (struct ws_client_data *) client_get_connection(client);
-					if (lws_get_socket_fd(data->wsi) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      ws client: %s", client_get_identifier(client));
-					}
+				connection = client_get_connection(client);
+				if (connection == NULL) {
+					continue;
 				}
-#endif
-				if (client_get_listener_type(client) == listener_type_uds) {
-					if (mbus_socket_get_fd(client_get_connection(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      uds client: %s", client_get_identifier(client));
-					}
-				}
-				if (client_get_listener_type(client) == listener_type_tcp) {
-					if (mbus_socket_get_fd(client_get_connection(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      tcp client: %s", client_get_identifier(client));
-					}
-				}
+				mbus_debugf("      client: %s, connection: %s, %d", client_get_identifier(client), listener_get_name(listener), connection_get_fd(connection));
 			}
 		}
 		{
-			int lfd;
-			struct listener *listener;
-			struct connection *connection;
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
 				if (server->pollfds.pollfds[c].fd != listener_get_fd(listener)) {
 					continue;
 				}
-				connection = connection_accept(listener);
+				connection = listener_accept(listener);
 				if (connection == NULL) {
 					mbus_errorf("can not accept new connection on listener: %s", listener_get_name(listener));
 					goto bail;
@@ -2108,83 +2054,30 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			mbus_errorf("can not find client by socket");
 			goto bail;
 		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
+		listener = client_get_listener(client);
+		if (listener == NULL) {
+			mbus_errorf("client listener is invalid");
+			goto bail;
+		}
+		connection = client_get_connection(client);
+		if (connection == NULL) {
+			mbus_errorf("client_connection is invalid");
+			goto bail;
+		}
+		listener_type = listener_get_type(listener);
+		if (listener_type == listener_type_ws) {
 			continue;
 		}
-#endif
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
-			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
-			if (rc != 0) {
-				mbus_errorf("can not reserve client buffer");
+			mbus_errorf("connection read %d", mbus_buffer_get_length(client->buffer.in));
+			rc = connection_read(connection, client->buffer.in);
+			mbus_errorf("connection read %d", mbus_buffer_get_length(client->buffer.in));
+			if ((rc <= 0) &&
+			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
+				mbus_debugf("can not read data from client");
+				mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
 				client_set_connection(client, NULL);
-				goto bail;
-			}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			if (client->ssl.ssl == NULL) {
-#endif
-				read_rc = read(mbus_socket_get_fd(client->socket),
-						mbus_buffer_get_base(client->buffer.in) + mbus_buffer_get_length(client->buffer.in),
-						mbus_buffer_get_size(client->buffer.in) - mbus_buffer_get_length(client->buffer.in));
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			} else {
-				read_rc = 0;
-				do {
-					rc = mbus_buffer_reserve(client->buffer.in, (mbus_buffer_get_length(client->buffer.in) + read_rc) + 1024);
-					if (rc != 0) {
-						mbus_errorf("can not reserve client buffer");
-						goto bail;
-					}
-					client->ssl.want_read = 0;
-					rc = SSL_read(client->ssl.ssl,
-							mbus_buffer_get_base(client->buffer.in) + (mbus_buffer_get_length(client->buffer.in) + read_rc),
-							mbus_buffer_get_size(client->buffer.in) - (mbus_buffer_get_length(client->buffer.in) + read_rc));
-					if (rc <= 0) {
-						int error;
-						error = SSL_get_error(client->ssl.ssl, rc);
-						if (error == SSL_ERROR_WANT_READ) {
-							errno = EAGAIN;
-							client->ssl.want_read = 1;
-						} else if (error == SSL_ERROR_WANT_WRITE) {
-							errno = EAGAIN;
-							client->ssl.want_write = 1;
-						} else if (error == SSL_ERROR_SYSCALL) {
-							read_rc = -1;
-							errno = EIO;
-						} else {
-							char ebuf[256];
-							mbus_errorf("can not read ssl: %d", error);
-							error = ERR_get_error();
-							while (error) {
-								mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-								error = ERR_get_error();
-							}
-							read_rc = -1;
-							errno = EIO;
-						}
-					} else {
-						read_rc += rc;
-					}
-				} while (read_rc >= 0 &&
-					 SSL_pending(client->ssl.ssl));
-			}
-#endif
-			if (read_rc <= 0) {
-				if (errno != EINTR ||
-				    errno != EAGAIN ||
-				    errno != EWOULDBLOCK) {
-					mbus_debugf("can not read data from client");
-					client_set_connection(client, NULL);
-					mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
-					continue;
-				}
-			} else {
-				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + read_rc);
-				if (rc != 0) {
-					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
-					client_set_connection(client, NULL);
-					continue;
-				}
+				continue;
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & POLLOUT) {
@@ -2192,77 +2085,29 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				mbus_errorf("logic error");
 				goto bail;
 			}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			if (client->ssl.ssl == NULL) {
-#endif
-				rc = write(mbus_socket_get_fd(client_get_connection(client)), mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			} else {
-				client->ssl.want_write = 0;
-				rc = SSL_write(client->ssl.ssl, mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
-				if (rc <= 0) {
-					int error;
-					error = SSL_get_error(client->ssl.ssl, rc);
-					mbus_errorf("can not write ssl: %d", error);
-					if (error == SSL_ERROR_WANT_READ) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_read = 1;
-					} else if (error == SSL_ERROR_WANT_WRITE) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_write = 1;
-					} else if (error == SSL_ERROR_SYSCALL) {
-						rc = -1;
-						errno = EIO;
-					} else {
-						char ebuf[256];
-						mbus_errorf("can not read ssl: %d", error);
-						error = ERR_get_error();
-						while (error) {
-							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-							error = ERR_get_error();
-						}
-						goto bail;
-					}
-				}
-			}
-#endif
-			if (rc <= 0) {
-				if (errno != EINTR ||
-				    errno != EAGAIN ||
-				    errno != EWOULDBLOCK) {
-					mbus_debugf("can not write string to client");
-					client_set_connection(client, NULL);
-					mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-					continue;
-				}
-			} else {
-				rc = mbus_buffer_shift(client->buffer.out, rc);
-				if (rc != 0) {
-					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
-					client_set_connection(client, NULL);
-					continue;
-				}
+			rc = connection_write(connection, client->buffer.out);
+			if ((rc <= 0) &&
+			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
+				mbus_debugf("can not write string to client");
+				mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+				client_set_connection(client, NULL);
+				continue;
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-			client_set_connection(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+			client_set_connection(client, NULL);
 			continue;
 		}
 	}
 out:
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	{
-		struct listener *listener;
 		TAILQ_FOREACH(listener, &server->listeners, listeners) {
 			if (listener_get_type(listener) == listener_type_ws) {
-				lws_service(listener->u.ws.context, 0);
+				listener_service(listener);
 			}
 		}
 	}
-#endif
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		uint8_t *ptr;
 		uint8_t *end;
@@ -2448,6 +2293,11 @@ __attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbu
 		return;
 	}
 	mbus_infof("destroying server");
+	while (server->methods.tqh_first != NULL) {
+		method = server->methods.tqh_first;
+		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
+		method_destroy(method);
+	}
 	while (server->listeners.tqh_first != NULL) {
 		listener = server->listeners.tqh_first;
 		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
@@ -2457,11 +2307,6 @@ __attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbu
 		client = server->clients.tqh_first;
 		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, clients);
 		client_destroy(client);
-	}
-	while (server->methods.tqh_first != NULL) {
-		method = server->methods.tqh_first;
-		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
-		method_destroy(method);
 	}
 	if (server->pollfds.pollfds != NULL) {
 		free(server->pollfds.pollfds);
@@ -2721,7 +2566,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 
 	if (server->options.tcp.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("tcp", listener_type_tcp, server->options.tcp.address, server->options.tcp.port, NULL, NULL);
+		struct listener_tcp_options listener_tcp_options;
+		memset(&listener_tcp_options, 0, sizeof(struct listener_tcp_options));
+		listener_tcp_options.name        = "tcp";
+		listener_tcp_options.address     = server->options.tcp.address;
+		listener_tcp_options.port        = server->options.tcp.port;
+		listener_tcp_options.certificate = NULL;
+		listener_tcp_options.privatekey  = NULL;
+		listener = listener_tcp_create(&listener_tcp_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: tcp");
 			goto bail;
@@ -2731,7 +2583,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 	}
 	if (server->options.uds.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("uds", listener_type_uds, server->options.uds.address, server->options.uds.port, NULL, NULL);
+		struct listener_uds_options listener_uds_options;
+		memset(&listener_uds_options, 0, sizeof(struct listener_uds_options));
+		listener_uds_options.name        = "uds";
+		listener_uds_options.address     = server->options.uds.address;
+		listener_uds_options.port        = server->options.uds.port;
+		listener_uds_options.certificate = NULL;
+		listener_uds_options.privatekey  = NULL;
+		listener = listener_uds_create(&listener_uds_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: uds");
 			goto bail;
@@ -2742,7 +2601,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	if (server->options.ws.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("ws", listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);
+		struct listener_ws_options listener_ws_options;
+		memset(&listener_ws_options, 0, sizeof(struct listener_ws_options));
+		listener_ws_options.name        = "ws";
+		listener_ws_options.address     = server->options.ws.address;
+		listener_ws_options.port        = server->options.ws.port;
+		listener_ws_options.certificate = NULL;
+		listener_ws_options.privatekey  = NULL;
+		listener = listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: ws");
 			goto bail;
@@ -2753,7 +2619,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 #endif
 	if (server->options.tcps.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("tcps", listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
+		struct listener_tcp_options listener_tcp_options;
+		memset(&listener_tcp_options, 0, sizeof(struct listener_tcp_options));
+		listener_tcp_options.name        = "tcps";
+		listener_tcp_options.address     = server->options.tcps.address;
+		listener_tcp_options.port        = server->options.tcps.port;
+		listener_tcp_options.certificate = server->options.tcps.certificate;
+		listener_tcp_options.privatekey  = server->options.tcps.privatekey;
+		listener = listener_tcp_create(&listener_tcp_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 		} else {
@@ -2763,7 +2636,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 	}
 	if (server->options.udss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("udss", listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
+		struct listener_uds_options listener_uds_options;
+		memset(&listener_uds_options, 0, sizeof(struct listener_uds_options));
+		listener_uds_options.name        = "udss";
+		listener_uds_options.address     = server->options.udss.address;
+		listener_uds_options.port        = server->options.udss.port;
+		listener_uds_options.certificate = server->options.udss.certificate;
+		listener_uds_options.privatekey  = server->options.udss.privatekey;
+		listener = listener_uds_create(&listener_uds_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 		} else {
@@ -2775,7 +2655,14 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.wss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("wss", listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
+		struct listener_ws_options listener_ws_options;
+		memset(&listener_ws_options, 0, sizeof(struct listener_ws_options));
+		listener_ws_options.name        = "wss";
+		listener_ws_options.address     = server->options.wss.address;
+		listener_ws_options.port        = server->options.wss.port;
+		listener_ws_options.certificate = server->options.wss.certificate;
+		listener_ws_options.privatekey  = server->options.wss.privatekey;
+		listener = listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 		} else {
