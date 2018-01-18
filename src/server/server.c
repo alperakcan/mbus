@@ -1090,6 +1090,8 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+
 static int server_listener_connection_established_callback (void *context, struct listener *listener, struct connection *connection)
 {
 	return server_client_connection_establish(context, listener, connection);
@@ -1179,6 +1181,7 @@ static int server_listener_poll_mod_callback (void *context, struct listener *li
 		for (i = 0; i < server->ws_pollfds.length; i++) {
 			if (server->ws_pollfds.pollfds[i].fd == fd) {
 				server->ws_pollfds.pollfds[i].events = events;
+				server->ws_pollfds.pollfds[i].revents = 0;
 				break;
 			}
 		}
@@ -1201,6 +1204,8 @@ static int server_listener_poll_del_callback (void *context, struct listener *li
 	}
 	return 0;
 }
+
+#endif
 
 static int server_handle_command_create (struct mbus_server *server, struct method *method)
 {
@@ -1978,7 +1983,8 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
 		enum mbus_compress_method compression;
 		mbus_debugf("    client: %s", client_get_identifier(client));
-		if (client_get_connection(client) == NULL) {
+		connection = client_get_connection(client);
+		if (connection == NULL) {
 			continue;
 		}
 		compression = client_get_compression(client);
