@@ -50,7 +50,7 @@ struct private {
 	struct client *source;
 };
 
-const char * method_get_request_type (struct method *method)
+const char * mbus_server_method_get_request_type (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -60,7 +60,7 @@ const char * method_get_request_type (struct method *method)
 	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_TYPE, NULL);
 }
 
-const char * method_get_request_destination (struct method *method)
+const char * mbus_server_method_get_request_destination (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -70,7 +70,7 @@ const char * method_get_request_destination (struct method *method)
 	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_DESTINATION, NULL);
 }
 
-const char * method_get_request_identifier (struct method *method)
+const char * mbus_server_method_get_request_identifier (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -80,7 +80,7 @@ const char * method_get_request_identifier (struct method *method)
 	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
 }
 
-int method_get_request_sequence (struct method *method)
+int mbus_server_method_get_request_sequence (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -90,7 +90,7 @@ int method_get_request_sequence (struct method *method)
 	return mbus_json_get_int_value(private->request.json, MBUS_METHOD_TAG_SEQUENCE, -1);
 }
 
-struct mbus_json * method_get_request_payload (struct method *method)
+struct mbus_json * mbus_server_method_get_request_payload (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -100,7 +100,7 @@ struct mbus_json * method_get_request_payload (struct method *method)
 	return mbus_json_get_object(private->request.json, MBUS_METHOD_TAG_PAYLOAD);
 }
 
-char * method_get_request_string (struct method *method)
+char * mbus_server_method_get_request_string (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -114,7 +114,7 @@ char * method_get_request_string (struct method *method)
 	return private->request.string;
 }
 
-int method_set_result_code (struct method *method, int code)
+int mbus_server_method_set_result_code (struct method *method, int code)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -125,7 +125,7 @@ int method_set_result_code (struct method *method, int code)
 	return 0;
 }
 
-int method_set_result_payload (struct method *method, struct mbus_json *payload)
+int mbus_server_method_set_result_payload (struct method *method, struct mbus_json *payload)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -137,7 +137,7 @@ int method_set_result_payload (struct method *method, struct mbus_json *payload)
 	return 0;
 }
 
-char * method_get_result_string (struct method *method)
+char * mbus_server_method_get_result_string (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -151,7 +151,7 @@ char * method_get_result_string (struct method *method)
 	return private->result.string;
 }
 
-struct client * method_get_source (struct method *method)
+struct client * mbus_server_method_get_source (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -161,7 +161,7 @@ struct client * method_get_source (struct method *method)
 	return private->source;
 }
 
-void method_destroy (struct method *method)
+void mbus_server_method_destroy (struct method *method)
 {
 	struct private *private;
 	if (method == NULL) {
@@ -186,7 +186,7 @@ void method_destroy (struct method *method)
 	free(private);
 }
 
-struct method * method_create_request (struct client *source, const char *string)
+struct method * mbus_server_method_create_request (struct client *source, const char *string)
 {
 	struct private *private;
 	private = NULL;
@@ -231,17 +231,17 @@ struct method * method_create_request (struct client *source, const char *string
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(private->result.json, MBUS_METHOD_TAG_TYPE, MBUS_METHOD_TYPE_RESULT);
-	mbus_json_add_number_to_object_cs(private->result.json, MBUS_METHOD_TAG_SEQUENCE, method_get_request_sequence(&private->method));
+	mbus_json_add_number_to_object_cs(private->result.json, MBUS_METHOD_TAG_SEQUENCE, mbus_server_method_get_request_sequence(&private->method));
 	mbus_json_add_item_to_object_cs(private->result.json, MBUS_METHOD_TAG_PAYLOAD, mbus_json_create_object());
 	private->source = source;
 	return &private->method;
 bail:	if (private != NULL) {
-		method_destroy(&private->method);
+		mbus_server_method_destroy(&private->method);
 	}
 	return NULL;
 }
 
-struct method * method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload)
+struct method * mbus_server_method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload)
 {
 	struct private *private;
 	struct mbus_json *data;
@@ -289,7 +289,7 @@ struct method * method_create_response (const char *type, const char *source, co
 	mbus_json_add_item_to_object_cs(private->request.json, MBUS_METHOD_TAG_PAYLOAD, data);
 	return &private->method;
 bail:	if (private != NULL) {
-		method_destroy(&private->method);
+		mbus_server_method_destroy(&private->method);
 	}
 	return NULL;
 }

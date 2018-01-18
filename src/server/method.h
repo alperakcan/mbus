@@ -34,17 +34,17 @@ struct method {
 };
 TAILQ_HEAD(methods, method);
 
-struct method * method_create_request (struct client *source, const char *string);
-struct method * method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload);
-void method_destroy (struct method *method);
+struct method * mbus_server_method_create_request (struct client *source, const char *string);
+struct method * mbus_server_method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload);
+void mbus_server_method_destroy (struct method *method);
 
-const char * method_get_request_type (struct method *method);
-const char * method_get_request_destination (struct method *method);
-const char * method_get_request_identifier (struct method *method);
-int method_get_request_sequence (struct method *method);
-struct mbus_json * method_get_request_payload (struct method *method);
-char * method_get_request_string (struct method *method);
-int method_set_result_code (struct method *method, int code);
-int method_set_result_payload (struct method *method, struct mbus_json *payload);
-char * method_get_result_string (struct method *method);
-struct client * method_get_source (struct method *method);
+const char * mbus_server_method_get_request_type (struct method *method);
+const char * mbus_server_method_get_request_destination (struct method *method);
+const char * mbus_server_method_get_request_identifier (struct method *method);
+int mbus_server_method_get_request_sequence (struct method *method);
+struct mbus_json * mbus_server_method_get_request_payload (struct method *method);
+char * mbus_server_method_get_request_string (struct method *method);
+int mbus_server_method_set_result_code (struct method *method, int code);
+int mbus_server_method_set_result_payload (struct method *method, struct mbus_json *payload);
+char * mbus_server_method_get_result_string (struct method *method);
+struct client * mbus_server_method_get_source (struct method *method);

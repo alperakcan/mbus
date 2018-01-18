@@ -40,7 +40,7 @@ struct private {
 	char *event;
 };
 
-const char * subscription_get_source (const struct subscription *subscription)
+const char * mbus_server_subscription_get_source (const struct subscription *subscription)
 {
 	const struct private *private;
 	if (subscription == NULL) {
@@ -50,7 +50,7 @@ const char * subscription_get_source (const struct subscription *subscription)
 	return private->source;
 }
 
-const char * subscription_get_event (const struct subscription *subscription)
+const char * mbus_server_subscription_get_event (const struct subscription *subscription)
 {
 	const struct private *private;
 	if (subscription == NULL) {
@@ -60,7 +60,7 @@ const char * subscription_get_event (const struct subscription *subscription)
 	return private->event;
 }
 
-void subscription_destroy (struct subscription *subscription)
+void mbus_server_subscription_destroy (struct subscription *subscription)
 {
 	struct private *private;
 	if (subscription == NULL) {
@@ -76,7 +76,7 @@ void subscription_destroy (struct subscription *subscription)
 	free(private);
 }
 
-struct subscription * subscription_create (const char *source, const char *event)
+struct subscription * mbus_server_subscription_create (const char *source, const char *event)
 {
 	struct private *private;
 	private = NULL;
@@ -103,7 +103,7 @@ struct subscription * subscription_create (const char *source, const char *event
 	}
 	return &private->subscription;
 bail:	if (private != NULL) {
-		subscription_destroy(&private->subscription);
+		mbus_server_subscription_destroy(&private->subscription);
 	}
 	return NULL;
 }

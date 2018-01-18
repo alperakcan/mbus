@@ -39,7 +39,7 @@ struct private {
 	char *identifier;
 };
 
-const char * command_get_identifier (const struct command *command)
+const char * mbus_server_command_get_identifier (const struct command *command)
 {
 	const struct private *private;
 	if (command == NULL) {
@@ -49,7 +49,7 @@ const char * command_get_identifier (const struct command *command)
 	return private->identifier;
 }
 
-void command_destroy (struct command *command)
+void mbus_server_command_destroy (struct command *command)
 {
 	struct private *private;
 	if (command == NULL) {
@@ -62,7 +62,7 @@ void command_destroy (struct command *command)
 	free(private);
 }
 
-struct command * command_create (const char *identifier)
+struct command * mbus_server_command_create (const char *identifier)
 {
 	struct private *private;
 	private = NULL;
@@ -83,7 +83,7 @@ struct command * command_create (const char *identifier)
 	}
 	return &private->command;
 bail:	if (private != NULL) {
-		command_destroy(&private->command);
+		mbus_server_command_destroy(&private->command);
 	}
 	return NULL;
 }

@@ -79,21 +79,21 @@ struct listener_ws_options {
 	struct listener_ws_callbacks callbacks;
 };
 
-struct listener * listener_tcp_create (const struct listener_tcp_options *options);
-struct listener * listener_uds_create (const struct listener_uds_options *options);
-struct listener * listener_ws_create (const struct listener_ws_options *options);
-void listener_destroy (struct listener *listener);
+struct listener * mbus_server_listener_tcp_create (const struct listener_tcp_options *options);
+struct listener * mbus_server_listener_uds_create (const struct listener_uds_options *options);
+struct listener * mbus_server_listener_ws_create (const struct listener_ws_options *options);
+void mbus_server_listener_destroy (struct listener *listener);
 
-const char * listener_get_name (struct listener *listener);
-enum listener_type listener_get_type (struct listener *listener);
-int listener_get_fd (struct listener *listener);
-int listener_service (struct listener *listener);
+const char * mbus_server_listener_get_name (struct listener *listener);
+enum listener_type mbus_server_listener_get_type (struct listener *listener);
+int mbus_server_listener_get_fd (struct listener *listener);
+int mbus_server_listener_service (struct listener *listener);
 
-struct connection * listener_accept (struct listener *listener);
-int connection_close (struct connection *connection);
-int connection_get_fd (struct connection *connection);
-int connection_wants_read (struct connection *connection);
-int connection_wants_write (struct connection *connection);
-int connection_request_write (struct connection *connection);
-int connection_read (struct connection *connection, struct mbus_buffer *buffer);
-int connection_write (struct connection *connection, struct mbus_buffer *buffer);
+struct connection * mbus_server_listener_accept (struct listener *listener);
+int mbus_server_connection_close (struct connection *connection);
+int mbus_server_connection_get_fd (struct connection *connection);
+int mbus_server_connection_wants_read (struct connection *connection);
+int mbus_server_connection_wants_write (struct connection *connection);
+int mbus_server_connection_request_write (struct connection *connection);
+int mbus_server_connection_read (struct connection *connection, struct mbus_buffer *buffer);
+int mbus_server_connection_write (struct connection *connection, struct mbus_buffer *buffer);

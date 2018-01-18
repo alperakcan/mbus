@@ -453,7 +453,7 @@ static void listener_tcp_destroy (struct listener *listener)
 	free(listener_tcp);
 }
 
-struct listener * listener_tcp_create (const struct listener_tcp_options *options)
+struct listener * mbus_server_listener_tcp_create (const struct listener_tcp_options *options)
 {
 	int rc;
 	struct listener_tcp *listener_tcp;
@@ -937,7 +937,7 @@ static void listener_uds_destroy (struct listener *listener)
 	free(listener_uds);
 }
 
-struct listener * listener_uds_create (const struct listener_uds_options *options)
+struct listener * mbus_server_listener_uds_create (const struct listener_uds_options *options)
 {
 	int rc;
 	struct listener_uds *listener_uds;
@@ -1562,7 +1562,7 @@ static void listener_ws_destroy (struct listener *listener)
 	free(listener_ws);
 }
 
-struct listener * listener_ws_create (const struct listener_ws_options *options)
+struct listener * mbus_server_listener_ws_create (const struct listener_ws_options *options)
 {
 	struct listener_ws *listener_ws;
 	struct lws_context_creation_info info;
@@ -1682,7 +1682,7 @@ bail:	if (listener_ws != NULL) {
 
 #else
 
-struct listener * listener_ws_create (const struct listener_ws_options *options)
+struct listener * mbus_server_listener_ws_create (const struct listener_ws_options *options)
 {
 	(void) options;
 	return NULL;
@@ -1690,7 +1690,7 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 
 #endif
 
-const char * listener_get_name (struct listener *listener)
+const char * mbus_server_listener_get_name (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1706,7 +1706,7 @@ const char * listener_get_name (struct listener *listener)
 bail:	return NULL;
 }
 
-enum listener_type listener_get_type (struct listener *listener)
+enum listener_type mbus_server_listener_get_type (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1722,7 +1722,7 @@ enum listener_type listener_get_type (struct listener *listener)
 bail:	return listener_type_unknown;
 }
 
-int listener_get_fd (struct listener *listener)
+int mbus_server_listener_get_fd (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1738,7 +1738,7 @@ int listener_get_fd (struct listener *listener)
 bail:	return -1;
 }
 
-int listener_service (struct listener *listener)
+int mbus_server_listener_service (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1754,7 +1754,7 @@ int listener_service (struct listener *listener)
 bail:	return -1;
 }
 
-void listener_destroy (struct listener *listener)
+void mbus_server_listener_destroy (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1770,7 +1770,7 @@ void listener_destroy (struct listener *listener)
 bail:	return;
 }
 
-struct connection * listener_accept (struct listener *listener)
+struct connection * mbus_server_listener_accept (struct listener *listener)
 {
 	struct listener_private *private;
 	if (listener == NULL) {
@@ -1786,7 +1786,7 @@ struct connection * listener_accept (struct listener *listener)
 bail:	return NULL;
 }
 
-int connection_close (struct connection *connection)
+int mbus_server_connection_close (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1802,7 +1802,7 @@ int connection_close (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_get_fd (struct connection *connection)
+int mbus_server_connection_get_fd (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1818,7 +1818,7 @@ int connection_get_fd (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_wants_read (struct connection *connection)
+int mbus_server_connection_wants_read (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1834,7 +1834,7 @@ int connection_wants_read (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_wants_write (struct connection *connection)
+int mbus_server_connection_wants_write (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1850,7 +1850,7 @@ int connection_wants_write (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_request_write (struct connection *connection)
+int mbus_server_connection_request_write (struct connection *connection)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1866,7 +1866,7 @@ int connection_request_write (struct connection *connection)
 bail:	return -1;
 }
 
-int connection_read (struct connection *connection, struct mbus_buffer *buffer)
+int mbus_server_connection_read (struct connection *connection, struct mbus_buffer *buffer)
 {
 	struct connection_private *private;
 	if (connection == NULL) {
@@ -1882,7 +1882,7 @@ int connection_read (struct connection *connection, struct mbus_buffer *buffer)
 bail:	return -1;
 }
 
-int connection_write (struct connection *connection, struct mbus_buffer *buffer)
+int mbus_server_connection_write (struct connection *connection, struct mbus_buffer *buffer)
 {
 	struct connection_private *private;
 	if (connection == NULL) {

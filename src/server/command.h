@@ -31,7 +31,7 @@ struct command {
 };
 TAILQ_HEAD(commands, command);
 
-struct command * command_create (const char *identifier);
-void command_destroy (struct command *command);
+struct command * mbus_server_command_create (const char *identifier);
+void mbus_server_command_destroy (struct command *command);
 
-const char * command_get_identifier (const struct command *command);
+const char * mbus_server_command_get_identifier (const struct command *command);

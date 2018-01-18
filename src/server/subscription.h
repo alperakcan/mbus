@@ -31,8 +31,8 @@ struct subscription {
 };
 TAILQ_HEAD(subscriptions, subscription);
 
-struct subscription * subscription_create (const char *source, const char *event);
-void subscription_destroy (struct subscription *subscription);
+struct subscription * mbus_server_subscription_create (const char *source, const char *event);
+void mbus_server_subscription_destroy (struct subscription *subscription);
 
-const char * subscription_get_source (const struct subscription *subscription);
-const char * subscription_get_event (const struct subscription *subscription);
+const char * mbus_server_subscription_get_source (const struct subscription *subscription);
+const char * mbus_server_subscription_get_event (const struct subscription *subscription);
