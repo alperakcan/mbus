@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,7 +10,7 @@
  *    * Redistributions in binary form must reproduce the above copyright
  *      notice, this list of conditions and the following disclaimer in the
  *      documentation and/or other materials provided with the distribution.
- *    * Neither the name of the <Alper Akcan> nor the
+ *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
  *
@@ -554,6 +554,10 @@ char * mbus_socket_fd_get_address (int fd, char *buffer, int length)
 			}
 		} else if (addr.ss_family == AF_INET6) {
 			if (inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &addr)->sin6_addr.s6_addr, buffer, length)) {
+				return buffer;
+			}
+		} else if (addr.ss_family == AF_UNIX) {
+			if (inet_ntop(AF_INET6, &((struct sockaddr_un *) &addr)->sun_path, buffer, length)) {
 				return buffer;
 			}
 		}

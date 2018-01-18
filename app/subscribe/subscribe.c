@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,7 +10,7 @@
  *    * Redistributions in binary form must reproduce the above copyright
  *      notice, this list of conditions and the following disclaimer in the
  *      documentation and/or other materials provided with the distribution.
- *    * Neither the name of the <Alper Akcan> nor the
+ *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
  *
@@ -107,7 +107,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	struct subscription *subscription;
 	struct mbus_client_subscribe_options subscribe_options;
 	arg = context;
-	fprintf(stdout, "connect: %s\n", mbus_client_connect_status_string(status));
+	fprintf(stdout, "connect status: %s\n", mbus_client_connect_status_string(status));
 	if (status == mbus_client_connect_status_success) {
 		arg->connected = 1;
 		if (arg->subscriptions->count > 0) {
@@ -152,7 +152,7 @@ static void mbus_client_callback_disconnect (struct mbus_client *client, void *c
 {
 	struct arg *arg = context;
 	(void) client;
-	fprintf(stdout, "disconnect: %s\n", mbus_client_disconnect_status_string(status));
+	fprintf(stdout, "disconnect status: %s\n", mbus_client_disconnect_status_string(status));
 	if (mbus_client_get_options(client)->connect_interval <= 0) {
 		arg->disconnected = 1;
 	}
@@ -198,7 +198,7 @@ static void signal_handler (int signal)
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
-	fprintf(stdout, "  -e, --event: event identifier to subscribe\n");
+	fprintf(stdout, "  -e, --event: event identifier to subscribe (default: all)\n");
 	fprintf(stdout, "  -h, --help : this text\n");
 	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_client_usage();

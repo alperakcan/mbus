@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,16 +26,64 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-struct mbus_buffer;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-struct mbus_buffer * mbus_buffer_create (void);
-void mbus_buffer_destroy (struct mbus_buffer *buffer);
-int mbus_buffer_reset (struct mbus_buffer *buffer);
-unsigned int mbus_buffer_get_size (struct mbus_buffer *buffer);
-unsigned int mbus_buffer_get_length (struct mbus_buffer *buffer);
-int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length);
-uint8_t * mbus_buffer_get_base (struct mbus_buffer *buffer);
-int mbus_buffer_reserve (struct mbus_buffer *buffer, unsigned int length);
-int mbus_buffer_push (struct mbus_buffer *buffer, const void *data, unsigned int length);
-int mbus_buffer_push_string (struct mbus_buffer *buffer, enum mbus_compress_method compression, const char *string);
-int mbus_buffer_shift (struct mbus_buffer *buffer, unsigned int length);
+#include "mbus/debug.h"
+#include "mbus/tailq.h"
+#include "command.h"
+
+struct private {
+	struct command command;
+	char *identifier;
+};
+
+const char * mbus_server_command_get_identifier (const struct command *command)
+{
+	const struct private *private;
+	if (command == NULL) {
+		return NULL;
+	}
+	private = (const struct private *) command;
+	return private->identifier;
+}
+
+void mbus_server_command_destroy (struct command *command)
+{
+	struct private *private;
+	if (command == NULL) {
+		return;
+	}
+	private = (struct private *) command;
+	if (private->identifier != NULL) {
+		free(private->identifier);
+	}
+	free(private);
+}
+
+struct command * mbus_server_command_create (const char *identifier)
+{
+	struct private *private;
+	private = NULL;
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	private = malloc(sizeof(struct private));
+	if (private == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	memset(private, 0, sizeof(struct private));
+	private->identifier = strdup(identifier);
+	if (private->identifier == NULL) {
+		mbus_errorf("can not allocate memory");
+		goto bail;
+	}
+	return &private->command;
+bail:	if (private != NULL) {
+		mbus_server_command_destroy(&private->command);
+	}
+	return NULL;
+}

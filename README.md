@@ -451,7 +451,7 @@ please contact with me at alper.akcan@gmail.com
 
 ## 10. license ##
 
-### mBus Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com> ###
+### mBus Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com> ###
 
 All rights reserved.
 

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,16 +26,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-struct mbus_buffer;
+struct command {
+	TAILQ_ENTRY(command) commands;
+};
+TAILQ_HEAD(commands, command);
 
-struct mbus_buffer * mbus_buffer_create (void);
-void mbus_buffer_destroy (struct mbus_buffer *buffer);
-int mbus_buffer_reset (struct mbus_buffer *buffer);
-unsigned int mbus_buffer_get_size (struct mbus_buffer *buffer);
-unsigned int mbus_buffer_get_length (struct mbus_buffer *buffer);
-int mbus_buffer_set_length (struct mbus_buffer *buffer, unsigned int length);
-uint8_t * mbus_buffer_get_base (struct mbus_buffer *buffer);
-int mbus_buffer_reserve (struct mbus_buffer *buffer, unsigned int length);
-int mbus_buffer_push (struct mbus_buffer *buffer, const void *data, unsigned int length);
-int mbus_buffer_push_string (struct mbus_buffer *buffer, enum mbus_compress_method compression, const char *string);
-int mbus_buffer_shift (struct mbus_buffer *buffer, unsigned int length);
+struct command * mbus_server_command_create (const char *identifier);
+void mbus_server_command_destroy (struct command *command);
+
+const char * mbus_server_command_get_identifier (const struct command *command);

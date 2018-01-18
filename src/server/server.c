@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,7 +10,7 @@
  *    * Redistributions in binary form must reproduce the above copyright
  *      notice, this list of conditions and the following disclaimer in the
  *      documentation and/or other materials provided with the distribution.
- *    * Neither the name of the <Alper Akcan> nor the
+ *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
  *
@@ -44,10 +44,6 @@
 #include <openssl/err.h>
 #endif
 
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-#include <libwebsockets.h>
-#endif
-
 #define MBUS_DEBUG_NAME	"mbus-server"
 
 #include "mbus/debug.h"
@@ -59,86 +55,11 @@
 #include "mbus/method.h"
 #include "mbus/socket.h"
 #include "mbus/version.h"
+#include "command.h"
+#include "subscription.h"
+#include "method.h"
+#include "listener.h"
 #include "server.h"
-
-#define BUFFER_OUT_CHUNK_SIZE (64 * 1024)
-#define BUFFER_IN_CHUNK_SIZE (64 * 1024)
-
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_OUT_CHUNK_SIZE < LWS_PRE ? -1 : 0];
-static __attribute__((__unused__)) char __sizeof_check_buffer_in[BUFFER_IN_CHUNK_SIZE < LWS_PRE ? -1 : 0];
-#endif
-
-struct method {
-	TAILQ_ENTRY(method) methods;
-	struct {
-		struct mbus_json *json;
-		char *string;
-	} request;
-	struct {
-		struct mbus_json *json;
-		char *string;
-	} result;
-	struct client *source;
-};
-TAILQ_HEAD(methods, method);
-
-struct subscription {
-	TAILQ_ENTRY(subscription) subscriptions;
-	char *source;
-	char *event;
-};
-TAILQ_HEAD(subscriptions, subscription);
-
-struct command {
-	TAILQ_ENTRY(command) commands;
-	char *identifier;
-};
-TAILQ_HEAD(commands, command);
-
-struct ws_client_data {
-	struct lws *wsi;
-	struct client *client;
-};
-
-enum listener_type {
-	listener_type_unknown,
-	listener_type_tcp,
-	listener_type_uds,
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	listener_type_ws,
-#endif
-};
-
-struct listener {
-	TAILQ_ENTRY(listener) listeners;
-	char *name;
-	enum listener_type type;
-	union {
-		struct {
-			struct mbus_socket *socket;
-		} uds;
-		struct {
-			struct mbus_socket *socket;
-		} tcp;
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		struct {
-			struct lws_context *context;
-			struct {
-				unsigned int length;
-				unsigned int size;
-				struct pollfd *pollfds;
-			} pollfds;
-		} ws;
-#endif
-	} u;
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	struct {
-		SSL_CTX *context;
-	} ssl;
-#endif
-};
-TAILQ_HEAD(listeners, listener);
 
 enum client_status {
 	client_status_accepted		= 0x00000001,
@@ -160,28 +81,20 @@ struct client {
 	char *identifier;
 	enum client_status status;
 	enum mbus_compress_method compression;
-	enum listener_type type;
-	struct mbus_socket *socket;
+	struct listener *listener;
+	struct connection *connection;
 	struct {
 		struct mbus_buffer *in;
 		struct mbus_buffer *out;
-		uint8_t out_chunk[BUFFER_OUT_CHUNK_SIZE];
 	} buffer;
 	struct {
 		int enabled;
 		int interval;
 		int timeout;
 		int threshold;
-		unsigned long long ping_recv_tsms;
-		int ping_missed_count;
+		unsigned long long recv_tsms;
+		int missed_count;
 	} ping;
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	struct {
-		SSL *ssl;
-		int want_read;
-		int want_write;
-	} ssl;
-#endif
 	struct subscriptions subscriptions;
 	struct commands commands;
 	struct methods requests;
@@ -190,7 +103,6 @@ struct client {
 	struct methods waits;
 	int ssequence;
 	int esequence;
-	int refcount;
 };
 TAILQ_HEAD(clients, client);
 
@@ -204,6 +116,11 @@ struct mbus_server {
 		unsigned int size;
 		struct pollfd *pollfds;
 	} pollfds;
+	struct {
+		unsigned int length;
+		unsigned int size;
+		struct pollfd *pollfds;
+	} ws_pollfds;
 	int running;
 };
 
@@ -286,7 +203,7 @@ static struct option longopts[] = {
 	{ NULL,					0,			NULL,	0 },
 };
 
-void mbus_server_usage (void)
+__attribute__ ((__visibility__("default"))) void mbus_server_usage (void)
 {
 	fprintf(stdout, "mbus server arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level            : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
@@ -330,9 +247,6 @@ void mbus_server_usage (void)
 	fprintf(stdout, "  --mbus-help                   : this text\n");
 }
 
-static void client_destroy (struct client *client);
-static struct client * client_retain (struct client *client);
-
 static char * _strndup (const char *s, size_t n)
 {
 	char *result;
@@ -345,699 +259,50 @@ static char * _strndup (const char *s, size_t n)
 	return (char *) memcpy(result, s, len);
 }
 
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-
-static void ws_log_callback (int level, const char *line);
-static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
-
-static struct lws_protocols ws_protocols[] = {
-	{
-		"mbus",
-		ws_protocol_mbus_callback,
-		sizeof(struct ws_client_data),
-		0,
-		0,
-		NULL,
-#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
-		0,
-#endif
-	},
-	{
-		NULL,
-		NULL,
-		0,
-		0,
-		0,
-		NULL,
-#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
-		0,
-#endif
-	}
-};
-
-static const struct lws_extension ws_extensions[] = {
-#if 0
-	{
-		"permessage-deflate",
-		lws_extension_callback_pm_deflate,
-		"permessage-deflate"
-	},
-#endif
-	{
-		"deflate-frame",
-		lws_extension_callback_pm_deflate,
-		"deflate_frame"
-	},
-	{
-		NULL,
-		NULL,
-		NULL
-	}
-};
-
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-
-static struct lws_protocols wss_protocols[] = {
-	{
-		"mbus",
-		ws_protocol_mbus_callback,
-		sizeof(struct ws_client_data),
-		0,
-		0,
-		NULL,
-#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
-		0,
-#endif
-	},
-	{
-		NULL,
-		NULL,
-		0,
-		0,
-		0,
-		NULL,
-#if (LWS_LIBRARY_VERSION_NUMBER >= 2004001)
-		0,
-#endif
-	}
-};
-
-static const struct lws_extension wss_extensions[] = {
-#if 0
-	{
-		"permessage-deflate",
-		lws_extension_callback_pm_deflate,
-		"permessage-deflate"
-	},
-#endif
-	{
-		"deflate-frame",
-		lws_extension_callback_pm_deflate,
-		"deflate_frame"
-	},
-	{
-		NULL,
-		NULL,
-		NULL
-	}
-};
-
-#endif
-#endif
-
-static const char * command_get_identifier (struct command *command)
+static struct listener * client_get_listener (struct client *client)
 {
-	if (command == NULL) {
+	if (client == NULL) {
+		mbus_errorf("client is null");
+		goto bail;
+	}
+	return client->listener;
+bail:	return NULL;
+}
+
+static struct connection * client_get_connection (struct client *client)
+{
+	if (client == NULL) {
+		mbus_errorf("client is null");
 		return NULL;
 	}
-	return command->identifier;
+	return client->connection;
 }
 
-static void command_destroy (struct command *command)
-{
-	if (command == NULL) {
-		return;
-	}
-	if (command->identifier != NULL) {
-		free(command->identifier);
-	}
-	free(command);
-}
-
-static struct command * command_create (const char *identifier)
-{
-	struct command *command;
-	command = NULL;
-	if (identifier == NULL) {
-		mbus_errorf("identifier is null");
-		goto bail;
-	}
-	command = malloc(sizeof(struct command));
-	if (command == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	memset(command, 0, sizeof(struct command));
-	command->identifier = strdup(identifier);
-	if (command->identifier == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	return command;
-bail:	command_destroy(command);
-	return NULL;
-}
-
-static const char * subscription_get_source (struct subscription *subscription)
-{
-	if (subscription == NULL) {
-		return NULL;
-	}
-	return subscription->source;
-}
-
-static const char * subscription_get_event (struct subscription *subscription)
-{
-	if (subscription == NULL) {
-		return NULL;
-	}
-	return subscription->event;
-}
-
-static void subscription_destroy (struct subscription *subscription)
-{
-	if (subscription == NULL) {
-		return;
-	}
-	if (subscription->source != NULL) {
-		free(subscription->source);
-	}
-	if (subscription->event != NULL) {
-		free(subscription->event);
-	}
-	free(subscription);
-}
-
-static struct subscription * subscription_create (const char *source, const char *event)
-{
-	struct subscription *subscription;
-	subscription = NULL;
-	if (source == NULL) {
-		mbus_errorf("source is null");
-		goto bail;
-	}
-	if (event == NULL) {
-		mbus_errorf("event is null");
-		goto bail;
-	}
-	subscription = malloc(sizeof(struct subscription));
-	if (subscription == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	memset(subscription, 0, sizeof(struct subscription));
-	subscription->source = strdup(source);
-	subscription->event = strdup(event);
-	if ((subscription->source == NULL) ||
-	    (subscription->event == NULL)) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	return subscription;
-bail:	subscription_destroy(subscription);
-	return NULL;
-}
-
-static const char * method_get_request_type (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_TYPE, NULL);
-}
-
-static const char * method_get_request_destination (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_DESTINATION, NULL);
-}
-
-static const char * method_get_request_identifier (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
-}
-
-static int method_get_request_sequence (struct method *method)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	return mbus_json_get_int_value(method->request.json, MBUS_METHOD_TAG_SEQUENCE, -1);
-}
-
-static struct mbus_json * method_get_request_payload (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return mbus_json_get_object(method->request.json, MBUS_METHOD_TAG_PAYLOAD);
-}
-
-static char * method_get_request_string (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	if (method->request.string != NULL) {
-		free(method->request.string);
-	}
-	method->request.string = mbus_json_print_unformatted(method->request.json);
-	return method->request.string;
-}
-
-static int method_set_result_code (struct method *method, int code)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	mbus_json_add_number_to_object_cs(method->result.json, MBUS_METHOD_TAG_STATUS, code);
-	return 0;
-}
-
-static int method_set_result_payload (struct method *method, struct mbus_json *payload)
-{
-	if (method == NULL) {
-		return -1;
-	}
-	mbus_json_delete_item_from_object(method->result.json, MBUS_METHOD_TAG_PAYLOAD);
-	mbus_json_add_item_to_object_cs(method->result.json, MBUS_METHOD_TAG_PAYLOAD, payload);
-	return 0;
-}
-
-static char * method_get_result_string (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	if (method->result.string != NULL) {
-		free(method->result.string);
-	}
-	method->result.string = mbus_json_print_unformatted(method->result.json);
-	return method->result.string;
-}
-
-
-static struct client * method_get_source (struct method *method)
-{
-	if (method == NULL) {
-		return NULL;
-	}
-	return method->source;
-}
-
-static void method_destroy (struct method *method)
-{
-	if (method == NULL) {
-		return;
-	}
-	if (method->request.json != NULL) {
-		mbus_json_delete(method->request.json);
-	}
-	if (method->request.string != NULL) {
-		free(method->request.string);
-	}
-	if (method->result.json != NULL) {
-		mbus_json_delete(method->result.json);
-	}
-	if (method->result.string != NULL) {
-		free(method->result.string);
-	}
-	if (method->source != NULL) {
-		client_destroy(method->source);
-	}
-	free(method);
-}
-
-static struct method * method_create_request (struct client *source, const char *string)
-{
-	struct method *method;
-	method = NULL;
-	if (string == NULL) {
-		mbus_errorf("string is null");
-		goto bail;
-	}
-	method = malloc(sizeof(struct method));
-	if (method == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	memset(method, 0, sizeof(struct method));
-	method->request.json = mbus_json_parse(string);
-	if (method->request.json == NULL) {
-		mbus_errorf("can not parse method");
-		goto bail;
-	}
-	if (mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_TYPE, NULL) == NULL) {
-		mbus_errorf("invalid method type: '%s'", string);
-		goto bail;
-	}
-	if (mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_DESTINATION, NULL) == NULL) {
-		mbus_errorf("invalid method destination: '%s'", string);
-		goto bail;
-	}
-	if (mbus_json_get_string_value(method->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL) == NULL) {
-		mbus_errorf("invalid method identifier: '%s'", string);
-		goto bail;
-	}
-	if (mbus_json_get_int_value(method->request.json, MBUS_METHOD_TAG_SEQUENCE, -1) == -1) {
-		mbus_errorf("invalid method sequence: '%s'", string);
-		goto bail;
-	}
-	if (mbus_json_get_object(method->request.json, MBUS_METHOD_TAG_PAYLOAD) == NULL) {
-		mbus_errorf("invalid method payload: '%s'", string);
-		goto bail;
-	}
-	method->result.json = mbus_json_create_object();
-	if (method->result.json == NULL) {
-		mbus_errorf("can not create object");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(method->result.json, MBUS_METHOD_TAG_TYPE, MBUS_METHOD_TYPE_RESULT);
-	mbus_json_add_number_to_object_cs(method->result.json, MBUS_METHOD_TAG_SEQUENCE, method_get_request_sequence(method));
-	mbus_json_add_item_to_object_cs(method->result.json, MBUS_METHOD_TAG_PAYLOAD, mbus_json_create_object());
-	method->source = client_retain(source);
-	return method;
-bail:	method_destroy(method);
-	return NULL;
-}
-
-static struct method * method_create_response (const char *type, const char *source, const char *identifier, int sequence, const struct mbus_json *payload)
-{
-	struct method *method;
-	struct mbus_json *data;
-	method = NULL;
-	if (type == NULL) {
-		mbus_errorf("type is null");
-		goto bail;
-	}
-	if (source == NULL) {
-		mbus_errorf("source is null");
-		goto bail;
-	}
-	if (identifier == NULL) {
-		mbus_errorf("identifier is null");
-		goto bail;
-	}
-	if (sequence < 0) {
-		mbus_errorf("sequence is invalid");
-		goto bail;
-	}
-	if (payload == NULL) {
-		data = mbus_json_create_object();
-	} else {
-		data = mbus_json_duplicate(payload, 1);
-	}
-	if (data == NULL) {
-		mbus_errorf("can not create payload");
-		goto bail;
-	}
-	method = malloc(sizeof(struct method));
-	if (method == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	memset(method, 0, sizeof(struct method));
-	method->request.json = mbus_json_create_object();
-	if (method->request.json == NULL) {
-		mbus_errorf("can not create method object");
-		goto bail;
-	}
-	mbus_json_add_string_to_object_cs(method->request.json, MBUS_METHOD_TAG_TYPE, type);
-	mbus_json_add_string_to_object_cs(method->request.json, MBUS_METHOD_TAG_SOURCE, source);
-	mbus_json_add_string_to_object_cs(method->request.json, MBUS_METHOD_TAG_IDENTIFIER, identifier);
-	mbus_json_add_number_to_object_cs(method->request.json, MBUS_METHOD_TAG_SEQUENCE, sequence);
-	mbus_json_add_item_to_object_cs(method->request.json, MBUS_METHOD_TAG_PAYLOAD, data);
-	return method;
-bail:	if (method != NULL) {
-		method_destroy(method);
-	}
-	return NULL;
-}
-
-static const char * listener_get_name (struct listener *listener)
-{
-	if (listener == NULL) {
-		mbus_errorf("listener is null");
-		return NULL;
-	}
-	return listener->name;
-}
-
-static enum listener_type listener_get_type (struct listener *listener)
-{
-	if (listener == NULL) {
-		mbus_errorf("listener is null");
-		return listener_type_unknown;
-	}
-	return listener->type;
-}
-
-static void listener_destroy (struct listener *listener)
-{
-	if (listener == NULL) {
-		return;
-	}
-	if (listener->name != NULL) {
-		free(listener->name);
-	}
-	if (listener->type == listener_type_tcp) {
-		if (listener->u.tcp.socket != NULL) {
-			mbus_socket_destroy(listener->u.tcp.socket);
-		}
-	}
-	if (listener->type == listener_type_uds) {
-		if (listener->u.uds.socket != NULL) {
-			mbus_socket_destroy(listener->u.uds.socket);
-		}
-	}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	if (listener->type == listener_type_ws) {
-		if (listener->u.ws.context != NULL) {
-			lws_context_destroy(listener->u.ws.context);
-		}
-		if (listener->u.ws.pollfds.pollfds != NULL) {
-			free(listener->u.ws.pollfds.pollfds);
-		}
-	}
-#endif
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (listener->ssl.context != NULL) {
-		SSL_CTX_free(listener->ssl.context);
-	}
-#endif
-	free(listener);
-}
-
-static struct listener * listener_create (const char *name, enum listener_type type, const char *address, int port, const char *certificate, const char *privatekey)
+static int client_set_connection (struct client *client, struct connection *connection)
 {
 	int rc;
-	struct listener *listener;
-	listener = NULL;
-	if (certificate != NULL ||
-	    privatekey != NULL) {
-		if (certificate == NULL) {
-			mbus_errorf("ssl certificate is invalid");
-			goto bail;
-		}
-		if (privatekey == NULL) {
-			mbus_errorf("ssl privatekey is invalid");
-			goto bail;
-		}
-	}
-	listener = malloc(sizeof(struct listener));
-	if (listener == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	memset(listener, 0, sizeof(struct listener));
-	listener->name = strdup(name);
-	if (listener->name == NULL) {
-		mbus_errorf("can not allocate memory");
-		goto bail;
-	}
-	listener->type = type;
-	if (type == listener_type_tcp) {
-		listener->u.tcp.socket = mbus_socket_create(mbus_socket_domain_af_inet, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
-		if (listener->u.tcp.socket == NULL) {
-			mbus_errorf("can not create socket: '%s:%s:%d'", "tcp", address, port);
-			goto bail;
-		}
-		rc = mbus_socket_set_reuseaddr(listener->u.tcp.socket, 1);
-		if (rc != 0) {
-			mbus_errorf("can not reuse socket: '%s:%s:%d'", "tcp", address, port);
-			goto bail;
-		}
-		mbus_socket_set_keepalive(listener->u.tcp.socket, 1);
-#if 0
-		mbus_socket_set_keepcnt(listener->u.tcp.socket, 5);
-		mbus_socket_set_keepidle(listener->u.tcp.socket, 180);
-		mbus_socket_set_keepintvl(listener->u.tcp.socket, 60);
-#endif
-		rc = mbus_socket_bind(listener->u.tcp.socket, address, port);
-		if (rc != 0) {
-			mbus_errorf("can not bind socket: '%s:%s:%d'", "tcp", address, port);
-			goto bail;
-		}
-		rc = mbus_socket_listen(listener->u.tcp.socket, 1024);
-		if (rc != 0) {
-			mbus_errorf("can not listen socket: '%s:%s:%d'", "tcp", address, port);
-			goto bail;
-		}
-	} else if (type == listener_type_uds) {
-		listener->u.uds.socket = mbus_socket_create(mbus_socket_domain_af_unix, mbus_socket_type_sock_stream, mbus_socket_protocol_any);
-		if (listener->u.uds.socket == NULL) {
-			mbus_errorf("can not create socket");
-			goto bail;
-		}
-		rc = mbus_socket_set_reuseaddr(listener->u.uds.socket, 1);
-		if (rc != 0) {
-			mbus_errorf("can not reuse socket");
-			goto bail;
-		}
-		rc = mbus_socket_bind(listener->u.uds.socket, address, port);
-		if (rc != 0) {
-			mbus_errorf("can not bind socket: '%s:%s:%d'", "uds", address, port);
-			goto bail;
-		}
-		rc = mbus_socket_listen(listener->u.uds.socket, 1024);
-		if (rc != 0) {
-			mbus_errorf("can not listen socket");
-			goto bail;
-		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	} else if (type == listener_type_ws &&
-		   certificate == NULL &&
-		   privatekey == NULL) {
-		struct lws_context_creation_info info;
-		ws_protocols[0].user = listener;
-		memset(&info, 0, sizeof(info));
-		info.iface = NULL;
-		info.port = port;
-		info.protocols = ws_protocols;
-		info.extensions = ws_extensions;
-		info.gid = -1;
-		info.uid = -1;
-		lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
-		listener->u.ws.context = lws_create_context(&info);
-		if (listener->u.ws.context == NULL) {
-			mbus_errorf("can not create ws context for: '%s:%s:%d'", "ws", address, port);
-			goto bail;
-		}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	} else if (type == listener_type_ws &&
-		   certificate != NULL &&
-		   privatekey != NULL) {
-		struct lws_context_creation_info info;
-		wss_protocols[0].user = listener;
-		memset(&info, 0, sizeof(info));
-		info.iface = NULL;
-		info.port = port;
-		info.protocols = wss_protocols;
-		info.extensions = wss_extensions;
-		info.gid = -1;
-		info.uid = -1;
-		info.ssl_ca_filepath = NULL; //"ca.crt";
-		info.ssl_cert_filepath = certificate;
-		info.ssl_private_key_filepath = privatekey;
-//		info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
-		info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-		lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
-		listener->u.ws.context = lws_create_context(&info);
-		if (listener->u.ws.context == NULL) {
-			mbus_errorf("can not create ws context for: '%s:%s:%d'", "wss", address, port);
-			goto bail;
-		}
-#endif
-#endif
-	} else {
-		mbus_errorf("unknown type: %d", type);
-		goto bail;
-	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (certificate != NULL ||
-	    privatekey != NULL) {
-		const SSL_METHOD *method;
-		method = SSLv23_server_method();
-		if (method == NULL) {
-			mbus_errorf("can not get server method");
-			goto bail;
-		}
-		listener->ssl.context = SSL_CTX_new(method);
-		if (listener->ssl.context == NULL) {
-			mbus_errorf("can not create ssl context");
-			goto bail;
-		}
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
-		SSL_CTX_set_ecdh_auto(listener->ssl.context, 1);
-#endif
-		rc = SSL_CTX_use_certificate_file(listener->ssl.context, certificate, SSL_FILETYPE_PEM);
-		if (rc <= 0) {
-			mbus_errorf("can not use ssl certificate: %s", certificate);
-			goto bail;
-		}
-		rc = SSL_CTX_use_PrivateKey_file(listener->ssl.context, privatekey, SSL_FILETYPE_PEM);
-		if (rc <= 0) {
-			mbus_errorf("can not use ssl privatekey: %s", privatekey);
-			goto bail;
-		}
-	}
-#endif
-	return listener;
-bail:	if (listener != NULL) {
-		listener_destroy(listener);
-	}
-	return NULL;
-}
-
-static struct mbus_socket * client_get_socket (struct client *client)
-{
 	if (client == NULL) {
 		mbus_errorf("client is null");
-		return NULL;
+		goto bail;
 	}
-	return client->socket;
-}
-
-static int client_set_socket (struct client *client, struct mbus_socket *socket)
-{
-	if (client == NULL) {
-		mbus_errorf("client is null");
-		return -1;
-	}
-	if (socket == NULL) {
-		if (client->socket != NULL) {
-			if (client->type == listener_type_tcp) {
-				mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
-				mbus_socket_destroy(client->socket);
-				client->socket = NULL;
+	if (connection == NULL) {
+		if (client->connection != NULL) {
+			rc = mbus_server_connection_close(client->connection);
+			if (rc != 0) {
+				mbus_errorf("can not close connection");
+				goto bail;
 			}
-			if (client->type == listener_type_uds) {
-				mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
-				mbus_socket_destroy(client->socket);
-				client->socket = NULL;
-			}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-			if (client->type == listener_type_ws) {
-				struct ws_client_data *data;
-				data = (struct ws_client_data *) client_get_socket(client);
-				data->client = NULL;
-				lws_callback_on_writable(data->wsi);
-			}
-#endif
-			client->socket = NULL;
+			client->connection = NULL;
 		}
 	} else {
-		if (client->socket != NULL) {
-			mbus_errorf("client event is not null");
+		if (client->connection != NULL) {
+			mbus_errorf("client connection is not null");
 			return -1;
 		}
-		client->socket = socket;
+		client->connection = connection;
 	}
 	return 0;
-}
-
-static enum listener_type client_get_listener_type (struct client *client)
-{
-	if (client == NULL) {
-		mbus_errorf("client is null");
-		return listener_type_unknown;
-	}
-	return client->type;
+bail:	return -1;
 }
 
 static int client_set_status (struct client *client, enum client_status status)
@@ -1126,14 +391,14 @@ static int client_del_subscription (struct client *client, const char *source, c
 		goto bail;
 	}
 	TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
-		if ((strcmp(subscription_get_source(subscription), source) == 0) &&
-		    (strcmp(subscription_get_event(subscription), event) == 0)) {
+		if ((strcmp(mbus_server_subscription_get_source(subscription), source) == 0) &&
+		    (strcmp(mbus_server_subscription_get_event(subscription), event) == 0)) {
 			break;
 		}
 	}
 	if (subscription != NULL) {
 		TAILQ_REMOVE(&client->subscriptions, subscription, subscriptions);
-		subscription_destroy(subscription);
+		mbus_server_subscription_destroy(subscription);
 		mbus_infof("unsubscribed '%s' from '%s', '%s'", client_get_identifier(client), source, event);
 		return 0;
 	}
@@ -1157,12 +422,12 @@ static int client_add_subscription (struct client *client, const char *source, c
 		goto bail;
 	}
 	TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
-		if ((strcmp(subscription_get_source(subscription), source) == 0) &&
-		    (strcmp(subscription_get_event(subscription), event) == 0)) {
+		if ((strcmp(mbus_server_subscription_get_source(subscription), source) == 0) &&
+		    (strcmp(mbus_server_subscription_get_event(subscription), event) == 0)) {
 			goto out;
 		}
 	}
-	subscription = subscription_create(source, event);
+	subscription = mbus_server_subscription_create(source, event);
 	if (subscription == NULL) {
 		mbus_errorf("can not create subscription");
 		goto bail;
@@ -1170,7 +435,7 @@ static int client_add_subscription (struct client *client, const char *source, c
 	TAILQ_INSERT_TAIL(&client->subscriptions, subscription, subscriptions);
 	mbus_infof("subscribed '%s' to '%s', '%s'", client_get_identifier(client), source, event);
 out:	return 0;
-bail:	subscription_destroy(subscription);
+bail:	mbus_server_subscription_destroy(subscription);
 	return -1;
 }
 
@@ -1187,11 +452,11 @@ static int client_add_command (struct client *client, const char *identifier)
 		goto bail;
 	}
 	TAILQ_FOREACH(command, &client->commands, commands) {
-		if (strcmp(command_get_identifier(command), identifier) == 0) {
+		if (strcmp(mbus_server_command_get_identifier(command), identifier) == 0) {
 			goto out;
 		}
 	}
-	command = command_create(identifier);
+	command = mbus_server_command_create(identifier);
 	if (command == NULL) {
 		mbus_errorf("can not create command");
 		goto bail;
@@ -1199,7 +464,7 @@ static int client_add_command (struct client *client, const char *identifier)
 	TAILQ_INSERT_TAIL(&client->commands, command, commands);
 	mbus_infof("registered '%s' '%s'", client_get_identifier(client), identifier);
 out:	return 0;
-bail:	command_destroy(command);
+bail:	mbus_server_command_destroy(command);
 	return -1;
 }
 
@@ -1216,15 +481,15 @@ static int client_del_command (struct client *client, const char *identifier)
 		goto bail;
 	}
 	TAILQ_FOREACH(command, &client->commands, commands) {
-		if (strcmp(command_get_identifier(command), identifier) == 0) {
+		if (strcmp(mbus_server_command_get_identifier(command), identifier) == 0) {
 			break;
 		}
 	}
 	TAILQ_REMOVE(&client->commands, command, commands);
-	command_destroy(command);
+	mbus_server_command_destroy(command);
 	mbus_infof("unregistered '%s' '%s'", client_get_identifier(client), identifier);
 	return 0;
-bail:	command_destroy(command);
+bail:	mbus_server_command_destroy(command);
 	return -1;
 }
 
@@ -1374,16 +639,8 @@ static void client_destroy (struct client *client)
 	if (client == NULL) {
 		return;
 	}
-	if (--client->refcount > 0) {
-		return;
-	}
-	if (client->socket != NULL) {
-		if (client_get_listener_type(client) == listener_type_tcp) {
-			mbus_socket_destroy(client->socket);
-		}
-		if (client_get_listener_type(client) == listener_type_uds) {
-			mbus_socket_destroy(client->socket);
-		}
+	if (client->connection != NULL) {
+		mbus_server_connection_close(client_get_connection(client));
 	}
 	if (client->identifier != NULL) {
 		free(client->identifier);
@@ -1391,32 +648,32 @@ static void client_destroy (struct client *client)
 	while (client->commands.tqh_first != NULL) {
 		command = client->commands.tqh_first;
 		TAILQ_REMOVE(&client->commands, client->commands.tqh_first, commands);
-		command_destroy(command);
+		mbus_server_command_destroy(command);
 	}
 	while (client->subscriptions.tqh_first != NULL) {
 		subscription = client->subscriptions.tqh_first;
 		TAILQ_REMOVE(&client->subscriptions, client->subscriptions.tqh_first, subscriptions);
-		subscription_destroy(subscription);
+		mbus_server_subscription_destroy(subscription);
 	}
 	while (client->requests.tqh_first != NULL) {
 		request = client->requests.tqh_first;
 		TAILQ_REMOVE(&client->requests, client->requests.tqh_first, methods);
-		method_destroy(request);
+		mbus_server_method_destroy(request);
 	}
 	while (client->results.tqh_first != NULL) {
 		result = client->results.tqh_first;
 		TAILQ_REMOVE(&client->results, client->results.tqh_first, methods);
-		method_destroy(result);
+		mbus_server_method_destroy(result);
 	}
 	while (client->events.tqh_first != NULL) {
 		event = client->events.tqh_first;
 		TAILQ_REMOVE(&client->events, client->events.tqh_first, methods);
-		method_destroy(event);
+		mbus_server_method_destroy(event);
 	}
 	while (client->waits.tqh_first != NULL) {
 		wait = client->waits.tqh_first;
 		TAILQ_REMOVE(&client->waits, client->waits.tqh_first, methods);
-		method_destroy(wait);
+		mbus_server_method_destroy(wait);
 	}
 	if (client->buffer.in != NULL) {
 		mbus_buffer_destroy(client->buffer.in);
@@ -1424,34 +681,27 @@ static void client_destroy (struct client *client)
 	if (client->buffer.out != NULL) {
 		mbus_buffer_destroy(client->buffer.out);
 	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (client->ssl.ssl != NULL) {
-		SSL_free(client->ssl.ssl);
-	}
-#endif
 	free(client);
 }
 
-static struct client * client_retain (struct client *client)
-{
-	if (client == NULL) {
-		return NULL;
-	}
-	client->refcount += 1;
-	return client;
-}
-
-static struct client * client_accept (enum listener_type type)
+static struct client * client_create (struct listener *listener, struct connection *connection)
 {
 	struct client *client;
 	client = NULL;
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
+		goto bail;
+	}
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
+		goto bail;
+	}
 	client = malloc(sizeof(struct client));
 	if (client == NULL) {
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct client));
-	client->refcount = 1;
 	TAILQ_INIT(&client->subscriptions);
 	TAILQ_INIT(&client->commands);
 	TAILQ_INIT(&client->requests);
@@ -1459,7 +709,8 @@ static struct client * client_accept (enum listener_type type)
 	TAILQ_INIT(&client->events);
 	TAILQ_INIT(&client->waits);
 	client->status = 0;
-	client->type = type;
+	client->listener = listener;
+	client->connection = connection;
 	client->ssequence = MBUS_METHOD_SEQUENCE_START;
 	client->esequence = MBUS_METHOD_SEQUENCE_START;
 	client->buffer.in = mbus_buffer_create();
@@ -1497,47 +748,40 @@ static struct client * server_find_client_by_identifier (struct mbus_server *ser
 
 static struct client * server_find_client_by_fd (struct mbus_server *server, int fd)
 {
+	int cfd;
 	struct client *client;
 	if (fd < 0) {
 		mbus_errorf("fd is invalid");
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_socket(client) == NULL) {
+		if (client_get_listener(client) == NULL) {
 			continue;
 		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
-			struct ws_client_data *data;
-			data = (struct ws_client_data *) client_get_socket(client);
-			if (lws_get_socket_fd(data->wsi) == fd) {
-				return client;
-			}
+		if (client_get_connection(client) == NULL) {
+			continue;
 		}
-#endif
-		if (client_get_listener_type(client) == listener_type_uds) {
-			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
-				return client;
-			}
+		cfd = mbus_server_connection_get_fd(client_get_connection(client));
+		if (cfd < 0) {
+			mbus_errorf("connection fd is invalid");
+			continue;
 		}
-		if (client_get_listener_type(client) == listener_type_tcp) {
-			if (mbus_socket_get_fd(client_get_socket(client)) == fd) {
-				return client;
-			}
+		if (cfd == fd) {
+			return client;
 		}
 	}
 	return NULL;
 }
 
-static __attribute__ ((__unused__)) struct client * server_find_client_by_socket (struct mbus_server *server, struct mbus_socket *socket)
+static __attribute__ ((__unused__)) struct client * server_find_client_by_connection (struct mbus_server *server, struct connection *connection)
 {
 	struct client *client;
-	if (socket == NULL) {
-		mbus_errorf("socket is null");
+	if (connection == NULL) {
+		mbus_errorf("connection is null");
 		return NULL;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_socket(client) == socket) {
+		if (client_get_connection(client) == connection) {
 			return client;
 		}
 	}
@@ -1576,7 +820,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		if (strcmp(identifier, MBUS_SERVER_EVENT_PING) == 0) {
 			client = server_find_client_by_identifier(server, source);
 			if (client != NULL) {
-				client->ping.ping_recv_tsms = mbus_clock_monotonic();
+				client->ping.recv_tsms = mbus_clock_monotonic();
 			}
 			rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, source, MBUS_SERVER_EVENT_PONG, NULL);
 			if (rc != 0) {
@@ -1592,7 +836,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			if (strcmp(client_get_identifier(client), source) == 0) {
 				continue;
 			}
-			method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
+			method = mbus_server_method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
 				goto bail;
@@ -1604,24 +848,24 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			rc = client_push_event(client, method);
 			if (rc != 0) {
 				mbus_errorf("can not push method");
-				method_destroy(method);
+				mbus_server_method_destroy(method);
 				goto bail;
 			}
 		}
 	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS) == 0) {
 		TAILQ_FOREACH(client, &server->clients, clients) {
 			TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
-				if (strcmp(subscription_get_source(subscription), MBUS_METHOD_EVENT_SOURCE_ALL) != 0) {
-					if (strcmp(subscription_get_source(subscription), source) != 0) {
+				if (strcmp(mbus_server_subscription_get_source(subscription), MBUS_METHOD_EVENT_SOURCE_ALL) != 0) {
+					if (strcmp(mbus_server_subscription_get_source(subscription), source) != 0) {
 						continue;
 					}
 				}
-				if (strcmp(subscription_get_event(subscription), MBUS_METHOD_EVENT_IDENTIFIER_ALL) != 0) {
-					if (strcmp(subscription_get_event(subscription), identifier) != 0) {
+				if (strcmp(mbus_server_subscription_get_event(subscription), MBUS_METHOD_EVENT_IDENTIFIER_ALL) != 0) {
+					if (strcmp(mbus_server_subscription_get_event(subscription), identifier) != 0) {
 						continue;
 					}
 				}
-				method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
+				method = mbus_server_method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 				if (method == NULL) {
 					mbus_errorf("can not create method");
 					goto bail;
@@ -1633,7 +877,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 				rc = client_push_event(client, method);
 				if (rc != 0) {
 					mbus_errorf("can not push method");
-					method_destroy(method);
+					mbus_server_method_destroy(method);
 					goto bail;
 				}
 				break;
@@ -1647,7 +891,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			if (strcmp(client_get_identifier(client), destination) != 0) {
 				continue;
 			}
-			method = method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
+			method = mbus_server_method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
 				goto bail;
@@ -1659,7 +903,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			rc = client_push_event(client, method);
 			if (rc != 0) {
 				mbus_errorf("can not push method");
-				method_destroy(method);
+				mbus_server_method_destroy(method);
 				goto bail;
 			}
 			break;
@@ -1817,93 +1061,151 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-static int server_accept_client (struct mbus_server *server, struct listener *listener, struct mbus_socket *from)
+static int server_client_connection_establish (struct mbus_server *server, struct listener *listener, struct connection *connection)
 {
-	int rc;
 	struct client *client;
-	struct mbus_socket *socket;
 	client = NULL;
-	socket = NULL;
 	if (server == NULL) {
-		mbus_errorf("server is null");
+		mbus_errorf("server is invalid");
 		goto bail;
 	}
-	socket = mbus_socket_accept(from);
-	if (socket == NULL) {
-		mbus_errorf("can not accept new socket connection");
+	if (listener == NULL) {
+		mbus_errorf("listener is invalid");
 		goto bail;
 	}
-	rc = mbus_socket_set_blocking(socket, 0);
-	if (rc != 0) {
-		mbus_errorf("can not set socket to nonblocking");
+	if (connection == NULL) {
+		mbus_errorf("connection is invalid");
 		goto bail;
 	}
-	client = client_accept(listener_get_type(listener));
+	client = client_create(listener, connection);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
-	rc = client_set_socket(client, socket);
-	if (rc != 0) {
-		mbus_errorf("can not set client socket");
-		goto bail;
+	TAILQ_INSERT_TAIL(&server->clients, client, clients);
+	return 0;
+bail:	if (client != NULL) {
+		client_destroy(client);
 	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (listener->ssl.context != NULL) {
-		client->ssl.ssl = SSL_new(listener->ssl.context);
-		if (client->ssl.ssl == NULL) {
-			mbus_errorf("can not create ssl");
-			goto bail;
+	return -1;
+}
+
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+
+static int server_listener_connection_established_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	return server_client_connection_establish(context, listener, connection);
+}
+
+static int server_listener_connection_receive_callback (void *context, struct listener *listener, struct connection *connection, void *in, int len)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return -1;
+	}
+	return mbus_buffer_push(client->buffer.in, in, len);
+}
+
+static struct mbus_buffer * server_listener_connection_writable_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return NULL;
+	}
+	return client->buffer.out;
+}
+
+static int server_listener_connection_closed_callback (void *context, struct listener *listener, struct connection *connection)
+{
+	struct client *client;
+	struct mbus_server *server = (struct mbus_server *) context;
+	(void) listener;
+	client = server_find_client_by_connection(server, connection);
+	if (client == NULL) {
+		return -1;
+	}
+	return client_set_connection(client, NULL);
+}
+
+static int server_listener_poll_add_callback (void *context, struct listener *listener, int fd, unsigned int events)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				server->ws_pollfds.pollfds[i].events = events;
+				break;
+			}
 		}
-		SSL_set_fd(client->ssl.ssl, mbus_socket_get_fd(socket));
-		rc = SSL_accept(client->ssl.ssl);
-		if (rc <= 0) {
-			int error;
-			error = SSL_get_error(client->ssl.ssl, rc);
-			if (error == SSL_ERROR_WANT_READ) {
-				client->ssl.want_read = 1;
-			} else if (error == SSL_ERROR_WANT_WRITE) {
-				client->ssl.want_write = 1;
-			} else if (error == SSL_ERROR_SYSCALL) {
-				client->ssl.want_read = 1;
-			} else {
-				char ebuf[256];
-				mbus_errorf("can not accept ssl: %d", error);
-				error = ERR_get_error();
-				while (error) {
-					mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-					error = ERR_get_error();
-				}
-				goto reject;
+		if (i < server->ws_pollfds.length) {
+			return 0;
+		}
+	}
+	if (server->ws_pollfds.length + 1 > server->ws_pollfds.size) {
+		struct pollfd *tmp;
+		while (server->ws_pollfds.length + 1 > server->ws_pollfds.size) {
+			server->ws_pollfds.size += 1024;
+		}
+		tmp = realloc(server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.size);
+		if (tmp == NULL) {
+			tmp = malloc(sizeof(int) * server->ws_pollfds.size);
+			if (tmp == NULL) {
+				mbus_errorf("can not allocate memory");
+				goto bail;
+			}
+			memcpy(tmp, server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.length);
+			free(server->ws_pollfds.pollfds);
+		}
+		server->ws_pollfds.pollfds = tmp;
+	}
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].fd = fd;
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].events = events;
+	server->ws_pollfds.pollfds[server->ws_pollfds.length].revents = 0;
+	server->ws_pollfds.length += 1;
+	return 0;
+bail:	return -1;
+}
+
+static int server_listener_poll_mod_callback (void *context, struct listener *listener, int fd, unsigned int events)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				server->ws_pollfds.pollfds[i].events = events;
+				server->ws_pollfds.pollfds[i].revents = 0;
+				break;
 			}
 		}
 	}
-#endif
-	TAILQ_INSERT_TAIL(&server->clients, client, clients);
 	return 0;
-bail:	if (socket != NULL) {
-		if (client == NULL ||
-		    client_get_socket(client) != socket) {
-			mbus_socket_destroy(socket);
-		}
-	}
-	if (client != NULL) {
-		client_destroy(client);
-	}
-	return -2;
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-reject:	if (socket != NULL) {
-		if (client == NULL ||
-		    client_get_socket(client) != socket) {
-			mbus_socket_destroy(socket);
-		}
-	}
-	if (client != NULL) {
-		client_destroy(client);
-	}
-	return -2;
-#endif
 }
+
+static int server_listener_poll_del_callback (void *context, struct listener *listener, int fd)
+{
+	struct mbus_server *server = (struct mbus_server *) context;
+	{
+		unsigned int i;
+		for (i = 0; i < server->ws_pollfds.length; i++) {
+			if (server->ws_pollfds.pollfds[i].fd == fd) {
+				memmove(&server->ws_pollfds.pollfds[i], &server->ws_pollfds.pollfds[i + 1], sizeof(struct pollfd) * (server->ws_pollfds.length - i - 1));
+				server->ws_pollfds.length -= 1;
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
+#endif
 
 static int server_handle_command_create (struct mbus_server *server, struct method *method)
 {
@@ -1919,14 +1221,14 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	identifier = client_get_identifier(method_get_source(method));
+	identifier = client_get_identifier(mbus_server_method_get_source(method));
 	if (identifier != NULL) {
 		mbus_errorf("invalid client state");
 		goto bail;
 	}
 	{
 		struct mbus_json *payload;
-		payload = method_get_request_payload(method);
+		payload = mbus_server_method_get_request_payload(method);
 		{
 			identifier = mbus_json_get_string_value(payload, "identifier", NULL);
 			if (identifier == NULL ||
@@ -1946,7 +1248,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				mbus_errorf("client with identifier: %s already exists", identifier);
 				goto bail;
 			}
-			rc = client_set_identifier(method_get_source(method), identifier);
+			rc = client_set_identifier(mbus_server_method_get_source(method), identifier);
 			if (rc != 0) {
 				mbus_errorf("can not set client identifier");
 				goto bail;
@@ -1968,7 +1270,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				client->ping.timeout = 0;
 				client->ping.threshold = 0;
 				client->ping.enabled = 0;
-				client->ping.ping_recv_tsms = 0;
+				client->ping.recv_tsms = 0;
 			} else {
 				if (client->ping.timeout > (client->ping.interval * 2) / 3) {
 					client->ping.timeout = (client->ping.interval * 2) / 3;
@@ -1976,7 +1278,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				if (client->ping.threshold <= 0) {
 					client->ping.threshold = 0;
 				}
-				client->ping.ping_recv_tsms = mbus_clock_monotonic() - client->ping.interval;
+				client->ping.recv_tsms = mbus_clock_monotonic() - client->ping.interval;
 				client->ping.enabled = 1;
 			}
 		}
@@ -2000,16 +1302,16 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 			}
 			if (i < (int) (sizeof(compression_methods) / sizeof(compression_methods[0]))) {
 				mbus_debugf("compression: %s", compression_methods[i].name);
-				client_set_compression(method_get_source(method), compression_methods[i].value);
+				client_set_compression(mbus_server_method_get_source(method), compression_methods[i].value);
 			} else {
 				mbus_debugf("compression: %s", "none");
-				client_set_compression(method_get_source(method), mbus_compress_method_none);
+				client_set_compression(mbus_server_method_get_source(method), mbus_compress_method_none);
 			}
 		}
 	}
 	mbus_infof("client created");
-	mbus_infof("  identifier : %s", client_get_identifier(method_get_source(method)));
-	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+	mbus_infof("  identifier : %s", client_get_identifier(mbus_server_method_get_source(method)));
+	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
 	mbus_infof("  ping");
 	mbus_infof("    enabled  : %d", client->ping.enabled);
 	mbus_infof("    interval : %d", client->ping.interval);
@@ -2019,14 +1321,14 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		struct mbus_json *payload;
 		struct mbus_json *ping;
 		payload = mbus_json_create_object();
-		mbus_json_add_string_to_object_cs(payload, "identifier", client_get_identifier(method_get_source(method)));
-		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(method_get_source(method))));
+		mbus_json_add_string_to_object_cs(payload, "identifier", client_get_identifier(mbus_server_method_get_source(method)));
+		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
 		ping = mbus_json_create_object();
 		mbus_json_add_number_to_object_cs(ping, "interval", client->ping.interval);
 		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping.timeout);
 		mbus_json_add_number_to_object_cs(ping, "threshold", client->ping.threshold);
 		mbus_json_add_item_to_object_cs(payload, "ping", ping);
-		method_set_result_payload(method, payload);
+		mbus_server_method_set_result_payload(method, payload);
 	}
 	return 0;
 bail:	return -1;
@@ -2045,19 +1347,19 @@ static int server_handle_command_subscribe (struct mbus_server *server, struct m
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
-	event = mbus_json_get_string_value(method_get_request_payload(method), "event", NULL);
+	source = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "source", NULL);
+	event = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "event", NULL);
 	if ((source == NULL) ||
 	    (event == NULL)) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = client_add_subscription(method_get_source(method), source, event);
+	rc = client_add_subscription(mbus_server_method_get_source(method), source, event);
 	if (rc != 0) {
 		mbus_errorf("can not add subscription");
 		goto bail;
 	}
-	rc = server_send_event_subscribed(server, client_get_identifier(method_get_source(method)), source, event);
+	rc = server_send_event_subscribed(server, client_get_identifier(mbus_server_method_get_source(method)), source, event);
 	if (rc != 0) {
 		mbus_errorf("can not send subscribed event");
 		goto bail;
@@ -2079,19 +1381,19 @@ static int server_handle_command_unsubscribe (struct mbus_server *server, struct
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
-	event = mbus_json_get_string_value(method_get_request_payload(method), "event", NULL);
+	source = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "source", NULL);
+	event = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "event", NULL);
 	if ((source == NULL) ||
 	    (event == NULL)) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = client_del_subscription(method_get_source(method), source, event);
+	rc = client_del_subscription(mbus_server_method_get_source(method), source, event);
 	if (rc != 0) {
 		mbus_errorf("can not del subscription");
 		goto bail;
 	}
-	rc = server_send_event_unsubscribed(server, client_get_identifier(method_get_source(method)), source, event);
+	rc = server_send_event_unsubscribed(server, client_get_identifier(mbus_server_method_get_source(method)), source, event);
 	if (rc != 0) {
 		mbus_errorf("can not send unsubscribed event");
 		goto bail;
@@ -2112,12 +1414,12 @@ static int server_handle_command_register (struct mbus_server *server, struct me
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	command = mbus_json_get_string_value(method_get_request_payload(method), "command", NULL);
+	command = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "command", NULL);
 	if (command == NULL) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = client_add_command(method_get_source(method), command);
+	rc = client_add_command(mbus_server_method_get_source(method), command);
 	if (rc != 0) {
 		mbus_errorf("can not add subscription");
 		goto bail;
@@ -2138,12 +1440,12 @@ static int server_handle_command_unregister (struct mbus_server *server, struct 
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	command = mbus_json_get_string_value(method_get_request_payload(method), "command", NULL);
+	command = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "command", NULL);
 	if (command == NULL) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = client_del_command(method_get_source(method), command);
+	rc = client_del_command(mbus_server_method_get_source(method), command);
 	if (rc != 0) {
 		mbus_errorf("can not add subscription");
 		goto bail;
@@ -2166,16 +1468,16 @@ static int server_handle_command_event (struct mbus_server *server, struct metho
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	destination = mbus_json_get_string_value(method_get_request_payload(method), MBUS_METHOD_TAG_DESTINATION, NULL);
-	identifier = mbus_json_get_string_value(method_get_request_payload(method), MBUS_METHOD_TAG_IDENTIFIER, NULL);
-	payload = mbus_json_get_object(method_get_request_payload(method), MBUS_METHOD_TAG_PAYLOAD);
+	destination = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_DESTINATION, NULL);
+	identifier = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_IDENTIFIER, NULL);
+	payload = mbus_json_get_object(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_PAYLOAD);
 	if ((destination == NULL) ||
 	    (identifier == NULL) ||
 	    (payload == NULL)) {
 		mbus_errorf("invalid request");
 		goto bail;
 	}
-	rc = server_send_event_to(server, client_get_identifier(method_get_source(method)), destination, identifier, payload);
+	rc = server_send_event_to(server, client_get_identifier(mbus_server_method_get_source(method)), destination, identifier, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
 	}
@@ -2214,16 +1516,7 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 		}
 		mbus_json_add_item_to_array(clients, source);
 		mbus_json_add_string_to_object_cs(source, "source", client_get_identifier(client));
-		if (client_get_listener_type(client) == listener_type_tcp) {
-			mbus_json_add_string_to_object_cs(source, "address", mbus_socket_get_address(client_get_socket(client), address, 1024));
-		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
-			struct ws_client_data *data;
-			data = (struct ws_client_data *) client_get_socket(client);
-			mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(lws_get_socket_fd(data->wsi), address, 1024));
-		}
-#endif
+		mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
 		subscribes = mbus_json_create_array();
 		if (subscribes == NULL) {
 			goto bail;
@@ -2235,8 +1528,8 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 				goto bail;
 			}
 			mbus_json_add_item_to_array(subscribes, object);
-			mbus_json_add_string_to_object_cs(object, "source", subscription_get_source(subscription));
-			mbus_json_add_string_to_object_cs(object, "identifier", subscription_get_event(subscription));
+			mbus_json_add_string_to_object_cs(object, "source", mbus_server_subscription_get_source(subscription));
+			mbus_json_add_string_to_object_cs(object, "identifier", mbus_server_subscription_get_event(subscription));
 		}
 		commands = mbus_json_create_array();
 		if (commands == NULL) {
@@ -2249,10 +1542,10 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 				goto bail;
 			}
 			mbus_json_add_item_to_array(commands, object);
-			mbus_json_add_string_to_object_cs(object, "identifier", command_get_identifier(command));
+			mbus_json_add_string_to_object_cs(object, "identifier", mbus_server_command_get_identifier(command));
 		}
 	}
-	method_set_result_payload(method, clients);
+	mbus_server_method_set_result_payload(method, clients);
 	return 0;
 bail:	if (clients != NULL) {
 		mbus_json_delete(clients);
@@ -2280,7 +1573,7 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
+	source = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "source", NULL);
 	if (source == NULL) {
 		mbus_errorf("method request source is null");
 		goto bail;
@@ -2295,9 +1588,7 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(result, "source", client_get_identifier(client));
-	if (client_get_listener_type(client) == listener_type_tcp) {
-		mbus_json_add_string_to_object_cs(result, "address", mbus_socket_get_address(client_get_socket(client), address, 1024));
-	}
+	mbus_json_add_string_to_object_cs(result, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
 	subscribes = mbus_json_create_array();
 	if (subscribes == NULL) {
 		goto bail;
@@ -2309,8 +1600,8 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 			goto bail;
 		}
 		mbus_json_add_item_to_array(subscribes, object);
-		mbus_json_add_string_to_object_cs(object, "source", subscription_get_source(subscription));
-		mbus_json_add_string_to_object_cs(object, "identifier", subscription_get_event(subscription));
+		mbus_json_add_string_to_object_cs(object, "source", mbus_server_subscription_get_source(subscription));
+		mbus_json_add_string_to_object_cs(object, "identifier", mbus_server_subscription_get_event(subscription));
 	}
 	commands = mbus_json_create_array();
 	if (commands == NULL) {
@@ -2323,9 +1614,9 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 			goto bail;
 		}
 		mbus_json_add_item_to_array(commands, object);
-		mbus_json_add_string_to_object_cs(object, "identifier", command_get_identifier(command));
+		mbus_json_add_string_to_object_cs(object, "identifier", mbus_server_command_get_identifier(command));
 	}
-	method_set_result_payload(method, result);
+	mbus_server_method_set_result_payload(method, result);
 	return 0;
 bail:	if (result != NULL) {
 		mbus_json_delete(result);
@@ -2361,7 +1652,7 @@ static int server_handle_command_clients (struct mbus_server *server, struct met
 		}
 		mbus_json_add_item_to_array(clients, source);
 	}
-	method_set_result_payload(method, clients);
+	mbus_server_method_set_result_payload(method, clients);
 	return 0;
 bail:	if (clients != NULL) {
 		mbus_json_delete(clients);
@@ -2381,7 +1672,7 @@ static int server_handle_command_close (struct mbus_server *server, struct metho
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	source = mbus_json_get_string_value(method_get_request_payload(method), "source", NULL);
+	source = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), "source", NULL);
 	if (source == NULL) {
 		mbus_errorf("method request source is null");
 		goto bail;
@@ -2396,7 +1687,7 @@ static int server_handle_command_close (struct mbus_server *server, struct metho
 			if (strcmp(client_get_identifier(client), source) != 0) {
 				continue;
 			}
-			client_set_socket(client, NULL);
+			client_set_connection(client, NULL);
 			break;
 		}
 		if (client == NULL) {
@@ -2425,25 +1716,25 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		if (client_get_identifier(client) == NULL) {
 			continue;
 		}
-		if (strcmp(method_get_request_destination(method), client_get_identifier(client)) != 0) {
+		if (strcmp(mbus_server_method_get_request_destination(method), client_get_identifier(client)) != 0) {
 			continue;
 		}
 		break;
 	}
 	if (client == NULL) {
-		mbus_errorf("client %s does not exists", method_get_request_destination(method));
+		mbus_errorf("client %s does not exists", mbus_server_method_get_request_destination(method));
 		goto bail;
 	}
 	TAILQ_FOREACH(command, &client->commands, commands) {
-		if (strcmp(method_get_request_identifier(method), command->identifier) == 0) {
+		if (strcmp(mbus_server_method_get_request_identifier(method), mbus_server_command_get_identifier(command)) == 0) {
 			break;
 		}
 	}
 	if (command == NULL) {
-		mbus_errorf("client: %s does not have such command: %s", method_get_request_destination(method), method_get_request_identifier(method));
+		mbus_errorf("client: %s does not have such command: %s", mbus_server_method_get_request_destination(method), mbus_server_method_get_request_identifier(method));
 		goto bail;
 	}
-	request = method_create_response(MBUS_METHOD_TYPE_COMMAND, client_get_identifier(method_get_source(method)), method_get_request_identifier(method), method_get_request_sequence(method), method_get_request_payload(method));
+	request = mbus_server_method_create_response(MBUS_METHOD_TYPE_COMMAND, client_get_identifier(mbus_server_method_get_source(method)), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_sequence(method), mbus_server_method_get_request_payload(method));
 	if (request == NULL) {
 		mbus_errorf("can not create call method");
 		goto bail;
@@ -2463,28 +1754,28 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 	const char *identifier;
 	int sequence;
 	int rc;
-	source = client_get_identifier(method_get_source(method));
+	source = client_get_identifier(mbus_server_method_get_source(method));
 	if (source == NULL) {
 		mbus_errorf("source is invalid");
 		goto bail;
 	}
-	destination = mbus_json_get_string_value(method_get_request_payload(method), MBUS_METHOD_TAG_DESTINATION, NULL);
+	destination = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_DESTINATION, NULL);
 	if (destination == NULL) {
 		mbus_errorf("destination is invalid");
 		goto bail;
 	}
-	identifier = mbus_json_get_string_value(method_get_request_payload(method), MBUS_METHOD_TAG_IDENTIFIER, NULL);
+	identifier = mbus_json_get_string_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_IDENTIFIER, NULL);
 	if (identifier == NULL) {
 		mbus_errorf("identifier is invalid");
 		goto bail;
 	}
-	sequence = mbus_json_get_int_value(method_get_request_payload(method), MBUS_METHOD_TAG_SEQUENCE, -1);
+	sequence = mbus_json_get_int_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_SEQUENCE, -1);
 	if (sequence < MBUS_METHOD_SEQUENCE_START ||
 	    sequence >= MBUS_METHOD_SEQUENCE_END) {
 		mbus_errorf("sequence is invalid");
 		goto bail;
 	}
-	rc = mbus_json_get_int_value(method_get_request_payload(method), MBUS_METHOD_TAG_STATUS, -1);
+	rc = mbus_json_get_int_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_STATUS, -1);
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		if (client_get_identifier(client) == NULL) {
 			continue;
@@ -2493,18 +1784,18 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 			continue;
 		}
 		TAILQ_FOREACH_SAFE(wait, &client->waits, methods, nwait) {
-			if (sequence != method_get_request_sequence(wait)) {
+			if (sequence != mbus_server_method_get_request_sequence(wait)) {
 				continue;
 			}
-			if (strcmp(method_get_request_destination(wait), source) != 0) {
+			if (strcmp(mbus_server_method_get_request_destination(wait), source) != 0) {
 				continue;
 			}
-			if (strcmp(method_get_request_identifier(wait), identifier) != 0) {
+			if (strcmp(mbus_server_method_get_request_identifier(wait), identifier) != 0) {
 				continue;
 			}
 			TAILQ_REMOVE(&client->waits, wait, methods);
-			method_set_result_code(wait, rc);
-			method_set_result_payload(wait, mbus_json_duplicate(mbus_json_get_object(method_get_request_payload(method), MBUS_METHOD_TAG_PAYLOAD), 1));
+			mbus_server_method_set_result_code(wait, rc);
+			mbus_server_method_set_result_payload(wait, mbus_json_duplicate(mbus_json_get_object(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_PAYLOAD), 1));
 			client_push_result(client, wait);
 			break;
 		}
@@ -2525,32 +1816,32 @@ static int server_handle_methods (struct mbus_server *server)
 		goto bail;
 	}
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
-		mbus_debugf("handle method: %s, %s, %s", method_get_request_type(method), method_get_request_identifier(method), method_get_request_destination(method));
+		mbus_debugf("handle method: %s, %s, %s", mbus_server_method_get_request_type(method), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_destination(method));
 		TAILQ_REMOVE(&server->methods, method, methods);
-		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
-			if (strcmp(method_get_request_destination(method), MBUS_SERVER_IDENTIFIER) == 0) {
+		if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
+			if (strcmp(mbus_server_method_get_request_destination(method), MBUS_SERVER_IDENTIFIER) == 0) {
 				response = 1;
-				if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
+				if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
 					rc = server_handle_command_create(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
 					rc = server_handle_command_subscribe(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
 					rc = server_handle_command_unsubscribe(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_REGISTER) == 0) {
 					rc = server_handle_command_register(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
 					rc = server_handle_command_unregister(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_RESULT) == 0) {
 					rc = server_handle_command_result(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_EVENT) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					rc = server_handle_command_event(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_STATUS) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_STATUS) == 0) {
 					rc = server_handle_command_status(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENT) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENT) == 0) {
 					rc = server_handle_command_client(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENTS) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLIENTS) == 0) {
 					rc = server_handle_command_clients(server, method);
-				} else if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLOSE) == 0) {
+				} else if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CLOSE) == 0) {
 					rc = server_handle_command_close(server, method);
 				} else {
 					rc = -1;
@@ -2561,26 +1852,26 @@ static int server_handle_methods (struct mbus_server *server)
 			}
 			if (rc != 0) {
 				mbus_errorf("can not execute method type: '%s', destination: '%s', identifier: '%s'",
-						method_get_request_type(method),
-						method_get_request_destination(method),
-						method_get_request_identifier(method));
+						mbus_server_method_get_request_type(method),
+						mbus_server_method_get_request_destination(method),
+						mbus_server_method_get_request_identifier(method));
 			}
 			if (response == 1 || rc != 0) {
 				mbus_debugf("  push to result");
-				method_set_result_code(method, rc);
-				client_push_result(method_get_source(method), method);
+				mbus_server_method_set_result_code(method, rc);
+				client_push_result(mbus_server_method_get_source(method), method);
 			} else {
 				mbus_debugf("  push to wait");
-				client_push_wait(method_get_source(method), method);
+				client_push_wait(mbus_server_method_get_source(method), method);
 			}
 		}
-		if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+		if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
 			mbus_debugf("  push to trash");
-			rc = server_send_event_to(server, client_get_identifier(method_get_source(method)), method_get_request_destination(method), method_get_request_identifier(method), method_get_request_payload(method));
+			rc = server_send_event_to(server, client_get_identifier(mbus_server_method_get_source(method)), mbus_server_method_get_request_destination(method), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_payload(method));
 			if (rc != 0) {
-				mbus_errorf("can not send event: %s", method_get_source(method));
+				mbus_errorf("can not send event: %s", mbus_server_method_get_source(method));
 			}
-			method_destroy(method);
+			mbus_server_method_destroy(method);
 		}
 	}
 	return 0;
@@ -2603,14 +1894,14 @@ static int server_handle_method (struct mbus_server *server, struct client *clie
 {
 	int rc;
 	struct method *method;
-	method = method_create_request(client, string);
+	method = mbus_server_method_create_request(client, string);
 	if (method == NULL) {
 		mbus_errorf("invalid method");
 		goto bail;
 	}
-	if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
+	if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
 		rc = server_handle_method_command(server, method);
-	} else if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+	} else if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
 		rc = server_handle_method_event(server, method);
 	} else {
 		mbus_errorf("invalid method");
@@ -2622,286 +1913,14 @@ static int server_handle_method (struct mbus_server *server, struct client *clie
 	}
 	return 0;
 bail:	if (method != NULL) {
-		method_destroy(method);
+		mbus_server_method_destroy(method);
 	}
 	return -1;
 }
 
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-
-static void ws_log_callback (int level, const char *line)
-{
-	int len;
-	if (line == NULL) {
-		return;
-	}
-	len = strlen(line);
-	if (len > 0 &&
-	    line[len - 1] == '\n') {
-		len -= 1;
-	}
-	if (level == LLL_ERR) {
-		mbus_errorf("ws: %.*s", len, line);
-	} else if (level == LLL_WARN) {
-		mbus_warningf("ws: %.*s", len, line);
-	} else if (level == LLL_NOTICE) {
-		mbus_noticef("ws: %.*s", len, line);
-	} else if (level >= LLL_DEBUG) {
-		mbus_debugf("ws: %.*s", len, line);
-	}
-}
-
-static int ws_protocol_mbus_callback (struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
+__attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 {
 	int rc;
-	struct mbus_server *server;
-	struct listener *listener;
-	struct ws_client_data *data;
-	const struct lws_protocols *protocol;
-	(void) wsi;
-	(void) reason;
-	(void) user;
-	(void) in;
-	(void) len;
-	mbus_debugf("ws callback");
-	server = g_server;
-	listener = NULL;
-	data = (struct ws_client_data *) user;
-	protocol = lws_get_protocol(wsi);
-	if (protocol != NULL) {
-		listener = protocol->user;
-	}
-	switch (reason) {
-		case LWS_CALLBACK_LOCK_POLL:
-			mbus_debugf("  lock poll");
-			break;
-		case LWS_CALLBACK_ADD_POLL_FD:
-			mbus_debugf("  add poll fd");
-			{
-				struct pollfd *tmp;
-				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				mbus_debugf("    fd: %d", pa->fd);
-				{
-					unsigned int i;
-					struct lws_pollargs *pa = (struct lws_pollargs *) in;
-					for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-						if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
-							listener->u.ws.pollfds.pollfds[i].events = pa->events;
-							break;
-						}
-					}
-					if (i < listener->u.ws.pollfds.length) {
-						break;
-					}
-				}
-				if (listener->u.ws.pollfds.length + 1 > listener->u.ws.pollfds.size) {
-					while (listener->u.ws.pollfds.length + 1 > listener->u.ws.pollfds.size) {
-						listener->u.ws.pollfds.size += 1024;
-					}
-					tmp = realloc(listener->u.ws.pollfds.pollfds, sizeof(struct pollfd) * listener->u.ws.pollfds.size);
-					if (tmp == NULL) {
-						tmp = malloc(sizeof(int) * listener->u.ws.pollfds.size);
-						if (tmp == NULL) {
-							mbus_errorf("can not allocate memory");
-							goto bail;
-						}
-						memcpy(tmp, listener->u.ws.pollfds.pollfds, sizeof(struct pollfd) * listener->u.ws.pollfds.length);
-						free(listener->u.ws.pollfds.pollfds);
-					}
-					listener->u.ws.pollfds.pollfds = tmp;
-				}
-				listener->u.ws.pollfds.pollfds[listener->u.ws.pollfds.length].fd = pa->fd;
-				listener->u.ws.pollfds.pollfds[listener->u.ws.pollfds.length].events = pa->events;
-				listener->u.ws.pollfds.pollfds[listener->u.ws.pollfds.length].revents = 0;
-				listener->u.ws.pollfds.length += 1;
-			}
-			break;
-		case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-			mbus_debugf("  change mode poll fd");
-			{
-				unsigned int i;
-				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				mbus_debugf("    fd: %d, events: 0x%08x", pa->fd, pa->events);
-				for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-					if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
-						listener->u.ws.pollfds.pollfds[i].events = pa->events;
-						mbus_debugf("      %d", i);
-						break;
-					}
-				}
-			}
-			break;
-		case LWS_CALLBACK_DEL_POLL_FD:
-			mbus_debugf("  del poll fd");
-			{
-				unsigned int i;
-				struct lws_pollargs *pa = (struct lws_pollargs *) in;
-				mbus_debugf("    fd: %d", pa->fd);
-				for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-					if (listener->u.ws.pollfds.pollfds[i].fd == pa->fd) {
-						memmove(&listener->u.ws.pollfds.pollfds[i], &listener->u.ws.pollfds.pollfds[i + 1], sizeof(struct pollfd) * (listener->u.ws.pollfds.length - i - 1));
-						listener->u.ws.pollfds.length -= 1;
-						break;
-					}
-				}
-			}
-			break;
-		case LWS_CALLBACK_UNLOCK_POLL:
-			mbus_debugf("  unlock poll");
-			break;
-		case LWS_CALLBACK_GET_THREAD_ID:
-			mbus_debugf("  get thread id");
-			break;
-		case LWS_CALLBACK_PROTOCOL_INIT:
-			mbus_debugf("  protocol init");
-			break;
-		case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
-			mbus_debugf("  filter network connection");
-			break;
-		case LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED:
-			mbus_debugf("  new client instantiated");
-			break;
-		case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-			mbus_debugf("  filter protocol connection");
-			break;
-		case LWS_CALLBACK_CONFIRM_EXTENSION_OKAY:
-			mbus_debugf("  confirm extensions okay");
-			break;
-		case LWS_CALLBACK_ESTABLISHED:
-			mbus_debugf("  established");
-			memset(data, 0, sizeof(struct ws_client_data));
-			data->wsi = wsi;
-			data->client = client_accept(listener_get_type(listener));
-			if (data->client == NULL) {
-				mbus_errorf("can not accept client");
-				goto bail;
-			}
-			rc = client_set_socket(data->client, (struct mbus_socket *) data);
-			if (rc != 0) {
-				mbus_errorf("can not set client socket");
-				client_destroy(data->client);
-				data->client = NULL;
-				goto bail;
-			}
-			TAILQ_INSERT_TAIL(&server->clients, data->client, clients);
-			lws_callback_on_writable(data->wsi);
-			break;
-#if 0
-		case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
-			mbus_debugf("  http drop protocol");
-			break;
-#endif
-		case LWS_CALLBACK_PROTOCOL_DESTROY:
-			mbus_debugf("  protocol destroy");
-			break;
-		case LWS_CALLBACK_WS_PEER_INITIATED_CLOSE:
-			mbus_debugf("  ws peer initiated close");
-			break;
-		case LWS_CALLBACK_WSI_CREATE:
-			mbus_debugf("  wsi create");
-			break;
-		case LWS_CALLBACK_WSI_DESTROY:
-			mbus_debugf("  wsi destroy");
-			break;
-		case LWS_CALLBACK_CLOSED:
-			mbus_debugf("  closed");
-			if (data != NULL) {
-				if (data->client != NULL) {
-					client_set_socket(data->client, NULL);
-					data->client = NULL;
-				}
-				data->wsi = NULL;
-			}
-			break;
-		case LWS_CALLBACK_RECEIVE:
-			mbus_debugf("  server receive");
-			if (data->client == NULL ||
-			    client_get_socket(data->client) == NULL) {
-				mbus_debugf("client is closed");
-				goto bail;
-			}
-			mbus_debugf("    data: %p", data);
-			mbus_debugf("      wsi   : %p", data->wsi);
-			mbus_debugf("      client: %p", data->client);
-			mbus_debugf("      buffer:");
-			mbus_debugf("        in:");
-			mbus_debugf("          length  : %d", mbus_buffer_get_length(data->client->buffer.in));
-			mbus_debugf("          size    : %d", mbus_buffer_get_size(data->client->buffer.in));
-			mbus_debugf("        out:");
-			mbus_debugf("          length  : %d", mbus_buffer_get_length(data->client->buffer.out));
-			mbus_debugf("          size    : %d", mbus_buffer_get_size(data->client->buffer.out));
-			mbus_debugf("    in: %p", in);
-			mbus_debugf("    len: %zd", len);
-			if (data->wsi == NULL &&
-			    data->client == NULL) {
-			}
-			rc = mbus_buffer_push(data->client->buffer.in, in, len);
-			if (rc != 0) {
-				mbus_errorf("can not push in");
-				goto bail;
-			}
-			break;
-		case LWS_CALLBACK_SERVER_WRITEABLE:
-			mbus_debugf("  server writable");
-			if (data->client == NULL ||
-			    client_get_socket(data->client) == NULL) {
-				mbus_debugf("client is closed");
-				goto bail;
-			}
-			while (mbus_buffer_get_length(data->client->buffer.out) > 0 &&
-			       lws_send_pipe_choked(data->wsi) == 0) {
-				uint8_t *ptr;
-				uint8_t *end;
-				uint32_t expected;
-				ptr = mbus_buffer_get_base(data->client->buffer.out);
-				end = ptr + mbus_buffer_get_length(data->client->buffer.out);
-				expected = end - ptr;
-				if (end - ptr < (int32_t) expected) {
-					break;
-				}
-				if (expected > BUFFER_OUT_CHUNK_SIZE - LWS_PRE) {
-					expected = BUFFER_OUT_CHUNK_SIZE - LWS_PRE;
-				}
-				mbus_debugf("write");
-				memset(data->client->buffer.out_chunk, 0, LWS_PRE + expected);
-				memcpy(data->client->buffer.out_chunk + LWS_PRE, ptr, expected);
-				mbus_debugf("payload: %d, %.*s", expected - 4, expected - 4, ptr + 4);
-				rc = lws_write(data->wsi, data->client->buffer.out_chunk + LWS_PRE, expected, LWS_WRITE_BINARY);
-				mbus_debugf("expected: %d, rc: %d", expected, rc);
-				rc = mbus_buffer_shift(data->client->buffer.out, rc);
-				if (rc != 0) {
-					mbus_errorf("can not shift in");
-					goto bail;
-				}
-				break;
-			}
-			if (mbus_buffer_get_length(data->client->buffer.out) > 0) {
-				lws_callback_on_writable(data->wsi);
-			}
-			break;
-		case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS:
-			mbus_debugf("  load extra server verify certs");
-			break;
-		case LWS_CALLBACK_FILTER_HTTP_CONNECTION:
-			mbus_debugf("  filter http connection");
-			break;
-		case LWS_CALLBACK_CLOSED_HTTP:
-			mbus_debugf("  closed http");
-			break;
-		default:
-			mbus_errorf("unknown reason: %d", reason);
-			break;
-	}
-	return 0;
-bail:	return -1;
-}
-
-#endif
-
-int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
-{
-	int rc;
-	int read_rc;
 	char *string;
 	unsigned int c;
 	unsigned int n;
@@ -2912,6 +1931,9 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	struct client *nwclient;
 	struct method *method;
 	struct method *nmethod;
+	struct listener *listener;
+	enum listener_type listener_type;
+	struct connection *connection;
 	current = mbus_clock_monotonic();
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -2931,7 +1953,7 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 	}
 	mbus_debugf("  check ping timeout");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
-		if (client_get_socket(client) == NULL) {
+		if (client_get_connection(client) == NULL) {
 			continue;
 		}
 		if (client->ping.interval <= 0) {
@@ -2942,26 +1964,27 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		}
 		mbus_debugf("    client: %s, recv: %lu, interval: %d, timeout: %d, missed: %d, threshold: %d",
 				client_get_identifier(client),
-				client->ping.ping_recv_tsms,
+				client->ping.recv_tsms,
 				client->ping.interval,
 				client->ping.timeout,
-				client->ping.ping_missed_count,
+				client->ping.missed_count,
 				client->ping.threshold);
-		if (mbus_clock_after(current, client->ping.ping_recv_tsms + client->ping.interval + client->ping.timeout)) {
-			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_identifier(client), current, client->ping.ping_recv_tsms, client->ping.interval, client->ping.timeout);
-			client->ping.ping_missed_count += 1;
-			client->ping.ping_recv_tsms = client->ping.ping_recv_tsms + client->ping.interval;
+		if (mbus_clock_after(current, client->ping.recv_tsms + client->ping.interval + client->ping.timeout)) {
+			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_identifier(client), current, client->ping.recv_tsms, client->ping.interval, client->ping.timeout);
+			client->ping.missed_count += 1;
+			client->ping.recv_tsms = client->ping.recv_tsms + client->ping.interval;
 		}
-		if (client->ping.ping_missed_count > client->ping.threshold) {
-			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_identifier(client), client->ping.ping_missed_count, client->ping.threshold);
-			client_set_socket(client, NULL);
+		if (client->ping.missed_count > client->ping.threshold) {
+			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_identifier(client), client->ping.missed_count, client->ping.threshold);
+			client_set_connection(client, NULL);
 		}
 	}
 	mbus_debugf("  prepare out buffer");
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
 		enum mbus_compress_method compression;
 		mbus_debugf("    client: %s", client_get_identifier(client));
-		if (client_get_socket(client) == NULL) {
+		connection = client_get_connection(client);
+		if (connection == NULL) {
 			continue;
 		}
 		compression = client_get_compression(client);
@@ -2971,56 +1994,48 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				mbus_errorf("could not pop result from client");
 				continue;
 			}
-			if (strcmp(method_get_request_destination(method), MBUS_SERVER_IDENTIFIER) == 0) {
-				if (strcmp(method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
+			if (strcmp(mbus_server_method_get_request_destination(method), MBUS_SERVER_IDENTIFIER) == 0) {
+				if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
 					compression = mbus_compress_method_none;
 				}
 			}
-			string = method_get_result_string(method);
+			string = mbus_server_method_get_result_string(method);
 		} else if (client_get_requests_count(client) > 0) {
 			method = client_pop_request(client);
 			if (method == NULL) {
 				mbus_errorf("could not pop request from client");
 				continue;
 			}
-			string = method_get_request_string(method);
+			string = mbus_server_method_get_request_string(method);
 		} else if (client_get_events_count(client) > 0) {
 			method = client_pop_event(client);
 			if (method == NULL) {
 				mbus_errorf("could not pop event from client");
 				continue;
 			}
-			string = method_get_request_string(method);
+			string = mbus_server_method_get_request_string(method);
 		} else {
 			continue;
 		}
 		if (string == NULL) {
 			mbus_errorf("can not build string from method event");
-			method_destroy(method);
+			mbus_server_method_destroy(method);
 			goto bail;
 		}
 		mbus_debugf("      message: %s, %s", mbus_compress_method_string(compression), string);
 		rc = mbus_buffer_push_string(client->buffer.out, compression, string);
 		if (rc != 0) {
 			mbus_errorf("can not push string");
-			method_destroy(method);
+			mbus_server_method_destroy(method);
 			goto bail;
 		}
-		method_destroy(method);
+		mbus_server_method_destroy(method);
 	}
+	mbus_debugf("  prepare pollfds (count)");
 	n  = 0;
 	n += server->listeners.count;
 	n += server->clients.count;
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	{
-		struct listener *listener;
-		TAILQ_FOREACH(listener, &server->listeners, listeners) {
-			if (listener_get_type(listener) == listener_type_ws) {
-				n += listener->u.ws.pollfds.length;
-			}
-		}
-	}
-#endif
+	n += server->ws_pollfds.length;
 	if (n > server->pollfds.size) {
 		struct pollfd *tmp;
 		while (n > server->pollfds.size) {
@@ -3039,100 +2054,68 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 		server->pollfds.pollfds = tmp;
 	}
 	n = 0;
+	mbus_debugf("  prepare pollfds (fill listeners)");
 	{
-		struct listener *listener;
+		int lfd;
 		TAILQ_FOREACH(listener, &server->listeners, listeners) {
-			if (listener_get_type(listener) == listener_type_tcp) {
-				server->pollfds.pollfds[n].events = POLLIN;
-				server->pollfds.pollfds[n].revents = 0;
-				server->pollfds.pollfds[n].fd = mbus_socket_get_fd(listener->u.tcp.socket);
-				n += 1;
+			lfd = mbus_server_listener_get_fd(listener);
+			if (lfd < 0) {
+				continue;
 			}
-			if (listener_get_type(listener) == listener_type_uds) {
-				server->pollfds.pollfds[n].events = POLLIN;
-				server->pollfds.pollfds[n].revents = 0;
-				server->pollfds.pollfds[n].fd = mbus_socket_get_fd(listener->u.uds.socket);
-				n += 1;
-			}
-		}
-	}
-	mbus_debugf("  prepare polling");
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_socket(client) == NULL) {
-			continue;
-		}
-		if (client_get_listener_type(client) == listener_type_tcp) {
 			server->pollfds.pollfds[n].events = POLLIN;
 			server->pollfds.pollfds[n].revents = 0;
-			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
-			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_get_length(client->buffer.out) > 0
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			    || client->ssl.want_write != 0
-#endif
-			    ) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				server->pollfds.pollfds[n].events |= POLLOUT;
-			}
+			server->pollfds.pollfds[n].fd = lfd;
+			mbus_debugf("    in : %s", mbus_server_listener_get_name(listener));
 			n += 1;
 		}
-		if (client_get_listener_type(client) == listener_type_uds) {
-			server->pollfds.pollfds[n].events = POLLIN;
-			server->pollfds.pollfds[n].revents = 0;
-			server->pollfds.pollfds[n].fd = mbus_socket_get_fd(client_get_socket(client));
-			mbus_debugf("    in : %s", client_get_identifier(client));
-			if (mbus_buffer_get_length(client->buffer.out) > 0
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			    || client->ssl.want_write != 0
-#endif
-			    ) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				server->pollfds.pollfds[n].events |= POLLOUT;
-			}
-			n += 1;
-		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
-			struct ws_client_data *data;
-			data = (struct ws_client_data *) client_get_socket(client);
-			if (mbus_buffer_get_length(client->buffer.out) > 0) {
-				mbus_debugf("    out: %s", client_get_identifier(client));
-				lws_callback_on_writable(data->wsi);
-			}
-		}
-#endif
 	}
+	mbus_debugf("  prepare pollfds (fill clients)");
 	{
-		mbus_debugf("    pollfds: %d", n);
-		if (0) {
-			unsigned int i;
-			for (i = 0; i < n; i++) {
-				mbus_debugf("      fd: %d, events: 0x%08x", server->pollfds.pollfds[i].fd, server->pollfds.pollfds[i].events);
+		TAILQ_FOREACH(client, &server->clients, clients) {
+			listener = client_get_listener(client);
+			if (listener == NULL) {
+				continue;
 			}
-		}
-	}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-	{
-		struct listener *listener;
-		TAILQ_FOREACH(listener, &server->listeners, listeners) {
-			if (listener_get_type(listener) == listener_type_ws) {
-				if (listener->u.ws.pollfds.length > 0) {
-					{
-						mbus_debugf("    ws: %d", listener->u.ws.pollfds.length);
-						if (0) {
-							unsigned int i;
-							for (i = 0; i < listener->u.ws.pollfds.length; i++) {
-								mbus_debugf("      fd: %d, events: 0x%08x", listener->u.ws.pollfds.pollfds[i].fd, listener->u.ws.pollfds.pollfds[i].events);
-							}
-						}
-					}
-					memcpy(&server->pollfds.pollfds[n], listener->u.ws.pollfds.pollfds, sizeof(struct pollfd) * listener->u.ws.pollfds.length);
-					n += listener->u.ws.pollfds.length;
+			connection = client_get_connection(client);
+			if (connection == NULL) {
+				continue;
+			}
+			listener_type = mbus_server_listener_get_type(listener);
+			if (listener_type == listener_type_tcp) {
+				server->pollfds.pollfds[n].events = POLLIN;
+				server->pollfds.pollfds[n].revents = 0;
+				server->pollfds.pollfds[n].fd = mbus_server_connection_get_fd(connection);
+				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
+				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				    mbus_server_connection_wants_write(connection) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
+					server->pollfds.pollfds[n].events |= POLLOUT;
+				}
+				n += 1;
+			} else if (listener_type == listener_type_uds) {
+				server->pollfds.pollfds[n].events = POLLIN;
+				server->pollfds.pollfds[n].revents = 0;
+				server->pollfds.pollfds[n].fd = mbus_server_connection_get_fd(connection);
+				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
+				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				    mbus_server_connection_wants_write(connection) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
+					server->pollfds.pollfds[n].events |= POLLOUT;
+				}
+				n += 1;
+			} else if (listener_type == listener_type_ws) {
+				if (mbus_buffer_get_length(client->buffer.out) > 0) {
+					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
+					mbus_server_connection_request_write(connection);
 				}
 			}
 		}
 	}
-#endif
+	mbus_debugf("  prepare pollfds (fill ws pollfds)");
+	{
+		memcpy(&server->pollfds.pollfds[n], server->ws_pollfds.pollfds, sizeof(struct pollfd) * server->ws_pollfds.length);
+		n += server->ws_pollfds.length;
+	}
 	rc = poll(server->pollfds.pollfds, n, milliseconds);
 	if (rc == 0) {
 		goto out;
@@ -3147,78 +2130,39 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			continue;
 		}
 		mbus_debugf("    fd: %d, events: 0x%08x, revents: 0x%08x", server->pollfds.pollfds[c].fd, server->pollfds.pollfds[c].events, server->pollfds.pollfds[c].revents);
-		{
-			struct client *client;
-			struct listener *listener;
+		if (mbus_debug_level >= mbus_debug_level_debug) {
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
-				if (listener_get_type(listener) == listener_type_tcp) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
-						mbus_debugf("      listener: tcp");
-					}
-				}
-				if (listener_get_type(listener) == listener_type_uds) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
-						mbus_debugf("      listener: uds");
-					}
+				if (server->pollfds.pollfds[c].fd == mbus_server_listener_get_fd(listener)) {
+					mbus_debugf("      listener: %s", mbus_server_listener_get_name(listener));
 				}
 			}
 			TAILQ_FOREACH(client, &server->clients, clients) {
-				if (client_get_socket(client) == NULL) {
+				listener = client_get_listener(client);
+				if (listener == NULL) {
 					continue;
 				}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-				if (client_get_listener_type(client) == listener_type_ws) {
-					struct ws_client_data *data;
-					data = (struct ws_client_data *) client_get_socket(client);
-					if (lws_get_socket_fd(data->wsi) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      ws client: %s", client_get_identifier(client));
-					}
+				connection = client_get_connection(client);
+				if (connection == NULL) {
+					continue;
 				}
-#endif
-				if (client_get_listener_type(client) == listener_type_uds) {
-					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      uds client: %s", client_get_identifier(client));
-					}
-				}
-				if (client_get_listener_type(client) == listener_type_tcp) {
-					if (mbus_socket_get_fd(client_get_socket(client)) == server->pollfds.pollfds[c].fd) {
-						mbus_debugf("      tcp client: %s", client_get_identifier(client));
-					}
-				}
+				mbus_debugf("      client: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
 			}
 		}
 		{
-			struct listener *listener;
 			TAILQ_FOREACH(listener, &server->listeners, listeners) {
-				if (listener_get_type(listener) == listener_type_tcp) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.tcp.socket)) {
-						if (server->pollfds.pollfds[c].revents & POLLIN) {
-							rc = server_accept_client(server, listener, listener->u.tcp.socket);
-							if (rc == -1) {
-								mbus_errorf("can not accept new connection on listener: %s", listener_get_name(listener));
-								goto bail;
-							} else if (rc == -2) {
-								mbus_errorf("rejected new connection on listener: %s", listener_get_name(listener));
-							} else {
-								mbus_infof("accepted new client on listener: %s", listener_get_name(listener));
-							}
-						}
-					}
+				if (server->pollfds.pollfds[c].fd != mbus_server_listener_get_fd(listener)) {
+					continue;
 				}
-				if (listener_get_type(listener) == listener_type_uds) {
-					if (server->pollfds.pollfds[c].fd == mbus_socket_get_fd(listener->u.uds.socket)) {
-						if (server->pollfds.pollfds[c].revents & POLLIN) {
-							rc = server_accept_client(server, listener, listener->u.uds.socket);
-							if (rc == -1) {
-								mbus_errorf("can not accept new connection");
-								goto bail;
-							} else if (rc == -2) {
-								mbus_errorf("rejected new connection");
-							} else {
-								mbus_infof("accepted new client");
-							}
-						}
-					}
+				connection = mbus_server_listener_accept(listener);
+				if (connection == NULL) {
+					mbus_errorf("can not accept new connection on listener: %s", mbus_server_listener_get_name(listener));
+					goto bail;
+				}
+				rc = server_client_connection_establish(server, listener, connection);
+				if (rc != 0) {
+					mbus_errorf("can not establish new connection on listener: %s", mbus_server_listener_get_name(listener));
+					mbus_server_connection_close(connection);
+					goto bail;
 				}
 			}
 		}
@@ -3228,83 +2172,28 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 			mbus_errorf("can not find client by socket");
 			goto bail;
 		}
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
-		if (client_get_listener_type(client) == listener_type_ws) {
+		listener = client_get_listener(client);
+		if (listener == NULL) {
+			mbus_errorf("client listener is invalid");
+			goto bail;
+		}
+		connection = client_get_connection(client);
+		if (connection == NULL) {
+			mbus_errorf("client_connection is invalid");
+			goto bail;
+		}
+		listener_type = mbus_server_listener_get_type(listener);
+		if (listener_type == listener_type_ws) {
 			continue;
 		}
-#endif
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
-			rc = mbus_buffer_reserve(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + BUFFER_IN_CHUNK_SIZE);
-			if (rc != 0) {
-				mbus_errorf("can not reserve client buffer");
-				client_set_socket(client, NULL);
-				goto bail;
-			}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			if (client->ssl.ssl == NULL) {
-#endif
-				read_rc = read(mbus_socket_get_fd(client->socket),
-						mbus_buffer_get_base(client->buffer.in) + mbus_buffer_get_length(client->buffer.in),
-						mbus_buffer_get_size(client->buffer.in) - mbus_buffer_get_length(client->buffer.in));
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			} else {
-				read_rc = 0;
-				do {
-					rc = mbus_buffer_reserve(client->buffer.in, (mbus_buffer_get_length(client->buffer.in) + read_rc) + 1024);
-					if (rc != 0) {
-						mbus_errorf("can not reserve client buffer");
-						goto bail;
-					}
-					client->ssl.want_read = 0;
-					rc = SSL_read(client->ssl.ssl,
-							mbus_buffer_get_base(client->buffer.in) + (mbus_buffer_get_length(client->buffer.in) + read_rc),
-							mbus_buffer_get_size(client->buffer.in) - (mbus_buffer_get_length(client->buffer.in) + read_rc));
-					if (rc <= 0) {
-						int error;
-						error = SSL_get_error(client->ssl.ssl, rc);
-						if (error == SSL_ERROR_WANT_READ) {
-							errno = EAGAIN;
-							client->ssl.want_read = 1;
-						} else if (error == SSL_ERROR_WANT_WRITE) {
-							errno = EAGAIN;
-							client->ssl.want_write = 1;
-						} else if (error == SSL_ERROR_SYSCALL) {
-							read_rc = -1;
-							errno = EIO;
-						} else {
-							char ebuf[256];
-							mbus_errorf("can not read ssl: %d", error);
-							error = ERR_get_error();
-							while (error) {
-								mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-								error = ERR_get_error();
-							}
-							read_rc = -1;
-							errno = EIO;
-						}
-					} else {
-						read_rc += rc;
-					}
-				} while (read_rc >= 0 &&
-					 SSL_pending(client->ssl.ssl));
-			}
-#endif
-			if (read_rc <= 0) {
-				if (errno != EINTR ||
-				    errno != EAGAIN ||
-				    errno != EWOULDBLOCK) {
-					mbus_debugf("can not read data from client");
-					client_set_socket(client, NULL);
-					mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
-					continue;
-				}
-			} else {
-				rc = mbus_buffer_set_length(client->buffer.in, mbus_buffer_get_length(client->buffer.in) + read_rc);
-				if (rc != 0) {
-					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
-					client_set_socket(client, NULL);
-					continue;
-				}
+			rc = mbus_server_connection_read(connection, client->buffer.in);
+			if ((rc <= 0) &&
+			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
+				mbus_debugf("can not read data from client");
+				mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
+				client_set_connection(client, NULL);
+				continue;
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & POLLOUT) {
@@ -3312,84 +2201,36 @@ int mbus_server_run_timeout (struct mbus_server *server, int milliseconds)
 				mbus_errorf("logic error");
 				goto bail;
 			}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			if (client->ssl.ssl == NULL) {
-#endif
-				rc = write(mbus_socket_get_fd(client_get_socket(client)), mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			} else {
-				client->ssl.want_write = 0;
-				rc = SSL_write(client->ssl.ssl, mbus_buffer_get_base(client->buffer.out), mbus_buffer_get_length(client->buffer.out));
-				if (rc <= 0) {
-					int error;
-					error = SSL_get_error(client->ssl.ssl, rc);
-					mbus_errorf("can not write ssl: %d", error);
-					if (error == SSL_ERROR_WANT_READ) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_read = 1;
-					} else if (error == SSL_ERROR_WANT_WRITE) {
-						rc = 0;
-						errno = EAGAIN;
-						client->ssl.want_write = 1;
-					} else if (error == SSL_ERROR_SYSCALL) {
-						rc = -1;
-						errno = EIO;
-					} else {
-						char ebuf[256];
-						mbus_errorf("can not read ssl: %d", error);
-						error = ERR_get_error();
-						while (error) {
-							mbus_errorf("  error: %d, %s", error, ERR_error_string(error, ebuf));
-							error = ERR_get_error();
-						}
-						goto bail;
-					}
-				}
-			}
-#endif
-			if (rc <= 0) {
-				if (errno != EINTR ||
-				    errno != EAGAIN ||
-				    errno != EWOULDBLOCK) {
-					mbus_debugf("can not write string to client");
-					client_set_socket(client, NULL);
-					mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-					continue;
-				}
-			} else {
-				rc = mbus_buffer_shift(client->buffer.out, rc);
-				if (rc != 0) {
-					mbus_errorf("can not set buffer length, closing client: '%s' connection", client_get_identifier(client));
-					client_set_socket(client, NULL);
-					continue;
-				}
+			rc = mbus_server_connection_write(connection, client->buffer.out);
+			if ((rc <= 0) &&
+			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
+				mbus_debugf("can not write string to client");
+				mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+				client_set_connection(client, NULL);
+				continue;
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-			client_set_socket(client, NULL);
 			mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
+			client_set_connection(client, NULL);
 			continue;
 		}
 	}
 out:
-#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	{
-		struct listener *listener;
 		TAILQ_FOREACH(listener, &server->listeners, listeners) {
-			if (listener_get_type(listener) == listener_type_ws) {
-				lws_service(listener->u.ws.context, 0);
+			if (mbus_server_listener_get_type(listener) == listener_type_ws) {
+				mbus_server_listener_service(listener);
 			}
 		}
 	}
-#endif
 	TAILQ_FOREACH(client, &server->clients, clients) {
 		uint8_t *ptr;
 		uint8_t *end;
 		uint8_t *data;
 		uint32_t expected;
 		uint32_t uncompressed;
-		if (mbus_buffer_get_length(client->buffer.in) < 4) {
+		if (mbus_buffer_get_length(client->buffer.in) < sizeof(expected)) {
 			continue;
 		}
 		mbus_debugf("%s buffer.in:", client_get_identifier(client));
@@ -3399,7 +2240,7 @@ out:
 			char *string;
 			ptr = mbus_buffer_get_base(client->buffer.in);
 			end = ptr + mbus_buffer_get_length(client->buffer.in);
-			if (end - ptr < 4) {
+			if (end - ptr < (int32_t) sizeof(expected)) {
 				break;
 			}
 			memcpy(&expected, ptr, sizeof(expected));
@@ -3433,13 +2274,13 @@ out:
 			string = _strndup((char *) data, uncompressed);
 			if (string == NULL) {
 				mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_identifier(client));
-				client_set_socket(client, NULL);
+				client_set_connection(client, NULL);
 				goto bail;
 			}
 			rc = server_handle_method(server, client, string);
 			if (rc != 0) {
 				mbus_errorf("can not handle request, closing client: '%s' connection", client_get_identifier(client));
-				client_set_socket(client, NULL);
+				client_set_connection(client, NULL);
 				free(string);
 				if (data != ptr) {
 					free(data);
@@ -3449,7 +2290,7 @@ out:
 			rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
 			if (rc != 0) {
 				mbus_errorf("can not shift in, closing client: '%s' connection", client_get_identifier(client));
-				client_set_socket(client, NULL);
+				client_set_connection(client, NULL);
 				free(string);
 				if (data != ptr) {
 					free(data);
@@ -3468,7 +2309,7 @@ out:
 		goto bail;
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_socket(client) == NULL) {
+		if (client_get_connection(client) == NULL) {
 			continue;
 		}
 		if ((client_get_status(client) & client_status_accepted) != 0) {
@@ -3478,7 +2319,7 @@ out:
 		mbus_infof("client: '%s' accepted to server", client_get_identifier(client));
 	}
 	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_socket(client) == NULL) {
+		if (client_get_connection(client) == NULL) {
 			continue;
 		}
 		if (client_get_identifier(client) == NULL) {
@@ -3499,27 +2340,27 @@ out:
 		}
 	}
 	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
-		if (client_get_socket(client) != NULL) {
+		if (client_get_connection(client) != NULL) {
 			continue;
 		}
 		mbus_infof("client: '%s' disconnected from server", client_get_identifier(client));
 		TAILQ_REMOVE(&server->clients, client, clients);
 		TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
-			if (method_get_source(method) != client) {
+			if (mbus_server_method_get_source(method) != client) {
 				continue;
 			}
-			if (strcmp(method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+			if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
 				continue;
 			}
 			TAILQ_REMOVE(&server->methods, method, methods);
-			method_destroy(method);
+			mbus_server_method_destroy(method);
 		}
 		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
 			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
 				if (client_get_identifier(client) != NULL &&
-				    strcmp(method_get_request_destination(method), client_get_identifier(client)) == 0) {
+				    strcmp(mbus_server_method_get_request_destination(method), client_get_identifier(client)) == 0) {
 					TAILQ_REMOVE(&wclient->waits, method, methods);
-					method_set_result_code(method, -1);
+					mbus_server_method_set_result_code(method, -1);
 					client_push_result(wclient, method);
 				}
 			}
@@ -3537,7 +2378,7 @@ out:
 bail:	return -1;
 }
 
-int mbus_server_run (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_run (struct mbus_server *server)
 {
 	int rc;
 	if (server == NULL) {
@@ -3559,7 +2400,7 @@ int mbus_server_run (struct mbus_server *server)
 bail:	return -1;
 }
 
-void mbus_server_destroy (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbus_server *server)
 {
 	struct client *client;
 	struct method *method;
@@ -3568,23 +2409,26 @@ void mbus_server_destroy (struct mbus_server *server)
 		return;
 	}
 	mbus_infof("destroying server");
+	while (server->methods.tqh_first != NULL) {
+		method = server->methods.tqh_first;
+		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
+		mbus_server_method_destroy(method);
+	}
 	while (server->listeners.tqh_first != NULL) {
 		listener = server->listeners.tqh_first;
 		TAILQ_REMOVE(&server->listeners, server->listeners.tqh_first, listeners);
-		listener_destroy(listener);
+		mbus_server_listener_destroy(listener);
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
 		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, clients);
 		client_destroy(client);
 	}
-	while (server->methods.tqh_first != NULL) {
-		method = server->methods.tqh_first;
-		TAILQ_REMOVE(&server->methods, server->methods.tqh_first, methods);
-		method_destroy(method);
-	}
 	if (server->pollfds.pollfds != NULL) {
 		free(server->pollfds.pollfds);
+	}
+	if (server->ws_pollfds.pollfds != NULL) {
+		free(server->ws_pollfds.pollfds);
 	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	EVP_cleanup();
@@ -3592,7 +2436,7 @@ void mbus_server_destroy (struct mbus_server *server)
 	free(server);
 }
 
-int mbus_server_options_default (struct mbus_server_options *options)
+__attribute__ ((__visibility__("default"))) int mbus_server_options_default (struct mbus_server_options *options)
 {
 	if (options == NULL) {
 		mbus_errorf("options is invalid");
@@ -3638,7 +2482,7 @@ int mbus_server_options_default (struct mbus_server_options *options)
 bail:	return -1;
 }
 
-int mbus_server_options_from_argv (struct mbus_server_options *options, int argc, char *argv[])
+__attribute__ ((__visibility__("default"))) int mbus_server_options_from_argv (struct mbus_server_options *options, int argc, char *argv[])
 {
 	int ch;
 	int o_optind;
@@ -3760,7 +2604,7 @@ bail:	if (_argv != NULL) {
 	return -1;
 }
 
-struct mbus_server * mbus_server_create (int argc, char *argv[])
+__attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_create (int argc, char *argv[])
 {
 	int rc;
 	struct mbus_server *server;
@@ -3788,7 +2632,7 @@ bail:	if (server != NULL) {
 	return NULL;
 }
 
-struct mbus_server * mbus_server_create_with_options (const struct mbus_server_options *_options)
+__attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_create_with_options (const struct mbus_server_options *_options)
 {
 	struct mbus_server *server;
 
@@ -3841,7 +2685,14 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 
 	if (server->options.tcp.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("tcp", listener_type_tcp, server->options.tcp.address, server->options.tcp.port, NULL, NULL);
+		struct listener_tcp_options listener_tcp_options;
+		memset(&listener_tcp_options, 0, sizeof(struct listener_tcp_options));
+		listener_tcp_options.name        = "tcp";
+		listener_tcp_options.address     = server->options.tcp.address;
+		listener_tcp_options.port        = server->options.tcp.port;
+		listener_tcp_options.certificate = NULL;
+		listener_tcp_options.privatekey  = NULL;
+		listener = mbus_server_listener_tcp_create(&listener_tcp_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: tcp");
 			goto bail;
@@ -3851,7 +2702,14 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 	}
 	if (server->options.uds.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("uds", listener_type_uds, server->options.uds.address, server->options.uds.port, NULL, NULL);
+		struct listener_uds_options listener_uds_options;
+		memset(&listener_uds_options, 0, sizeof(struct listener_uds_options));
+		listener_uds_options.name        = "uds";
+		listener_uds_options.address     = server->options.uds.address;
+		listener_uds_options.port        = server->options.uds.port;
+		listener_uds_options.certificate = NULL;
+		listener_uds_options.privatekey  = NULL;
+		listener = mbus_server_listener_uds_create(&listener_uds_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: uds");
 			goto bail;
@@ -3862,7 +2720,22 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	if (server->options.ws.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("ws", listener_type_ws, server->options.ws.address, server->options.ws.port, NULL, NULL);
+		struct listener_ws_options listener_ws_options;
+		memset(&listener_ws_options, 0, sizeof(struct listener_ws_options));
+		listener_ws_options.name        = "ws";
+		listener_ws_options.address     = server->options.ws.address;
+		listener_ws_options.port        = server->options.ws.port;
+		listener_ws_options.certificate = NULL;
+		listener_ws_options.privatekey  = NULL;
+		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
+		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
+		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
+		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
+		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
+		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
+		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.context                = server;
+		listener = mbus_server_listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener: ws");
 			goto bail;
@@ -3873,7 +2746,14 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #endif
 	if (server->options.tcps.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("tcps", listener_type_tcp, server->options.tcps.address, server->options.tcps.port, server->options.tcps.certificate, server->options.tcps.privatekey);
+		struct listener_tcp_options listener_tcp_options;
+		memset(&listener_tcp_options, 0, sizeof(struct listener_tcp_options));
+		listener_tcp_options.name        = "tcps";
+		listener_tcp_options.address     = server->options.tcps.address;
+		listener_tcp_options.port        = server->options.tcps.port;
+		listener_tcp_options.certificate = server->options.tcps.certificate;
+		listener_tcp_options.privatekey  = server->options.tcps.privatekey;
+		listener = mbus_server_listener_tcp_create(&listener_tcp_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "tcps", server->options.tcps.address, server->options.tcps.port);
 		} else {
@@ -3883,7 +2763,14 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 	}
 	if (server->options.udss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("udss", listener_type_uds, server->options.udss.address, server->options.udss.port, server->options.udss.certificate, server->options.udss.privatekey);
+		struct listener_uds_options listener_uds_options;
+		memset(&listener_uds_options, 0, sizeof(struct listener_uds_options));
+		listener_uds_options.name        = "udss";
+		listener_uds_options.address     = server->options.udss.address;
+		listener_uds_options.port        = server->options.udss.port;
+		listener_uds_options.certificate = server->options.udss.certificate;
+		listener_uds_options.privatekey  = server->options.udss.privatekey;
+		listener = mbus_server_listener_uds_create(&listener_uds_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "udss", server->options.udss.address, server->options.udss.port);
 		} else {
@@ -3895,7 +2782,22 @@ struct mbus_server * mbus_server_create_with_options (const struct mbus_server_o
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (server->options.wss.enabled == 1) {
 		struct listener *listener;
-		listener = listener_create("wss", listener_type_ws, server->options.wss.address, server->options.wss.port, server->options.wss.certificate, server->options.wss.privatekey);
+		struct listener_ws_options listener_ws_options;
+		memset(&listener_ws_options, 0, sizeof(struct listener_ws_options));
+		listener_ws_options.name        = "wss";
+		listener_ws_options.address     = server->options.wss.address;
+		listener_ws_options.port        = server->options.wss.port;
+		listener_ws_options.certificate = server->options.wss.certificate;
+		listener_ws_options.privatekey  = server->options.wss.privatekey;
+		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
+		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
+		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
+		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
+		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
+		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
+		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.context                = server;
+		listener = mbus_server_listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
 			mbus_errorf("can not create listener '%s:%s:%d'", "wss", server->options.wss.address, server->options.wss.port);
 		} else {
@@ -3923,7 +2825,7 @@ bail:	mbus_server_destroy(server);
 	return NULL;
 }
 
-int mbus_server_tcp_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_tcp_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3933,7 +2835,7 @@ int mbus_server_tcp_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_tcp_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_tcp_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3943,7 +2845,7 @@ const char * mbus_server_tcp_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_tcp_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_tcp_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3953,7 +2855,7 @@ int mbus_server_tcp_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_uds_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_uds_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3963,7 +2865,7 @@ int mbus_server_uds_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_uds_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_uds_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3973,7 +2875,7 @@ const char * mbus_server_uds_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_uds_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_uds_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3983,7 +2885,7 @@ int mbus_server_uds_port (struct mbus_server *server)
 bail:	return -1;
 }
 
-int mbus_server_ws_enabled (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_ws_enabled (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -3995,7 +2897,7 @@ int mbus_server_ws_enabled (struct mbus_server *server)
 bail:	return -1;
 }
 
-const char * mbus_server_ws_address (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) const char * mbus_server_ws_address (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -4007,7 +2909,7 @@ const char * mbus_server_ws_address (struct mbus_server *server)
 bail:	return NULL;
 }
 
-int mbus_server_ws_port (struct mbus_server *server)
+__attribute__ ((__visibility__("default"))) int mbus_server_ws_port (struct mbus_server *server)
 {
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -4015,6 +2917,82 @@ int mbus_server_ws_port (struct mbus_server *server)
 	}
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 	return server->options.ws.port;
+#endif
+bail:	return -1;
+}
+
+__attribute__ ((__visibility__("default"))) int mbus_server_tcps_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.tcps.port;
+bail:	return -1;
+}
+
+__attribute__ ((__visibility__("default"))) int mbus_server_udss_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.enabled;
+bail:	return -1;
+}
+
+__attribute__ ((__visibility__("default"))) const char * mbus_server_udss_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.address;
+bail:	return NULL;
+}
+
+__attribute__ ((__visibility__("default"))) int mbus_server_udss_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	return server->options.udss.port;
+bail:	return -1;
+}
+
+__attribute__ ((__visibility__("default"))) int mbus_server_wss_enabled (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.enabled;
+#endif
+bail:	return -1;
+}
+
+__attribute__ ((__visibility__("default"))) const char * mbus_server_wss_address (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.address;
+#endif
+bail:	return NULL;
+}
+
+__attribute__ ((__visibility__("default"))) int mbus_server_wss_port (struct mbus_server *server)
+{
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+	return server->options.wss.port;
 #endif
 bail:	return -1;
 }

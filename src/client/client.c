@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2014-2017, Alper Akcan <alper.akcan@gmail.com>
+ * Copyright (c) 2014-2018, Alper Akcan <alper.akcan@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,7 +10,7 @@
  *    * Redistributions in binary form must reproduce the above copyright
  *      notice, this list of conditions and the following disclaimer in the
  *      documentation and/or other materials provided with the distribution.
- *    * Neither the name of the <Alper Akcan> nor the
+ *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
  *
@@ -1172,6 +1172,9 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		}
 	} else if (rc == -EINPROGRESS) {
 		status = mbus_client_connect_status_success;
+	} else if (rc == -EAGAIN) {
+		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
+		status = mbus_client_connect_status_connection_refused;
 	} else if (rc == -ECONNREFUSED) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
 		status = mbus_client_connect_status_connection_refused;
@@ -1711,7 +1714,7 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 
 	rc = pipe(client->wakeup);
 	if (rc != 0) {
-		mbus_errorf("can not create wakeup");
+		mbus_errorf("can not create wakeup: %d, %s", errno, strerror(errno));
 		goto bail;
 	}
 
@@ -3335,7 +3338,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 				} else if (errno == EAGAIN) {
 				} else if (errno == EWOULDBLOCK) {
 				} else {
-					mbus_errorf("can not write string to client");
+					mbus_errorf("can not write string to client: %s", strerror(errno));
 					goto bail;
 				}
 			} else {
