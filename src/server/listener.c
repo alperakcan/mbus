@@ -29,13 +29,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <errno.h>
 
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
 
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 #include <libwebsockets.h>
+#endif
 
 #include "mbus/debug.h"
 #include "mbus/tailq.h"
@@ -47,8 +52,10 @@
 
 #define BUFFER_IN_CHUNK_SIZE (16 * 1024)
 #define BUFFER_OUT_CHUNK_SIZE (16 * 1024)
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
 static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_IN_CHUNK_SIZE < LWS_PRE ? -1 : 0];
 static __attribute__((__unused__)) char __sizeof_check_buffer_out[BUFFER_OUT_CHUNK_SIZE < LWS_PRE ? -1 : 0];
+#endif
 
 struct connection_private {
 	struct connection connection;
@@ -1035,6 +1042,8 @@ bail:	if (listener_uds != NULL) {
 	return NULL;
 }
 
+#if defined(WS_ENABLE) && (WS_ENABLE == 1)
+
 struct connection_ws {
 	struct connection_private private;
 	struct lws *wsi;
@@ -1045,9 +1054,6 @@ struct listener_ws {
 	char *name;
 	struct lws_context *lws;
 	struct listener_ws_callbacks callbacks;
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	SSL_CTX *ssl;
-#endif
 	uint8_t out_chunk[BUFFER_OUT_CHUNK_SIZE];
 };
 
@@ -1551,17 +1557,11 @@ static void listener_ws_destroy (struct listener *listener)
 	if (listener_ws->lws != NULL) {
 		lws_context_destroy(listener_ws->lws);
 	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (listener_ws->ssl != NULL) {
-		SSL_CTX_free(listener_ws->ssl);
-	}
-#endif
 	free(listener_ws);
 }
 
 struct listener * listener_ws_create (const struct listener_ws_options *options)
 {
-	int rc;
 	struct listener_ws *listener_ws;
 	struct lws_context_creation_info info;
 	listener_ws = NULL;
@@ -1633,7 +1633,9 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 	}
 	memcpy(&listener_ws->callbacks, &options->callbacks, sizeof(struct listener_ws_callbacks));
 	ws_protocols[0].user = listener_ws;
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	wss_protocols[0].user = listener_ws;
+#endif
 	lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
 	memset(&info, 0, sizeof(info));
 	info.iface = NULL;
@@ -1645,7 +1647,7 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 		info.protocols = ws_protocols;
 		info.extensions = ws_extensions;
 	} else {
-		memset(&info, 0, sizeof(info));
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 		info.protocols = wss_protocols;
 		info.extensions = wss_extensions;
 		info.ssl_ca_filepath = NULL; //"ca.crt";
@@ -1653,41 +1655,16 @@ struct listener * listener_ws_create (const struct listener_ws_options *options)
 		info.ssl_private_key_filepath = options->privatekey;
 //		info.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
 		info.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+#else
+		info.protocols = ws_protocols;
+		info.extensions = ws_extensions;
+#endif
 	}
 	listener_ws->lws = lws_create_context(&info);
 	if (listener_ws->lws == NULL) {
 		mbus_errorf("can not create ws context for: '%s:%s:%d'", "wss", options->address, options->port);
 		goto bail;
 	}
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	if (options->certificate != NULL ||
-	    options->privatekey != NULL) {
-		const SSL_METHOD *method;
-		method = SSLv23_server_method();
-		if (method == NULL) {
-			mbus_errorf("can not get server method");
-			goto bail;
-		}
-		listener_ws->ssl = SSL_CTX_new(method);
-		if (listener_ws->ssl == NULL) {
-			mbus_errorf("can not create ssl context");
-			goto bail;
-		}
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
-		SSL_CTX_set_ecdh_auto(listener_ws->ssl, 1);
-#endif
-		rc = SSL_CTX_use_certificate_file(listener_ws->ssl, options->certificate, SSL_FILETYPE_PEM);
-		if (rc <= 0) {
-			mbus_errorf("can not use ssl certificate: %s", options->certificate);
-			goto bail;
-		}
-		rc = SSL_CTX_use_PrivateKey_file(listener_ws->ssl, options->privatekey, SSL_FILETYPE_PEM);
-		if (rc <= 0) {
-			mbus_errorf("can not use ssl privatekey: %s", options->privatekey);
-			goto bail;
-		}
-	}
-#endif
 	listener_ws->private.get_name = listener_ws_get_name;
 	listener_ws->private.get_type = listener_ws_get_type;
 	listener_ws->private.get_fd   = listener_ws_get_fd;
@@ -1700,6 +1677,16 @@ bail:	if (listener_ws != NULL) {
 	}
 	return NULL;
 }
+
+#else
+
+struct listener * listener_ws_create (const struct listener_ws_options *options)
+{
+	(void) options;
+	return NULL;
+}
+
+#endif
 
 const char * listener_get_name (struct listener *listener)
 {
