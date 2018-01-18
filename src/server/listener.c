@@ -997,11 +997,13 @@ struct listener * mbus_server_listener_uds_create (const struct listener_uds_opt
 		mbus_errorf("can not bind socket: '%s:%s:%d'", "uds", options->address, options->port);
 		goto bail;
 	}
+#if 1
 	rc = mbus_socket_listen(listener_uds->socket, 1024);
 	if (rc != 0) {
 		mbus_errorf("can not listen socket: '%s:%s:%d'", "uds", options->address, options->port);
 		goto bail;
 	}
+#endif
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (options->certificate != NULL ||
 	    options->privatekey != NULL) {

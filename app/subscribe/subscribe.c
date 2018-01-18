@@ -198,7 +198,7 @@ static void signal_handler (int signal)
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
-	fprintf(stdout, "  -e, --event: event identifier to subscribe\n");
+	fprintf(stdout, "  -e, --event: event identifier to subscribe (default: all)\n");
 	fprintf(stdout, "  -h, --help : this text\n");
 	fprintf(stdout, "  --mbus-help: mbus help text\n");
 	mbus_client_usage();

@@ -1,10 +1,11 @@
 
 subdir-y = \
-	client \
-	command \
 	broker \
+	command \
 	publish \
 	subscribe \
+	client \
+	benchmark \
 	version
 
 include ../Makefile.lib

@@ -1172,6 +1172,9 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		}
 	} else if (rc == -EINPROGRESS) {
 		status = mbus_client_connect_status_success;
+	} else if (rc == -EAGAIN) {
+		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
+		status = mbus_client_connect_status_connection_refused;
 	} else if (rc == -ECONNREFUSED) {
 		mbus_errorf("can not connect to server: '%s:%s:%d', rc: %d, %s", client->options->server_protocol, client->options->server_address, client->options->server_port, rc, strerror(-rc));
 		status = mbus_client_connect_status_connection_refused;
@@ -1711,7 +1714,7 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 
 	rc = pipe(client->wakeup);
 	if (rc != 0) {
-		mbus_errorf("can not create wakeup");
+		mbus_errorf("can not create wakeup: %d, %s", errno, strerror(errno));
 		goto bail;
 	}
 
