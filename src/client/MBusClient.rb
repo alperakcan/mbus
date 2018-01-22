@@ -691,11 +691,11 @@ module MBusClient
       @subscriptions.clear()
     end
     
-    def commandRegisterResponse (this, context, message, status):
+    def commandRegisterResponse (this, context, message, status)
         raise "not implemented yet"
     end
     
-    def commandUnregisterResponse (this, context, message, status):
+    def commandUnregisterResponse (this, context, message, status)
         raise "not implemented yet"
     end
     
@@ -951,7 +951,7 @@ module MBusClient
       end
       if (callback != nil)
         message = MBusClientMessageEvent(object)
-        callback(self, callbackContext, message)
+        callback.call(self, callbackContext, message)
       end
     end
     
