@@ -1402,6 +1402,9 @@ module MBusClient
             begin
               data = @socket.read_nonblock(4096)
             rescue Errno::EAGAIN
+            rescue Errno::EWOULDBLOCK
+            rescue OpenSSL::SSL::SSLErrorWaitReadable
+              break
             rescue Errno::EINTR
             rescue Errno::EWOULDBLOCK
             rescue EOFError
