@@ -674,19 +674,25 @@ static void mbus_client_reset (struct mbus_client *client)
 				if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					mbus_client_notify_publish(client, request_get_payload(request), mbus_client_publish_status_canceled);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					struct subscription *subscription;
 					mbus_client_notify_subscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_subscribe_status_canceled);
+					subscription = request->context;
+					subscription_destroy(subscription);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
 					mbus_client_notify_unsubscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_unsubscribe_status_canceled);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					struct routine *routine;
 					mbus_client_notify_registered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_register_status_canceled);
+					routine = request->context;
+					routine_destroy(routine);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
 					mbus_client_notify_unregistered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
@@ -3540,19 +3546,25 @@ out:
 				if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_EVENT) == 0) {
 					mbus_client_notify_publish(client, request_get_payload(request), mbus_client_publish_status_timeout);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_SUBSCRIBE) == 0) {
+					struct subscription *subscription;
 					mbus_client_notify_subscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_subscribe_status_timeout);
+					subscription = request->context;
+					subscription_destroy(subscription);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNSUBSCRIBE) == 0) {
 					mbus_client_notify_unsubscribe(client,
 								mbus_json_get_string_value(request_get_payload(request), "source", NULL),
 								mbus_json_get_string_value(request_get_payload(request), "event", NULL),
 								mbus_client_unsubscribe_status_timeout);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_REGISTER) == 0) {
+					struct routine *routine;
 					mbus_client_notify_registered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
 								mbus_client_register_status_timeout);
+					routine = request->context;
+					routine_destroy(routine);
 				} else if (strcmp(request_get_identifier(request), MBUS_SERVER_COMMAND_UNREGISTER) == 0) {
 					mbus_client_notify_unregistered(client,
 								mbus_json_get_string_value(request_get_payload(request), "command", NULL),
