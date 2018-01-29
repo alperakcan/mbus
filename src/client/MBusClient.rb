@@ -1508,7 +1508,8 @@ module MBusClient
       
       if (@state == MBusClientState::CONNECTED and
           @pingInterval > 0)
-        if (MBusClientClock::after(current, @pingSendTsms + @pingInterval))
+        if (@pingWaitPong == 0 and
+            MBusClientClock::after(current, @pingSendTsms + @pingInterval))
           @pingSendTsms = current
           @pongRecvTsms = 0
           @pingWaitPong = 1

@@ -545,7 +545,8 @@ function MBusClient (options = null) {
 		if (thiz.__state == MBusClientState.Connected &&
 			thiz.__pingInterval > 0) {
 			current = mbus_clock_monotonic();
-			if (mbus_clock_after(current, thiz.__pingSendTsms + thiz.__pingInterval)) {
+			if (thiz.__pingWaitPong == 0 &&
+			    mbus_clock_after(current, thiz.__pingSendTsms + thiz.__pingInterval)) {
 				thiz.__pingSendTsms = current;
 				thiz.__pongRecvTsms = 0;
 				thiz.__pingWaitPong = 1;

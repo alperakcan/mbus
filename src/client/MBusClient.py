@@ -1167,7 +1167,8 @@ class MBusClient (object):
 
         if (self.__state == MBusClientState.Connected and
             self.__pingInterval > 0):
-            if (mbus_clock_after(current, self.__pingSendTsms + self.__pingInterval)):
+            if (self.__pingWaitPong == 0 and
+                mbus_clock_after(current, self.__pingSendTsms + self.__pingInterval)):
                 self.__pingSendTsms = current
                 self.__pongRecvTsms = 0
                 self.__pingWaitPong = 1

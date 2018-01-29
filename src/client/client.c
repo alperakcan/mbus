@@ -1644,8 +1644,8 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	if (options.ping_threshold == 0) {
 		options.ping_threshold = MBUS_CLIENT_DEFAULT_PING_THRESHOLD;
 	}
-	if (options.ping_timeout > (options.ping_interval * 2) / 3) {
-		options.ping_timeout = (options.ping_interval * 2) / 3;
+	if (options.ping_timeout > options.ping_interval) {
+		options.ping_timeout = options.ping_interval;
 	}
 
 	if (strcmp(options.server_protocol, MBUS_SERVER_TCP_PROTOCOL) == 0) {
@@ -3484,7 +3484,8 @@ out:
 
 	if (client->state == mbus_client_state_connected &&
 	    client->ping_interval > 0) {
-		if (mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
+		if (client->ping_wait_pong == 0 &&
+		    mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
 			struct mbus_client_publish_options publish_options;
 			mbus_debugf("send ping current: %ld, %ld, %d, %d", current, client->ping_send_tsms, client->ping_interval, client->ping_timeout);
 			client->ping_send_tsms = current;

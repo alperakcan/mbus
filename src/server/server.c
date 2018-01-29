@@ -1272,8 +1272,8 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				client->ping.enabled = 0;
 				client->ping.recv_tsms = 0;
 			} else {
-				if (client->ping.timeout > (client->ping.interval * 2) / 3) {
-					client->ping.timeout = (client->ping.interval * 2) / 3;
+				if (client->ping.timeout > client->ping.interval) {
+					client->ping.timeout = client->ping.interval;
 				}
 				if (client->ping.threshold <= 0) {
 					client->ping.threshold = 0;
