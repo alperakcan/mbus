@@ -2156,7 +2156,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				connection = mbus_server_listener_accept(listener);
 				if (connection == NULL) {
 					mbus_errorf("can not accept new connection on listener: %s", mbus_server_listener_get_name(listener));
-					goto bail;
+					continue;
 				}
 				rc = server_client_connection_establish(server, listener, connection);
 				if (rc != 0) {
@@ -2164,6 +2164,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 					mbus_server_connection_close(connection);
 					goto bail;
 				}
+				mbus_infof("accepted new connection on listener: %s", mbus_server_listener_get_name(listener));
 			}
 		}
 		client = server_find_client_by_fd(server, server->pollfds.pollfds[c].fd);
