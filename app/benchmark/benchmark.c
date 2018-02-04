@@ -113,6 +113,14 @@ static void mbus_client_callback_disconnect (struct mbus_client *mbus_client, vo
 	}
 }
 
+static void mbus_client_callback_message (struct mbus_client *mbus_client, void *context, struct mbus_client_message_event *message)
+{
+	struct client *client = context;
+	(void) mbus_client;
+	(void) client;
+	(void) message;
+}
+
 static void client_destroy (struct client *client)
 {
 	if (client == NULL) {
@@ -135,6 +143,7 @@ static struct client * client_create (struct mbus_client_options *options, struc
 	memset(client, 0, sizeof(struct client));
 	options->callbacks.connect    = mbus_client_callback_connect;
 	options->callbacks.disconnect = mbus_client_callback_disconnect;
+	options->callbacks.message    = mbus_client_callback_message;
 	options->callbacks.context    = client;
 	client->client = mbus_client_create(options);
 	if (client->client == NULL) {
@@ -270,7 +279,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":e:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":c:s:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_CLIENTS:
 				nclients = atoi(optarg);
