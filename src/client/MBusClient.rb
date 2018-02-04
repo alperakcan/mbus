@@ -59,19 +59,18 @@ module MBusClient
   MBUS_SERVER_COMMAND_EVENT                   = "command.event"
   MBUS_SERVER_COMMAND_CALL                    = "command.call"
   MBUS_SERVER_COMMAND_RESULT                  = "command.result"
-  MBUS_SERVER_COMMAND_STATUS                  = "command.status"
-  MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients"
   MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe"
   MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe"
   MBUS_SERVER_COMMAND_REGISTER                = "command.register"
   MBUS_SERVER_COMMAND_UNREGISTER              = "command.unregister"
-  MBUS_SERVER_COMMAND_CLOSE                   = "command.close"
   
   MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected"
   MBUS_SERVER_EVENT_DISCONNECTED              = "org.mbus.server.event.disconnected"
   MBUS_SERVER_EVENT_SUBSCRIBED                = "org.mbus.server.event.subscribed"
   MBUS_SERVER_EVENT_UNSUBSCRIBED              = "org.mbus.server.event.unsubscribed"
-  
+  MBUS_SERVER_EVENT_REGISTERED                = "org.mbus.server.event.regitered"
+  MBUS_SERVER_EVENT_UNREGISTERED              = "org.mbus.server.event.unregitered"
+
   MBUS_SERVER_EVENT_PING                      = "org.mbus.server.event.ping"
   MBUS_SERVER_EVENT_PONG                      = "org.mbus.server.event.pong"
 

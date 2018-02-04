@@ -57,18 +57,17 @@ const MBUS_SERVER_COMMAND_CREATE                  = "command.create";
 const MBUS_SERVER_COMMAND_EVENT                   = "command.event";
 const MBUS_SERVER_COMMAND_CALL                    = "command.call";
 const MBUS_SERVER_COMMAND_RESULT                  = "command.result";
-const MBUS_SERVER_COMMAND_STATUS                  = "command.status";
-const MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients";
 const MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe";
 const MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe";
 const MBUS_SERVER_COMMAND_REGISTER                = "command.register";
 const MBUS_SERVER_COMMAND_UNREGISTER              = "command.unregister";
-const MBUS_SERVER_COMMAND_CLOSE                   = "command.close";
 
 const MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected";
 const MBUS_SERVER_EVENT_DISCONNECTED              = "org.mbus.server.event.disconnected";
 const MBUS_SERVER_EVENT_SUBSCRIBED                = "org.mbus.server.event.subscribed";
 const MBUS_SERVER_EVENT_UNSUBSCRIBED              = "org.mbus.server.event.unsubscribed";
+const MBUS_SERVER_EVENT_REGISTERED                = "org.mbus.server.event.regitered";
+const MBUS_SERVER_EVENT_UNREGISTERED              = "org.mbus.server.event.unregitered";
 
 const MBUS_SERVER_EVENT_PING                      = "org.mbus.server.event.ping";
 const MBUS_SERVER_EVENT_PONG                      = "org.mbus.server.event.pong";

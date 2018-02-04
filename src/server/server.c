@@ -83,18 +83,14 @@ struct client {
 	enum mbus_compress_method compression;
 	struct listener *listener;
 	struct connection *connection;
-	struct {
-		struct mbus_buffer *in;
-		struct mbus_buffer *out;
-	} buffer;
-	struct {
-		int enabled;
-		int interval;
-		int timeout;
-		int threshold;
-		unsigned long long recv_tsms;
-		int missed_count;
-	} ping;
+	struct mbus_buffer *buffer_in;
+	struct mbus_buffer *buffer_out;
+	int ping_enabled;
+	int ping_interval;
+	int ping_timeout;
+	int ping_threshold;
+	unsigned long long ping_recv_tsms;
+	int ping_missed_count;
 	struct subscriptions subscriptions;
 	struct commands commands;
 	struct methods requests;
@@ -675,11 +671,11 @@ static void client_destroy (struct client *client)
 		TAILQ_REMOVE(&client->waits, client->waits.tqh_first, methods);
 		mbus_server_method_destroy(wait);
 	}
-	if (client->buffer.in != NULL) {
-		mbus_buffer_destroy(client->buffer.in);
+	if (client->buffer_in != NULL) {
+		mbus_buffer_destroy(client->buffer_in);
 	}
-	if (client->buffer.out != NULL) {
-		mbus_buffer_destroy(client->buffer.out);
+	if (client->buffer_out != NULL) {
+		mbus_buffer_destroy(client->buffer_out);
 	}
 	free(client);
 }
@@ -713,13 +709,13 @@ static struct client * client_create (struct listener *listener, struct connecti
 	client->connection = connection;
 	client->ssequence = MBUS_METHOD_SEQUENCE_START;
 	client->esequence = MBUS_METHOD_SEQUENCE_START;
-	client->buffer.in = mbus_buffer_create();
-	if (client->buffer.in == NULL) {
+	client->buffer_in = mbus_buffer_create();
+	if (client->buffer_in == NULL) {
 		mbus_errorf("can not create buffer");
 		goto bail;
 	}
-	client->buffer.out = mbus_buffer_create();
-	if (client->buffer.out == NULL) {
+	client->buffer_out = mbus_buffer_create();
+	if (client->buffer_out == NULL) {
 		mbus_errorf("can not create buffer");
 		goto bail;
 	}
@@ -820,7 +816,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 		if (strcmp(identifier, MBUS_SERVER_EVENT_PING) == 0) {
 			client = server_find_client_by_identifier(server, source);
 			if (client != NULL) {
-				client->ping.recv_tsms = mbus_clock_monotonic();
+				client->ping_recv_tsms = mbus_clock_monotonic();
 			}
 			rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, source, MBUS_SERVER_EVENT_PONG, NULL);
 			if (rc != 0) {
@@ -1061,6 +1057,80 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
+static int server_send_event_registered (struct mbus_server *server, const char *source, const char *identifier)
+{
+	int rc;
+	struct mbus_json *payload;
+	payload = NULL;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	if (source == NULL) {
+		mbus_errorf("source is null");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create payload");
+		goto bail;
+	}
+	mbus_json_add_string_to_object_cs(payload, "source", source);
+	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
+	rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_REGISTERED, payload);
+	if (rc != 0) {
+		mbus_errorf("can not send event");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	return -1;
+}
+
+static int server_send_event_unregistered (struct mbus_server *server, const char *source, const char *identifier)
+{
+	int rc;
+	struct mbus_json *payload;
+	payload = NULL;
+	if (server == NULL) {
+		mbus_errorf("server is null");
+		goto bail;
+	}
+	if (source == NULL) {
+		mbus_errorf("source is null");
+		goto bail;
+	}
+	if (identifier == NULL) {
+		mbus_errorf("identifier is null");
+		goto bail;
+	}
+	payload = mbus_json_create_object();
+	if (payload == NULL) {
+		mbus_errorf("can not create payload");
+		goto bail;
+	}
+	mbus_json_add_string_to_object_cs(payload, "source", source);
+	mbus_json_add_string_to_object_cs(payload, "identifier", identifier);
+	rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_UNREGISTERED, payload);
+	if (rc != 0) {
+		mbus_errorf("can not send event");
+		goto bail;
+	}
+	mbus_json_delete(payload);
+	return 0;
+bail:	if (payload != NULL) {
+		mbus_json_delete(payload);
+	}
+	return -1;
+}
+
 static int server_client_connection_establish (struct mbus_server *server, struct listener *listener, struct connection *connection)
 {
 	struct client *client;
@@ -1092,12 +1162,12 @@ bail:	if (client != NULL) {
 
 #if defined(WS_ENABLE) && (WS_ENABLE == 1)
 
-static int server_listener_connection_established_callback (void *context, struct listener *listener, struct connection *connection)
+static int server_listener_ws_callback_connection_established (void *context, struct listener *listener, struct connection *connection)
 {
 	return server_client_connection_establish(context, listener, connection);
 }
 
-static int server_listener_connection_receive_callback (void *context, struct listener *listener, struct connection *connection, void *in, int len)
+static int server_listener_ws_callback_connection_receive (void *context, struct listener *listener, struct connection *connection, void *in, int len)
 {
 	struct client *client;
 	struct mbus_server *server = (struct mbus_server *) context;
@@ -1106,10 +1176,10 @@ static int server_listener_connection_receive_callback (void *context, struct li
 	if (client == NULL) {
 		return -1;
 	}
-	return mbus_buffer_push(client->buffer.in, in, len);
+	return mbus_buffer_push(client->buffer_in, in, len);
 }
 
-static struct mbus_buffer * server_listener_connection_writable_callback (void *context, struct listener *listener, struct connection *connection)
+static struct mbus_buffer * server_listener_ws_callback_connection_writable (void *context, struct listener *listener, struct connection *connection)
 {
 	struct client *client;
 	struct mbus_server *server = (struct mbus_server *) context;
@@ -1118,10 +1188,10 @@ static struct mbus_buffer * server_listener_connection_writable_callback (void *
 	if (client == NULL) {
 		return NULL;
 	}
-	return client->buffer.out;
+	return client->buffer_out;
 }
 
-static int server_listener_connection_closed_callback (void *context, struct listener *listener, struct connection *connection)
+static int server_listener_ws_callback_connection_closed (void *context, struct listener *listener, struct connection *connection)
 {
 	struct client *client;
 	struct mbus_server *server = (struct mbus_server *) context;
@@ -1133,7 +1203,7 @@ static int server_listener_connection_closed_callback (void *context, struct lis
 	return client_set_connection(client, NULL);
 }
 
-static int server_listener_poll_add_callback (void *context, struct listener *listener, int fd, unsigned int events)
+static int server_listener_ws_callback_poll_add (void *context, struct listener *listener, int fd, unsigned int events)
 {
 	struct mbus_server *server = (struct mbus_server *) context;
 	{
@@ -1173,7 +1243,7 @@ static int server_listener_poll_add_callback (void *context, struct listener *li
 bail:	return -1;
 }
 
-static int server_listener_poll_mod_callback (void *context, struct listener *listener, int fd, unsigned int events)
+static int server_listener_ws_callback_poll_mod (void *context, struct listener *listener, int fd, unsigned int events)
 {
 	struct mbus_server *server = (struct mbus_server *) context;
 	{
@@ -1189,7 +1259,7 @@ static int server_listener_poll_mod_callback (void *context, struct listener *li
 	return 0;
 }
 
-static int server_listener_poll_del_callback (void *context, struct listener *listener, int fd)
+static int server_listener_ws_callback_poll_del (void *context, struct listener *listener, int fd)
 {
 	struct mbus_server *server = (struct mbus_server *) context;
 	{
@@ -1262,24 +1332,24 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		{
 			struct mbus_json *ping;
 			ping = mbus_json_get_object(payload, "ping");
-			client->ping.interval = mbus_json_get_int_value(ping, "interval", -1);
-			client->ping.timeout = mbus_json_get_int_value(ping, "timeout", -1);
-			client->ping.threshold = mbus_json_get_int_value(ping, "threshold", -1);
-			if (client->ping.interval <= 0) {
-				client->ping.interval = 0;
-				client->ping.timeout = 0;
-				client->ping.threshold = 0;
-				client->ping.enabled = 0;
-				client->ping.recv_tsms = 0;
+			client->ping_interval = mbus_json_get_int_value(ping, "interval", -1);
+			client->ping_timeout = mbus_json_get_int_value(ping, "timeout", -1);
+			client->ping_threshold = mbus_json_get_int_value(ping, "threshold", -1);
+			if (client->ping_interval <= 0) {
+				client->ping_interval = 0;
+				client->ping_timeout = 0;
+				client->ping_threshold = 0;
+				client->ping_enabled = 0;
+				client->ping_recv_tsms = 0;
 			} else {
-				if (client->ping.timeout > client->ping.interval) {
-					client->ping.timeout = client->ping.interval;
+				if (client->ping_timeout > client->ping_interval) {
+					client->ping_timeout = client->ping_interval;
 				}
-				if (client->ping.threshold <= 0) {
-					client->ping.threshold = 0;
+				if (client->ping_threshold <= 0) {
+					client->ping_threshold = 0;
 				}
-				client->ping.recv_tsms = mbus_clock_monotonic() - client->ping.interval;
-				client->ping.enabled = 1;
+				client->ping_recv_tsms = mbus_clock_monotonic() - client->ping_interval;
+				client->ping_enabled = 1;
 			}
 		}
 		{
@@ -1313,10 +1383,10 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	mbus_infof("  identifier : %s", client_get_identifier(mbus_server_method_get_source(method)));
 	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
 	mbus_infof("  ping");
-	mbus_infof("    enabled  : %d", client->ping.enabled);
-	mbus_infof("    interval : %d", client->ping.interval);
-	mbus_infof("    timeout  : %d", client->ping.timeout);
-	mbus_infof("    threshold: %d", client->ping.threshold);
+	mbus_infof("    enabled  : %d", client->ping_enabled);
+	mbus_infof("    interval : %d", client->ping_interval);
+	mbus_infof("    timeout  : %d", client->ping_timeout);
+	mbus_infof("    threshold: %d", client->ping_threshold);
 	{
 		struct mbus_json *payload;
 		struct mbus_json *ping;
@@ -1324,9 +1394,9 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		mbus_json_add_string_to_object_cs(payload, "identifier", client_get_identifier(mbus_server_method_get_source(method)));
 		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
 		ping = mbus_json_create_object();
-		mbus_json_add_number_to_object_cs(ping, "interval", client->ping.interval);
-		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping.timeout);
-		mbus_json_add_number_to_object_cs(ping, "threshold", client->ping.threshold);
+		mbus_json_add_number_to_object_cs(ping, "interval", client->ping_interval);
+		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping_timeout);
+		mbus_json_add_number_to_object_cs(ping, "threshold", client->ping_threshold);
 		mbus_json_add_item_to_object_cs(payload, "ping", ping);
 		mbus_server_method_set_result_payload(method, payload);
 	}
@@ -1424,6 +1494,11 @@ static int server_handle_command_register (struct mbus_server *server, struct me
 		mbus_errorf("can not add subscription");
 		goto bail;
 	}
+	rc = server_send_event_registered(server, client_get_identifier(mbus_server_method_get_source(method)), command);
+	if (rc != 0) {
+		mbus_errorf("can not send registered event");
+		goto bail;
+	}
 	return 0;
 bail:	return -1;
 }
@@ -1448,6 +1523,11 @@ static int server_handle_command_unregister (struct mbus_server *server, struct 
 	rc = client_del_command(mbus_server_method_get_source(method), command);
 	if (rc != 0) {
 		mbus_errorf("can not add subscription");
+		goto bail;
+	}
+	rc = server_send_event_unregistered(server, client_get_identifier(mbus_server_method_get_source(method)), command);
+	if (rc != 0) {
+		mbus_errorf("can not send unregistered event");
 		goto bail;
 	}
 	return 0;
@@ -1956,26 +2036,26 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		if (client_get_connection(client) == NULL) {
 			continue;
 		}
-		if (client->ping.interval <= 0) {
+		if (client->ping_interval <= 0) {
 			continue;
 		}
-		if (client->ping.enabled == 0) {
+		if (client->ping_enabled == 0) {
 			continue;
 		}
 		mbus_debugf("    client: %s, recv: %lu, interval: %d, timeout: %d, missed: %d, threshold: %d",
 				client_get_identifier(client),
-				client->ping.recv_tsms,
-				client->ping.interval,
-				client->ping.timeout,
-				client->ping.missed_count,
-				client->ping.threshold);
-		if (mbus_clock_after(current, client->ping.recv_tsms + client->ping.interval + client->ping.timeout)) {
-			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_identifier(client), current, client->ping.recv_tsms, client->ping.interval, client->ping.timeout);
-			client->ping.missed_count += 1;
-			client->ping.recv_tsms = client->ping.recv_tsms + client->ping.interval;
+				client->ping_recv_tsms,
+				client->ping_interval,
+				client->ping_timeout,
+				client->ping_missed_count,
+				client->ping_threshold);
+		if (mbus_clock_after(current, client->ping_recv_tsms + client->ping_interval + client->ping_timeout)) {
+			mbus_infof("%s ping timeout: %ld, %ld, %d, %d", client_get_identifier(client), current, client->ping_recv_tsms, client->ping_interval, client->ping_timeout);
+			client->ping_missed_count += 1;
+			client->ping_recv_tsms = client->ping_recv_tsms + client->ping_interval;
 		}
-		if (client->ping.missed_count > client->ping.threshold) {
-			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_identifier(client), client->ping.missed_count, client->ping.threshold);
+		if (client->ping_missed_count > client->ping_threshold) {
+			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_identifier(client), client->ping_missed_count, client->ping_threshold);
 			client_set_connection(client, NULL);
 		}
 	}
@@ -2023,7 +2103,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			goto bail;
 		}
 		mbus_debugf("      message: %s, %s", mbus_compress_method_string(compression), string);
-		rc = mbus_buffer_push_string(client->buffer.out, compression, string);
+		rc = mbus_buffer_push_string(client->buffer_out, compression, string);
 		if (rc != 0) {
 			mbus_errorf("can not push string");
 			mbus_server_method_destroy(method);
@@ -2086,7 +2166,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				server->pollfds.pollfds[n].revents = 0;
 				server->pollfds.pollfds[n].fd = mbus_server_connection_get_fd(connection);
 				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
-				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				if (mbus_buffer_get_length(client->buffer_out) > 0 ||
 				    mbus_server_connection_wants_write(connection) > 0) {
 					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
 					server->pollfds.pollfds[n].events |= POLLOUT;
@@ -2097,14 +2177,14 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 				server->pollfds.pollfds[n].revents = 0;
 				server->pollfds.pollfds[n].fd = mbus_server_connection_get_fd(connection);
 				mbus_debugf("    in : %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
-				if (mbus_buffer_get_length(client->buffer.out) > 0 ||
+				if (mbus_buffer_get_length(client->buffer_out) > 0 ||
 				    mbus_server_connection_wants_write(connection) > 0) {
 					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
 					server->pollfds.pollfds[n].events |= POLLOUT;
 				}
 				n += 1;
 			} else if (listener_type == listener_type_ws) {
-				if (mbus_buffer_get_length(client->buffer.out) > 0) {
+				if (mbus_buffer_get_length(client->buffer_out) > 0) {
 					mbus_debugf("    out: %s, connection: %s, %d", client_get_identifier(client), mbus_server_listener_get_name(listener), mbus_server_connection_get_fd(connection));
 					mbus_server_connection_request_write(connection);
 				}
@@ -2188,7 +2268,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			continue;
 		}
 		if (server->pollfds.pollfds[c].revents & POLLIN) {
-			rc = mbus_server_connection_read(connection, client->buffer.in);
+			rc = mbus_server_connection_read(connection, client->buffer_in);
 			if ((rc <= 0) &&
 			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
 				mbus_debugf("can not read data from client");
@@ -2198,11 +2278,11 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & POLLOUT) {
-			if (mbus_buffer_get_length(client->buffer.out) <= 0) {
+			if (mbus_buffer_get_length(client->buffer_out) <= 0) {
 				mbus_errorf("logic error");
 				goto bail;
 			}
-			rc = mbus_server_connection_write(connection, client->buffer.out);
+			rc = mbus_server_connection_write(connection, client->buffer_out);
 			if ((rc <= 0) &&
 			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
 				mbus_debugf("can not write string to client");
@@ -2231,16 +2311,16 @@ out:
 		uint8_t *data;
 		uint32_t expected;
 		uint32_t uncompressed;
-		if (mbus_buffer_get_length(client->buffer.in) < sizeof(expected)) {
+		if (mbus_buffer_get_length(client->buffer_in) < sizeof(expected)) {
 			continue;
 		}
 		mbus_debugf("%s buffer.in:", client_get_identifier(client));
-		mbus_debugf("  length  : %d", mbus_buffer_get_length(client->buffer.in));
-		mbus_debugf("  size    : %d", mbus_buffer_get_size(client->buffer.in));
+		mbus_debugf("  length  : %d", mbus_buffer_get_length(client->buffer_in));
+		mbus_debugf("  size    : %d", mbus_buffer_get_size(client->buffer_in));
 		while (1) {
 			char *string;
-			ptr = mbus_buffer_get_base(client->buffer.in);
-			end = ptr + mbus_buffer_get_length(client->buffer.in);
+			ptr = mbus_buffer_get_base(client->buffer_in);
+			end = ptr + mbus_buffer_get_length(client->buffer_in);
 			if (end - ptr < (int32_t) sizeof(expected)) {
 				break;
 			}
@@ -2288,7 +2368,7 @@ out:
 				}
 				break;
 			}
-			rc = mbus_buffer_shift(client->buffer.in, sizeof(uint32_t) + expected);
+			rc = mbus_buffer_shift(client->buffer_in, sizeof(uint32_t) + expected);
 			if (rc != 0) {
 				mbus_errorf("can not shift in, closing client: '%s' connection", client_get_identifier(client));
 				client_set_connection(client, NULL);
@@ -2728,13 +2808,13 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 		listener_ws_options.port        = server->options.ws.port;
 		listener_ws_options.certificate = NULL;
 		listener_ws_options.privatekey  = NULL;
-		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
-		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
-		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
-		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
-		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
-		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
-		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.connection_established = server_listener_ws_callback_connection_established;
+		listener_ws_options.callbacks.connection_receive     = server_listener_ws_callback_connection_receive;
+		listener_ws_options.callbacks.connection_writable    = server_listener_ws_callback_connection_writable;
+		listener_ws_options.callbacks.connection_closed      = server_listener_ws_callback_connection_closed;
+		listener_ws_options.callbacks.poll_add               = server_listener_ws_callback_poll_add;
+		listener_ws_options.callbacks.poll_mod               = server_listener_ws_callback_poll_mod;
+		listener_ws_options.callbacks.poll_del               = server_listener_ws_callback_poll_del;
 		listener_ws_options.callbacks.context                = server;
 		listener = mbus_server_listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {
@@ -2790,13 +2870,13 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 		listener_ws_options.port        = server->options.wss.port;
 		listener_ws_options.certificate = server->options.wss.certificate;
 		listener_ws_options.privatekey  = server->options.wss.privatekey;
-		listener_ws_options.callbacks.connection_established = server_listener_connection_established_callback;
-		listener_ws_options.callbacks.connection_receive     = server_listener_connection_receive_callback;
-		listener_ws_options.callbacks.connection_writable    = server_listener_connection_writable_callback;
-		listener_ws_options.callbacks.connection_closed      = server_listener_connection_closed_callback;
-		listener_ws_options.callbacks.poll_add               = server_listener_poll_add_callback;
-		listener_ws_options.callbacks.poll_mod               = server_listener_poll_mod_callback;
-		listener_ws_options.callbacks.poll_del               = server_listener_poll_del_callback;
+		listener_ws_options.callbacks.connection_established = server_listener_ws_callback_connection_established;
+		listener_ws_options.callbacks.connection_receive     = server_listener_ws_callback_connection_receive;
+		listener_ws_options.callbacks.connection_writable    = server_listener_ws_callback_connection_writable;
+		listener_ws_options.callbacks.connection_closed      = server_listener_ws_callback_connection_closed;
+		listener_ws_options.callbacks.poll_add               = server_listener_ws_callback_poll_add;
+		listener_ws_options.callbacks.poll_mod               = server_listener_ws_callback_poll_mod;
+		listener_ws_options.callbacks.poll_del               = server_listener_ws_callback_poll_del;
 		listener_ws_options.callbacks.context                = server;
 		listener = mbus_server_listener_ws_create(&listener_ws_options);
 		if (listener == NULL) {

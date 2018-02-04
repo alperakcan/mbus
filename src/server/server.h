@@ -136,6 +136,60 @@
  */
 #define MBUS_SERVER_COMMAND_RESULT		"command.result"
 
+/* command subscribe
+ *
+ * input:
+ * {
+ *     "source": "application name",
+ *     "event" : "event name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
+
+/* command unsubscribe
+ *
+ * input:
+ * {
+ *     "source": "application name",
+ *     "event" : "event name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
+
+/* command register
+ *
+ * input:
+ * {
+ *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
+
+/* command unregister
+ *
+ * input:
+ * {
+ *     "command" : "command name"
+ * }
+ *
+ * output:
+ * {
+ * }
+ */
+#define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
+
 /* command status
  *
  * input:
@@ -216,60 +270,6 @@
  */
 #define MBUS_SERVER_COMMAND_CLIENT		"command.client"
 
-/* command subscribe
- *
- * input:
- * {
- *     "source": "application name",
- *     "event" : "event name"
- * }
- *
- * output:
- * {
- * }
- */
-#define MBUS_SERVER_COMMAND_SUBSCRIBE		"command.subscribe"
-
-/* command unsubscribe
- *
- * input:
- * {
- *     "source": "application name",
- *     "event" : "event name"
- * }
- *
- * output:
- * {
- * }
- */
-#define MBUS_SERVER_COMMAND_UNSUBSCRIBE		"command.unsubscribe"
-
-/* command register
- *
- * input:
- * {
- *     "command" : "command name"
- * }
- *
- * output:
- * {
- * }
- */
-#define MBUS_SERVER_COMMAND_REGISTER		"command.register"
-
-/* command unregister
- *
- * input:
- * {
- *     "command" : "command name"
- * }
- *
- * output:
- * {
- * }
- */
-#define MBUS_SERVER_COMMAND_UNREGISTER		"command.unregister"
-
 /* command close
  *
  * input:
@@ -334,6 +334,24 @@
  * }
  */
 #define MBUS_SERVER_EVENT_UNSUBSCRIBED		"org.mbus.server.event.unsubscribed"
+
+/* event registered
+ *
+ * {
+ *   "source"      : "application name",
+ *   "identifier"  : "command name"
+ * }
+ */
+#define MBUS_SERVER_EVENT_REGISTERED		"org.mbus.server.event.registered"
+
+/* event unregistered
+ *
+ * {
+ *   "source"      : "application name",
+ *   "identifier"  : "command name"
+ * }
+ */
+#define MBUS_SERVER_EVENT_UNREGISTERED		"org.mbus.server.event.unregistered"
 
 struct mbus_server;
 
