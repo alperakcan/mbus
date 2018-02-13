@@ -1189,7 +1189,7 @@ class MBusClient (object):
                     self.__state = MBusClientState.Disconnected
                 return 0
 
-        for request in self.__requests[:]:
+        for request in list(self.__requests):
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
                 continue
@@ -1212,7 +1212,7 @@ class MBusClient (object):
                     self.__notifyCommand(request, None, MBusClientCommandStatus.Timeout)
             self.__requests.remove(request)
 
-        for request in self.__pendings[:]:
+        for request in list(self.__pendings):
             if (request.timeout < 0 or
                 mbus_clock_before(current, request.createdAt + request.timeout)):
                 continue
