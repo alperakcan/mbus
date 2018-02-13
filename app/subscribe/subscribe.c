@@ -45,13 +45,13 @@
 TAILQ_HEAD(subscriptions, subscription);
 struct subscription {
 	TAILQ_ENTRY(subscription) subscriptions;
-	char *source;
-	char *event;
+	char *identifier;
 };
 
 struct arg {
 	int connected;
 	int disconnected;
+	const char *source;
 	struct subscriptions *subscriptions;
 };
 
@@ -60,21 +60,18 @@ static void subscription_destroy (struct subscription *subscription)
 	if (subscription == NULL) {
 		return;
 	}
-	if (subscription->source != NULL) {
-		free(subscription->source);
-	}
-	if (subscription->event != NULL) {
-		free(subscription->event);
+	if (subscription->identifier != NULL) {
+		free(subscription->identifier);
 	}
 	free(subscription);
 }
 
-static struct subscription * subscription_create (const char *topic)
+static struct subscription * subscription_create (const char *identifier)
 {
 	struct subscription *subscription;
 	subscription = NULL;
-	if (topic == NULL) {
-		fprintf(stderr, "topic is invalid\n");
+	if (identifier == NULL) {
+		fprintf(stderr, "identifier is invalid\n");
 		goto bail;
 	}
 	subscription = malloc(sizeof(struct subscription));
@@ -83,13 +80,8 @@ static struct subscription * subscription_create (const char *topic)
 		goto bail;
 	}
 	memset(subscription, 0, sizeof(struct subscription));
-	subscription->source = strdup(MBUS_METHOD_EVENT_SOURCE_ALL);
-	if (subscription->source == NULL) {
-		fprintf(stderr, "can not allocate memory\n");
-		goto bail;
-	}
-	subscription->event = strdup(topic);
-	if (subscription->event == NULL) {
+	subscription->identifier = strdup(identifier);
+	if (subscription->identifier == NULL) {
 		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
@@ -117,8 +109,8 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 					fprintf(stderr, "can not get default subscribe options\n");
 					goto bail;
 				}
-				subscribe_options.source = subscription->source;
-				subscribe_options.event = subscription->event;
+				subscribe_options.source = arg->source;
+				subscribe_options.event = subscription->identifier;
 				rc = mbus_client_subscribe_with_options(client, &subscribe_options);
 				if (rc != 0) {
 					fprintf(stderr, "can not subscribe to event\n");
@@ -131,7 +123,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 				fprintf(stderr, "can not get default subscribe options\n");
 				goto bail;
 			}
-			subscribe_options.source = MBUS_METHOD_EVENT_SOURCE_ALL;
+			subscribe_options.source = arg->source;
 			subscribe_options.event = MBUS_METHOD_EVENT_IDENTIFIER_ALL;
 			rc = mbus_client_subscribe_with_options(client, &subscribe_options);
 			if (rc != 0) {
@@ -180,9 +172,11 @@ static void mbus_client_callback_message (struct mbus_client *client, void *cont
 }
 
 #define OPTION_HELP	'h'
+#define OPTION_SOURCE	's'
 #define OPTION_EVENT	'e'
 static struct option longopts[] = {
 	{ "help",			no_argument,		NULL,	OPTION_HELP },
+	{ "source",			required_argument,	NULL,	OPTION_SOURCE },
 	{ "event",			required_argument,	NULL,	OPTION_EVENT },
 	{ NULL,				0,			NULL,	0 },
 };
@@ -198,9 +192,10 @@ static void signal_handler (int signal)
 static void usage (void)
 {
 	fprintf(stdout, "mbus subscribe arguments:\n");
-	fprintf(stdout, "  -e, --event: event identifier to subscribe (default: all)\n");
-	fprintf(stdout, "  -h, --help : this text\n");
-	fprintf(stdout, "  --mbus-help: mbus help text\n");
+	fprintf(stdout, "  -s, --source: source identifier to subscribe (default: all)\n");
+	fprintf(stdout, "  -e, --event : event identifier to subscribe (default: all)\n");
+	fprintf(stdout, "  -h, --help  : this text\n");
+	fprintf(stdout, "  --mbus-help : mbus help text\n");
 	mbus_client_usage();
 }
 
@@ -243,8 +238,11 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":e:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":s:e:h", longopts, NULL)) != -1) {
 		switch (c) {
+			case OPTION_SOURCE:
+				arg.source = optarg;
+				break;
 			case OPTION_EVENT:
 				subscription = subscription_create(optarg);
 				if (subscription == NULL) {
