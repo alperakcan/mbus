@@ -949,7 +949,7 @@ module MBusClient
         end
       end
       if (callback != nil)
-        message = MBusClientMessageEvent(object)
+        message = MBusClientMessageEvent.new(object)
         callback.call(self, callbackContext, message)
       end
     end

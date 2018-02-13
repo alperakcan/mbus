@@ -32,7 +32,8 @@ require "json"
 
 require "MBusClient"
 
-o_subscriptions = Array.new()
+o_source = nil
+o_events = Array.new()
 
 mbus_client_identifier        = nil
 mbus_client_server_protocol   = nil
@@ -51,6 +52,7 @@ mbus_client_ping_threshold    = nil
 opts = GetoptLong.new(
   [ "--help"       , "-h", GetoptLong::NO_ARGUMENT ],
     
+  [ "--source"     , "-s", GetoptLong::REQUIRED_ARGUMENT ],
   [ "--event"      , "-e", GetoptLong::REQUIRED_ARGUMENT ],
     
   [ "--mbus-client-identifier"       , GetoptLong::REQUIRED_ARGUMENT ],
@@ -72,7 +74,8 @@ opts.each do |opt, arg|
   case opt
     when "--help"
     puts "command usage:\n" \
-         "  -e, --event                    : publish event identifier (default: %s)\n" \
+         "  -s, --source                   : source client identifier (default: %s)\n" \
+         "  -e, --event                    : subscribe event identifier (default: %s)\n" \
          "  --mbus-debug-level             : debug level (default: error)\n" \
          "  --mbus-client-identifier       : client identifier (default: %s)\n" \
          "  --mbus-client-server-protocol  : server protocol (default: %s)\n" \
@@ -89,6 +92,7 @@ opts.each do |opt, arg|
          "  --mbus-client-ping-threshold   : ping threshold (default: %s)\n" \
          "  --help                         : this text" \
          % [
+           MBusClient::MBUS_METHOD_EVENT_SOURCE_ALL,
            MBusClient::MBUS_METHOD_EVENT_IDENTIFIER_ALL,
            MBusClient::MBusClientDefaults::IDENTIFIER,
            MBusClient::MBusClientDefaults::SERVER_PROTOCOL,
@@ -105,10 +109,10 @@ opts.each do |opt, arg|
            MBusClient::MBusClientDefaults::PING_THRESHOLD
          ]
          exit(0)
+    when "--source"
+      o_source = arg
     when "--event"
-      o_subscriptions.push(arg)
-    when "--flood"
-      o_flood       = arg.to_i()
+      o_events.push(arg)
     when "--mbus-client-identifier"
       mbus_client_identifier        = arg
     when "--mbus-client-server-protocol"
@@ -139,12 +143,14 @@ opts.each do |opt, arg|
 end
 
 class CallbackParam
-  attr_accessor :subscriptions
+  attr_accessor :source
+  attr_accessor :events
   attr_accessor :connected
   attr_accessor :disconnected
 
   def initialize
-    @subscriptions = Array.new()
+    @source = nil
+    @events = Array.new()
     @connected = 0
     @disconnected = 0
   end
@@ -154,11 +160,11 @@ def onConnect (client, context, status)
   puts "connect: %s, %s" % [ status, MBusClient::MBusClientConnectStatus.string(status) ]
   if (status == MBusClient::MBusClientConnectStatus::SUCCESS)
     context.connected = 1
-    if (context.subscriptions.count() == 0)
-      client.subscribe(MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL)
+    if (context.events.count() == 0)
+      client.subscribe(MBusClient.MBUS_METHOD_EVENT_IDENTIFIER_ALL, nil, nil, context.source, nil)
     else
-      for s in context.subscriptions
-        client.subscribe(s)
+      for s in context.events
+        client.subscribe(s, nil, nil, context.source, nil)
       end
     end
   else
@@ -230,7 +236,8 @@ options.onSubscribe  = method(:onSubscribe)
 options.onMessage    = method(:onMessage)
 
 options.onContext = CallbackParam.new()
-options.onContext.subscriptions = o_subscriptions
+options.onContext.source = o_source
+options.onContext.events = o_events
 
 client = MBusClient::MBusClient.new(options)
 client.connect()
