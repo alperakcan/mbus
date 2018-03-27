@@ -69,13 +69,13 @@ or
 
 ## 3. build ##
 
-    apt install gcc
-    apt install make
-    apt install pkg-config
-    apt install libssl-dev
-    apt install zlib1g-dev
-    apt install libwebsockets-dev
-    apt install libreadline-dev
+    sudo apt install -y gcc
+    sudo apt install -y make
+    sudo apt install -y pkg-config
+    sudo apt install -y libssl-dev
+    sudo apt install -y zlib1g-dev
+    sudo apt install -y libwebsockets-dev
+    sudo apt install -y libreadline-dev
 
     cd mbus
     make
