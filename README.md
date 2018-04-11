@@ -354,7 +354,7 @@ generate server key
 
     openssl genrsa -des3 -out server.key 2048
 
-generate server key without encryption
+generate server key without passphrase
 
     openssl genrsa -out server.key 2048
 
