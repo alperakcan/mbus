@@ -1677,7 +1677,7 @@ struct listener * mbus_server_listener_ws_create (const struct listener_ws_optio
 	listener_ws->private.destroy  = listener_ws_destroy;
 	return &listener_ws->private.listener;
 bail:	if (listener_ws != NULL) {
-		listener_ws_destroy(&listener_ws->private.listener);
+		//listener_ws_destroy(&listener_ws->private.listener);
 	}
 	return NULL;
 }
