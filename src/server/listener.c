@@ -1452,8 +1452,6 @@ static const struct lws_extension ws_extensions[] = {
 	}
 };
 
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-
 static struct lws_protocols wss_protocols[] = {
 	{
 		"mbus",
@@ -1498,8 +1496,6 @@ static const struct lws_extension wss_extensions[] = {
 		NULL
 	}
 };
-
-#endif
 
 static const char * listener_ws_get_name (struct listener *listener)
 {
@@ -1636,10 +1632,6 @@ struct listener * mbus_server_listener_ws_create (const struct listener_ws_optio
 		goto bail;
 	}
 	memcpy(&listener_ws->callbacks, &options->callbacks, sizeof(struct listener_ws_callbacks));
-	ws_protocols[0].user = listener_ws;
-#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	wss_protocols[0].user = listener_ws;
-#endif
 	lws_set_log_level((1 << LLL_COUNT) - 1, ws_log_callback);
 	memset(&info, 0, sizeof(info));
 	info.iface = NULL;
@@ -1648,9 +1640,11 @@ struct listener * mbus_server_listener_ws_create (const struct listener_ws_optio
 	info.uid = -1;
 	if (options->certificate == NULL &&
 	    options->privatekey == NULL) {
+		ws_protocols[0].user = listener_ws;
 		info.protocols = ws_protocols;
 		info.extensions = ws_extensions;
 	} else {
+		wss_protocols[0].user = listener_ws;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 		info.protocols = wss_protocols;
 		info.extensions = wss_extensions;
@@ -1677,7 +1671,7 @@ struct listener * mbus_server_listener_ws_create (const struct listener_ws_optio
 	listener_ws->private.destroy  = listener_ws_destroy;
 	return &listener_ws->private.listener;
 bail:	if (listener_ws != NULL) {
-		//listener_ws_destroy(&listener_ws->private.listener);
+		listener_ws_destroy(&listener_ws->private.listener);
 	}
 	return NULL;
 }
