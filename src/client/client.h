@@ -116,6 +116,15 @@ enum mbus_client_command_status {
 	mbus_client_command_status_canceled
 };
 
+enum mbus_client_wakeupfd_events {
+        mbus_client_wakeupfd_event_in           = 0x00000001
+};
+
+enum mbus_client_connectionfd_events {
+        mbus_client_connectionfd_event_in       = 0x00000001,
+        mbus_client_connectionfd_event_out      = 0x00000002
+};
+
 enum mbus_client_connectionfd_status {
         mbus_client_connectionfd_status_create,
         mbus_client_connectionfd_status_events,
@@ -217,9 +226,9 @@ const struct mbus_client_options * mbus_client_get_options (struct mbus_client *
 enum mbus_client_state mbus_client_get_state (struct mbus_client *client);
 const char * mbus_client_get_identifier (struct mbus_client *client);
 int mbus_client_get_wakeup_fd (struct mbus_client *client);
-int mbus_client_get_wakeup_fd_events (struct mbus_client *client);
+enum mbus_client_wakeupfd_events mbus_client_get_wakeup_fd_events (struct mbus_client *client);
 int mbus_client_get_connection_fd (struct mbus_client *client);
-int mbus_client_get_connection_fd_events (struct mbus_client *client);
+enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struct mbus_client *client);
 
 int mbus_client_has_pending (struct mbus_client *client);
 int mbus_client_has_pending_unlocked (struct mbus_client *client);

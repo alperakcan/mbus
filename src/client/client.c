@@ -1214,6 +1214,8 @@ static int mbus_client_run_connect (struct mbus_client *client)
 			mbus_client_notify_disconnect(client, mbus_client_disconnect_status_canceled);
 		}
 	}
+
+	mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
 	return 0;
 bail:	mbus_client_notify_connect(client, status);
 	mbus_client_reset(client);
@@ -1867,7 +1869,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_get_wakeup_fd_events (struct mbus_client *client)
+enum mbus_client_wakeupfd_events mbus_client_get_wakeup_fd_events (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -1878,7 +1880,7 @@ int mbus_client_get_wakeup_fd_events (struct mbus_client *client)
 	if (client->socket == NULL) {
 		goto bail;
 	}
-	rc = POLLIN;
+	rc = mbus_client_wakeupfd_event_in;
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -1907,7 +1909,7 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-int mbus_client_get_connection_fd_events (struct mbus_client *client)
+enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struct mbus_client *client)
 {
 	int rc;
 	if (client == NULL) {
@@ -1918,13 +1920,14 @@ int mbus_client_get_connection_fd_events (struct mbus_client *client)
 	if (client->socket == NULL) {
 		goto bail;
 	}
-	rc = POLLIN;
+	rc = mbus_client_connectionfd_event_in;
 	if (mbus_buffer_get_length(client->outgoing) > 0
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	    || client->ssl.want_write != 0
 #endif
+	    || !TAILQ_EMPTY(&client->requests)
 	) {
-		rc |= POLLOUT;
+		rc |= mbus_client_connectionfd_event_out;
 	}
 	mbus_client_unlock(client);
 	return rc;
@@ -3605,6 +3608,7 @@ out:
 		}
 	}
 
+	mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
 	mbus_client_unlock(client);
 	return 0;
 bail:	if (client != NULL) {
