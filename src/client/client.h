@@ -116,6 +116,12 @@ enum mbus_client_command_status {
 	mbus_client_command_status_canceled
 };
 
+enum mbus_client_connectionfd_status {
+        mbus_client_connectionfd_status_create,
+        mbus_client_connectionfd_status_events,
+        mbus_client_connectionfd_status_destroy
+};
+
 enum mbus_client_qos {
 	mbus_client_qos_at_most_once,
 	mbus_client_qos_at_least_once,
@@ -191,6 +197,7 @@ struct mbus_client_options {
 		void (*unsubscribe) (struct mbus_client *client, void *context, const char *source, const char *event, enum mbus_client_unsubscribe_status status);
 		void (*registered) (struct mbus_client *client, void *context, const char *command, enum mbus_client_register_status status);
 		void (*unregistered) (struct mbus_client *client, void *context, const char *command, enum mbus_client_unregister_status status);
+		void (*connectionfd) (struct mbus_client *client, void *context, enum mbus_client_connectionfd_status status);
 		void *context;
 	} callbacks;
 };
@@ -293,3 +300,4 @@ const char * mbus_client_unsubscribe_status_string (enum mbus_client_unsubscribe
 const char * mbus_client_register_status_string (enum mbus_client_register_status status);
 const char * mbus_client_unregister_status_string (enum mbus_client_unregister_status status);
 const char * mbus_client_command_status_string (enum mbus_client_command_status status);
+const char * mbus_client_connectionfd_status_string (enum mbus_client_connectionfd_status status);

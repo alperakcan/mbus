@@ -622,11 +622,20 @@ static void mbus_client_notify_connect (struct mbus_client *client, enum mbus_cl
 
 static void mbus_client_notify_disconnect (struct mbus_client *client, enum mbus_client_disconnect_status status)
 {
-	if (client->options->callbacks.disconnect != NULL) {
-		mbus_client_unlock(client);
-		client->options->callbacks.disconnect(client, client->options->callbacks.context, status);
-		mbus_client_lock(client);
-	}
+        if (client->options->callbacks.disconnect != NULL) {
+                mbus_client_unlock(client);
+                client->options->callbacks.disconnect(client, client->options->callbacks.context, status);
+                mbus_client_lock(client);
+        }
+}
+
+static void mbus_client_notify_connectionfd (struct mbus_client *client, enum mbus_client_connectionfd_status status)
+{
+        if (client->options->callbacks.connectionfd != NULL) {
+                mbus_client_unlock(client);
+                client->options->callbacks.connectionfd(client, client->options->callbacks.context, status);
+                mbus_client_lock(client);
+        }
 }
 
 static void mbus_client_reset (struct mbus_client *client)
@@ -650,6 +659,7 @@ static void mbus_client_reset (struct mbus_client *client)
 	}
 #endif
 	if (client->socket != NULL) {
+                mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_destroy);
 		mbus_socket_shutdown(client->socket, mbus_socket_shutdown_rdwr);
 		mbus_socket_destroy(client->socket);
 		client->socket = NULL;
@@ -1100,6 +1110,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		status = mbus_client_connect_status_internal_error;
 		goto bail;
 	}
+        mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_create);
 
 	rc = mbus_socket_set_reuseaddr(client->socket, 1);
 	if (rc != 0) {
@@ -1847,9 +1858,6 @@ int mbus_client_get_wakeup_fd (struct mbus_client *client)
 		goto bail;
 	}
 	mbus_client_lock(client);
-	if (client->socket == NULL) {
-		goto bail;
-	}
 	rc = client->wakeup[0];
 	mbus_client_unlock(client);
 	return rc;
@@ -3861,4 +3869,14 @@ const char * mbus_client_command_status_string (enum mbus_client_command_status 
 		case mbus_client_command_status_canceled:			return "canceled";
 	}
 	return "internal error";
+}
+
+const char * mbus_client_connectionfd_status_string (enum mbus_client_connectionfd_status status)
+{
+        switch (status) {
+                case mbus_client_connectionfd_status_create:                    return "create";
+                case mbus_client_connectionfd_status_events:                    return "events";
+                case mbus_client_connectionfd_status_destroy:                   return "destroy";
+        }
+        return "internal error";
 }
