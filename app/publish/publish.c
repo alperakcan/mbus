@@ -38,7 +38,6 @@
 #include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/client.h"
-#include "mbus/server.h"
 
 #define OPTION_HELP		'h'
 #define OPTION_DESTINATION	'd'
