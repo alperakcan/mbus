@@ -1216,7 +1216,9 @@ static int mbus_client_run_connect (struct mbus_client *client)
 		}
 	}
 
-	mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
+	if (client->socket != NULL) {
+	        mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
+	}
 	return 0;
 bail:	mbus_client_notify_connect(client, status);
 	mbus_client_reset(client);
@@ -1921,15 +1923,21 @@ enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struc
 	if (client->socket == NULL) {
 		goto bail;
 	}
-	rc = mbus_client_connectionfd_event_in;
-	if (mbus_buffer_get_length(client->outgoing) > 0
+        rc = mbus_client_connectionfd_event_in;
+        if (client->state == mbus_client_state_connecting &&
+            client->socket_connected == 0) {
+                rc |= mbus_client_connectionfd_event_out;
+        } else {
+                rc = mbus_client_connectionfd_event_in;
+                if (mbus_buffer_get_length(client->outgoing) > 0
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-	    || client->ssl.want_write != 0
+                    || client->ssl.want_write != 0
 #endif
-	    || !TAILQ_EMPTY(&client->requests)
-	) {
-		rc |= mbus_client_connectionfd_event_out;
-	}
+                    || !TAILQ_EMPTY(&client->requests)
+                ) {
+                        rc |= mbus_client_connectionfd_event_out;
+                }
+        }
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -3143,7 +3151,11 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			pollfds[npollfds].events |= POLLOUT;
 		} else {
 			pollfds[npollfds].events |= POLLIN;
-			if (mbus_buffer_get_length(client->outgoing) > 0) {
+			if (mbus_buffer_get_length(client->outgoing) > 0
+#if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+			    || client->ssl.want_write != 0
+#endif
+			    ) {
 				pollfds[npollfds].events |= POLLOUT;
 			}
 		}
@@ -3230,10 +3242,16 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 					 SSL_pending(client->ssl.ssl));
 			}
 #endif
-		if (read_rc <= 0) {
+	        if (read_rc == 0) {
+                        mbus_errorf("connection reset by server");
+                        mbus_client_reset(client);
+                        client->state = mbus_client_state_disconnected;
+                        mbus_client_notify_disconnect(client, mbus_client_disconnect_status_connection_closed);
+                        goto out;
+	        } else if (read_rc < 0) {
 			if (errno == EINTR) {
-			} else if (errno == EAGAIN) {
-			} else if (errno == EWOULDBLOCK) {
+                        } else if (errno == EAGAIN) {
+                        } else if (errno == EWOULDBLOCK) {
 			} else {
 				mbus_errorf("connection reset by server");
 				mbus_client_reset(client);
@@ -3614,7 +3632,9 @@ out:
 		}
 	}
 
-	mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
+	if (client->socket != NULL) {
+	        mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
+	}
 	mbus_client_unlock(client);
 	return 0;
 bail:	if (client != NULL) {
