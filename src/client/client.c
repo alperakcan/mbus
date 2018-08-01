@@ -101,7 +101,8 @@ static struct option longopts[] = {
 enum wakeup_reason {
 	wakeup_reason_break,
 	wakeup_reason_connect,
-	wakeup_reason_disconnect
+	wakeup_reason_disconnect,
+	wakeup_reason_publish,
 };
 
 TAILQ_HEAD(requests, request);
@@ -2353,7 +2354,7 @@ int mbus_client_publish (struct mbus_client *client, const char *event, const st
 		goto bail;
 	}
 	mbus_client_lock(client);
-	rc = mbus_client_publish_unlocked(client, event, payload);
+	rc  = mbus_client_publish_unlocked(client, event, payload);
 	mbus_client_unlock(client);
 	return rc;
 bail:	if (client != NULL) {
@@ -2518,6 +2519,11 @@ int mbus_client_publish_with_options_unlocked (struct mbus_client *client, struc
 	}
 	if (jdata != NULL) {
 		mbus_json_delete(jdata);
+	}
+        rc = mbus_client_wakeup(client, wakeup_reason_publish);
+	if (rc != 0) {
+	        mbus_errorf("can not wakeup loop\n");
+	        goto bail;
 	}
 	return 0;
 bail:	if (jpayload != NULL) {
