@@ -32,6 +32,28 @@
 				mbcOptions.onConnect = function (client, context, status) {
 					console.log("connect status: {0}, {1}".format(status, MBusClientConnectStatusString(status)));
 					writeToScreen("connect status: {0}, {1}".format(status, MBusClientConnectStatusString(status)));
+					mbc.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CLIENTS, null, function (client, context, message, status) {
+						console.log("command.clients status: {0}, {1}".format(status, MBusClientCommandStatusString(status)));
+						writeToScreen("command.clients status: {0}, {1}".format(status, MBusClientCommandStatusString(status)));
+						if (status == MBusClientCommandStatus.Success) {
+							console.log("message status:{0}, payload: {1}".format(message.getResponseStatus(), message.getResponsePayload()));
+							writeToScreen("message status:{0}, payload: {1}".format(message.getResponseStatus(), message.getResponsePayload()));
+							var clients = message.getResponsePayload();
+							for (var i = 0; i < clients.length; i++) {
+								var payload;
+							    payload = {};
+							    payload["source"] = clients[i];
+								mbc.command(MBUS_SERVER_IDENTIFIER, MBUS_SERVER_COMMAND_CLIENT, payload, function (client, context, message, status) {
+									console.log("command.client status: {0}, {1}".format(status, MBusClientCommandStatusString(status)));
+									writeToScreen("command.client status: {0}, {1}".format(status, MBusClientCommandStatusString(status)));
+									if (status == MBusClientCommandStatus.Success) {
+										console.log("message status:{0}, payload: {1}".format(message.getResponseStatus(), message.getResponsePayload()));
+										writeToScreen("message status:{0}, payload: {1}".format(message.getResponseStatus(), JSON.stringify(message.getResponsePayload())));
+									}
+								}, null, null);
+							}
+						}
+					}, null, null);
 					if (status == MBusClientConnectStatus.Success) {
 						mbc.subscribe(MBUS_METHOD_EVENT_IDENTIFIER_ALL);
 					}

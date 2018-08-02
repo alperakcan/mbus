@@ -61,6 +61,8 @@ const MBUS_SERVER_COMMAND_SUBSCRIBE               = "command.subscribe";
 const MBUS_SERVER_COMMAND_UNSUBSCRIBE             = "command.unsubscribe";
 const MBUS_SERVER_COMMAND_REGISTER                = "command.register";
 const MBUS_SERVER_COMMAND_UNREGISTER              = "command.unregister";
+const MBUS_SERVER_COMMAND_CLIENTS                 = "command.clients";
+const MBUS_SERVER_COMMAND_CLIENT                  = "command.client";
 
 const MBUS_SERVER_EVENT_CONNECTED                 = "org.mbus.server.event.connected";
 const MBUS_SERVER_EVENT_DISCONNECTED              = "org.mbus.server.event.disconnected";
