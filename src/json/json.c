@@ -171,6 +171,11 @@ int mbus_json_compare (const struct mbus_json *a, const struct mbus_json *b)
 	return 0;
 }
 
+struct mbus_json * mbus_json_get_parent (const struct mbus_json *json)
+{
+        return (struct mbus_json *) (((mbus_cJSON *) json)->parent);
+}
+
 struct mbus_json * mbus_json_get_child (const struct mbus_json *json)
 {
 	return (struct mbus_json *) (((mbus_cJSON *) json)->child);
@@ -358,9 +363,12 @@ int mbus_json_add_string_to_array (struct mbus_json *json, const char *string)
 
 int mbus_json_add_string_to_object (struct mbus_json *json, const char *name, const char *string)
 {
-	if (name == NULL) {
-		return -1;
-	}
+        if (json == NULL) {
+                return -1;
+        }
+        if (name == NULL) {
+                return -1;
+        }
 	if (string == NULL) {
 		return -1;
 	}

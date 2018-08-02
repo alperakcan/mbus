@@ -50,6 +50,8 @@ typedef struct mbus_cJSON
     struct mbus_cJSON *prev;
     /* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */
     struct mbus_cJSON *child;
+    /* An array or object item will have a child pointer pointing to a chain of the items in the array/object. */
+    struct mbus_cJSON *parent;
 
     /* The type of the item, as above. */
     int type;

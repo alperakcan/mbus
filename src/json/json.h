@@ -50,6 +50,7 @@ struct mbus_json * mbus_json_create_null (void);
 void mbus_json_delete (struct mbus_json *json);
 
 int mbus_json_compare (const struct mbus_json *a, const struct mbus_json *b);
+struct mbus_json * mbus_json_get_parent (const struct mbus_json *json);
 struct mbus_json * mbus_json_get_child (const struct mbus_json *json);
 struct mbus_json * mbus_json_get_next (const struct mbus_json *json);
 enum mbus_json_type mbus_json_get_type (const struct mbus_json *json);

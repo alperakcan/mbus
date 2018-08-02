@@ -1739,9 +1739,10 @@ void   mbus_cJSON_AddItemToArray(mbus_cJSON *array, mbus_cJSON *item)
         }
         suffix_object(c, item);
     }
+    item->parent = array;
 }
 
-void   mbus_cJSON_AddItemToObject(mbus_cJSON *object, const char *string, mbus_cJSON *item)
+void mbus_cJSON_AddItemToObject(mbus_cJSON *object, const char *string, mbus_cJSON *item)
 {
     if (!item)
     {
@@ -1756,6 +1757,7 @@ void   mbus_cJSON_AddItemToObject(mbus_cJSON *object, const char *string, mbus_c
     item->string = cJSON_strdup(string);
 
     mbus_cJSON_AddItemToArray(object,item);
+    item->parent = object;
 }
 
 /* Add an item to an object with constant string as key */
