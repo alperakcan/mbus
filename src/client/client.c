@@ -1912,17 +1912,16 @@ bail:	if (client != NULL) {
 	return -1;
 }
 
-enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struct mbus_client *client)
+enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events_unlocked (struct mbus_client *client)
 {
-	int rc;
-	if (client == NULL) {
-		mbus_errorf("client is invalid");
-		goto bail;
-	}
-	mbus_client_lock(client);
-	if (client->socket == NULL) {
-		goto bail;
-	}
+        int rc;
+        if (client == NULL) {
+                mbus_errorf("client is invalid");
+                goto bail;
+        }
+        if (client->socket == NULL) {
+                goto bail;
+        }
         rc = mbus_client_connectionfd_event_in;
         if (client->state == mbus_client_state_connecting &&
             client->socket_connected == 0) {
@@ -1938,12 +1937,25 @@ enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struc
                         rc |= mbus_client_connectionfd_event_out;
                 }
         }
-	mbus_client_unlock(client);
-	return rc;
-bail:	if (client != NULL) {
-		mbus_client_unlock(client);
-	}
-	return 0;
+        return rc;
+bail:   return 0;
+}
+
+enum mbus_client_connectionfd_events mbus_client_get_connection_fd_events (struct mbus_client *client)
+{
+        enum mbus_client_connectionfd_events events;
+        if (client == NULL) {
+                mbus_errorf("client is invalid");
+                goto bail;
+        }
+        mbus_client_lock(client);
+        events = mbus_client_get_connection_fd_events_unlocked(client);
+        mbus_client_unlock(client);
+        return events;
+bail:   if (client != NULL) {
+                mbus_client_unlock(client);
+        }
+        return 0;
 }
 
 int mbus_client_has_pending_unlocked (struct mbus_client *client)
@@ -3090,6 +3102,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 {
 	int rc;
 	unsigned long long current;
+	enum mbus_client_connectionfd_events events;
 
 	struct request *request;
 	struct request *nrequest;
@@ -3100,7 +3113,9 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	int npollfds;
 	struct pollfd pollfds[2];
 
-	if (client == NULL) {
+        events = 0;
+
+        if (client == NULL) {
 		mbus_errorf("client is invalid");
 		goto bail;
 	}
@@ -3167,6 +3182,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	} else {
 		ptimeout = MIN(ptimeout, timeout);
 	}
+	events = mbus_client_get_connection_fd_events_unlocked(client);
 	mbus_client_unlock(client);
 	rc = poll(pollfds, npollfds, ptimeout);
 	mbus_client_lock(client);
@@ -3632,7 +3648,7 @@ out:
 		}
 	}
 
-	if (client->socket != NULL) {
+	if (events != mbus_client_get_connection_fd_events_unlocked(client)) {
 	        mbus_client_notify_connectionfd(client, mbus_client_connectionfd_status_events);
 	}
 	mbus_client_unlock(client);
