@@ -99,6 +99,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 	struct arg *arg;
 	struct mbus_client_publish_options publish_options;
 	arg = context;
+	rc = 0;
 	if (status == mbus_client_connect_status_success) {
 		for (p = 0; p < arg->flood; p++) {
 			rc = mbus_client_publish_options_default(&publish_options);
