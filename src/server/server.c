@@ -2578,7 +2578,6 @@ __attribute__ ((__visibility__("default"))) int mbus_server_options_from_argv (s
 		mbus_errorf("options is invalid");
 		goto bail;
 	}
-	mbus_server_options_default(options);
 
 	optind = 1;
 	_argv = malloc(sizeof(char *) * argc);
