@@ -16,6 +16,9 @@ libmbus-clock.so_libraries-y = \
 libmbus-clock.so_files-y = \
 	clock.c
 
+libmbus-clock.so_ldflags-y += \
+	-lrt
+
 libmbus-clock.a_includes-y = \
 	${libmbus-clock.so_includes-y}
 
