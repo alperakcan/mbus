@@ -243,10 +243,21 @@ __attribute__ ((__visibility__("default"))) void mbus_server_usage (void)
 	fprintf(stdout, "  --mbus-help                   : this text\n");
 }
 
+static size_t _strnlen (const char *s, size_t maxlen)
+{
+	 size_t len;
+	for (len = 0; len < maxlen; len++, s++) {
+		if (!*s) {
+			break;
+		}
+	}
+	return (len);
+}
+
 static char * _strndup (const char *s, size_t n)
 {
 	char *result;
-	size_t len = strnlen(s, n);
+	size_t len = _strnlen(s, n);
 	result = (char *) malloc(len + 1);
 	if (result == NULL) {
 		return NULL;
