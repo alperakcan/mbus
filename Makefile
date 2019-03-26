@@ -16,7 +16,9 @@ install: app src test
 	install -d ${DESTDIR}/usr/local/bin
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
 	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
+ifeq (${APP_CLIENT_ENABLE}, y)
 	install -m 0755 dist/bin/mbus-client ${DESTDIR}/usr/local/bin/mbus-client
+endif
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
 	install -m 0755 dist/bin/mbus-command.py ${DESTDIR}/usr/local/bin/mbus-command.py
 	install -m 0755 dist/bin/mbus-command.rb ${DESTDIR}/usr/local/bin/mbus-command.rb
