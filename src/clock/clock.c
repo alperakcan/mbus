@@ -28,6 +28,10 @@
 
 #include <time.h>
 
+#if !defined(CLOCK_MONOTONIC_RAW)
+#define CLOCK_MONOTONIC_RAW	CLOCK_MONOTONIC
+#endif
+
 unsigned long long mbus_clock_monotonic (void)
 {
 	struct timespec ts;
