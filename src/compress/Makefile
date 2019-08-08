@@ -34,7 +34,7 @@ libmbus-compress.a_files-y += \
 libmbus-compress.a_cflags-y += \
 	${libmbus-compress.so_cflags-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

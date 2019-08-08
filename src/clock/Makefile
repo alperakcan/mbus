@@ -27,7 +27,7 @@ libmbus-clock.a_files-y = \
 
 dist.base = mbus
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.include-y = \
 	clock.h

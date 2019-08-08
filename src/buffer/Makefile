@@ -26,7 +26,7 @@ libmbus-buffer.a_includes-y = \
 libmbus-buffer.a_files-y = \
 	${libmbus-buffer.so_files-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

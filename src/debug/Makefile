@@ -13,7 +13,7 @@ libmbus-debug.so_files-y = \
 libmbus-debug.a_files-y = \
 	${libmbus-debug.so_files-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

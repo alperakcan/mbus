@@ -32,7 +32,7 @@ libmbus-json.a_includes-y = \
 libmbus-json.a_files-y = \
 	${libmbus-json.so_files-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

@@ -1,5 +1,5 @@
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

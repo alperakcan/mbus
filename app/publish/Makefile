@@ -35,7 +35,7 @@ mbus-publish_ldflags-y += \
 	-lm \
 	-ldl
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.bin-y = \
 	mbus-publish \

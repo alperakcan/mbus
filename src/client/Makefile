@@ -42,7 +42,7 @@ libmbus-client.a_cflags-y = \
 libmbus-client.a_files-y = \
 	${libmbus-client.so_files-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

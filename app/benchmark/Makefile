@@ -35,7 +35,7 @@ mbus-benchmark_ldflags-y += \
 	-lm \
 	-ldl
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.bin-y = \
 	mbus-benchmark

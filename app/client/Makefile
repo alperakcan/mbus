@@ -36,7 +36,7 @@ mbus-client_ldflags-y += \
 	-ldl \
 	-lreadline
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.bin-y = \
 	mbus-client

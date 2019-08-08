@@ -34,7 +34,7 @@ mbus-test-execute-command_ldflags-y += \
 	-lm \
 	-ldl
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.bin-y = \
 	mbus-test-execute-command

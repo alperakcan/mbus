@@ -25,7 +25,7 @@ libmbus-socket.a_includes-y = \
 libmbus-socket.a_files-y = \
 	${libmbus-socket.so_files-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

@@ -14,7 +14,7 @@ mbus-version_files-y = \
 mbus-version_ldflags-y = \
 	-lmbus-version
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.bin-y = \
 	mbus-version

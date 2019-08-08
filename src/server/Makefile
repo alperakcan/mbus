@@ -61,7 +61,7 @@ libmbus-server.a_includes-y = \
 libmbus-server.a_cflags-y += \
 	${libmbus-server.so_cflags-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 

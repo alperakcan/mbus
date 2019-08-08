@@ -22,7 +22,7 @@ libmbus-json-cJSON.a_files-y = \
 libmbus-json-cJSON.a_cflags-y = \
 	${libmbus-json-cJSON.so_cflags-y}
 
-distdir = ../../../dist
+dist.dir = ../../../dist
 
 dist.base = mbus
 

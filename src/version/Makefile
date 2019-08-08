@@ -23,7 +23,7 @@ libmbus-version.a_files-y = \
 libmbus-version.a_cflags-y = \
 	${libmbus-version.so_cflags-y}
 
-distdir = ../../dist
+dist.dir = ../../dist
 
 dist.base = mbus
 
