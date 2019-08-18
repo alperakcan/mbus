@@ -418,7 +418,7 @@ int mbus_socket_connect (struct mbus_socket *socket, const char *address, unsign
 		hints.ai_socktype = SOCK_STREAM;
 		rc = getaddrinfo(address, NULL, &hints, &result);
 		if (rc != 0) {
-			mbus_errorf("getaddrinfo failed for: %s", address);
+			mbus_errorf("getaddrinfo failed for: %s, error: %d, %s", address, rc, gai_strerror(rc));
 			rc = -EINVAL;
 			goto bail;
 		}
