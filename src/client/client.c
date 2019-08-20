@@ -3063,7 +3063,11 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 			}
 		}
 	}
+#if 0
 	if (mbus_client_has_pending_unlocked(client) > 0) {
+#else
+        if (mbus_buffer_get_length(client->incoming) > 0) {
+#endif
 		timeout = 0;
 	}
 	return timeout;
