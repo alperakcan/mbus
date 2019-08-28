@@ -920,6 +920,7 @@ static void mbus_client_command_create_response (struct mbus_client *client, voi
 		const char *identifier;
 		identifier = mbus_json_get_string_value(response, "identifier", NULL);
 		if (identifier == NULL) {
+	                mbus_errorf("message response identifier is invalid");
 			mbus_client_notify_connect(client, mbus_client_connect_status_server_error);
 			goto bail;
 		}
