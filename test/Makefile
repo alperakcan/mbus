@@ -2,6 +2,7 @@
 subdir-y += \
 	file-transfer \
 	execute-command \
-	logger
+	logger \
+	connect-interval
 
 include ../Makefile.lib
