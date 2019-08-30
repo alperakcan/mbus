@@ -3182,11 +3182,13 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			pollfds[npollfds].events |= POLLOUT;
 		} else {
 			pollfds[npollfds].events |= POLLIN;
-			if (mbus_buffer_get_length(client->outgoing) > 0
+			if (
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
-			    || client->ssl.want_write != 0
+			        (mbus_buffer_get_length(client->outgoing) > 0 || client->ssl.want_write != 0)
+#else
+			        (mbus_buffer_get_length(client->outgoing) > 0)
 #endif
-			    ) {
+                        ) {
 				pollfds[npollfds].events |= POLLOUT;
 			}
 		}
@@ -3234,6 +3236,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 			} else {
 				read_rc = 0;
+				errno   = 0;
 				do {
 					rc = mbus_buffer_reserve(client->incoming, (mbus_buffer_get_length(client->incoming) + read_rc) + 1024);
 					if (rc != 0) {
@@ -3248,14 +3251,16 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 						int error;
 						error = SSL_get_error(client->ssl.ssl, rc);
 						if (error == SSL_ERROR_WANT_READ) {
-							errno = EAGAIN;
+                                                        read_rc = -1;
+							errno   = EAGAIN;
 							client->ssl.want_read = 1;
 						} else if (error == SSL_ERROR_WANT_WRITE) {
-							errno = EAGAIN;
+                                                        read_rc = -1;
+							errno   = EAGAIN;
 							client->ssl.want_write = 1;
 						} else if (error == SSL_ERROR_SYSCALL) {
 							read_rc = -1;
-							errno = EIO;
+							errno   = EIO;
 						} else {
 							char ebuf[256];
 							mbus_errorf("can not read ssl: %d", error);
@@ -3274,18 +3279,12 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 					 SSL_pending(client->ssl.ssl));
 			}
 #endif
-	        if (read_rc == 0) {
-                        mbus_errorf("connection reset by server");
-                        mbus_client_reset(client);
-                        client->state = mbus_client_state_disconnected;
-                        mbus_client_notify_disconnect(client, mbus_client_disconnect_status_connection_closed);
-                        goto out;
-	        } else if (read_rc < 0) {
+	        if (read_rc <= 0) {
 			if (errno == EINTR) {
                         } else if (errno == EAGAIN) {
                         } else if (errno == EWOULDBLOCK) {
 			} else {
-				mbus_errorf("connection reset by server");
+				mbus_errorf("connection reset by server (read: %d, errno: %d, %s)", read_rc, errno, strerror(errno));
 				mbus_client_reset(client);
 				client->state = mbus_client_state_disconnected;
 				mbus_client_notify_disconnect(client, mbus_client_disconnect_status_connection_closed);
@@ -3379,20 +3378,21 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			} else {
 				client->ssl.want_write = 0;
 				write_rc = SSL_write(client->ssl.ssl, mbus_buffer_get_base(client->outgoing), mbus_buffer_get_length(client->outgoing));
+				errno    = 0;
 				if (write_rc <= 0) {
 					int error;
 					error = SSL_get_error(client->ssl.ssl, write_rc);
 					if (error == SSL_ERROR_WANT_READ) {
 						write_rc = 0;
-						errno = EAGAIN;
+						errno    = EAGAIN;
 						client->ssl.want_read = 1;
 					} else if (error == SSL_ERROR_WANT_WRITE) {
 						write_rc = 0;
-						errno = EAGAIN;
+						errno    = EAGAIN;
 						client->ssl.want_write = 1;
 					} else if (error == SSL_ERROR_SYSCALL) {
 						write_rc = -1;
-						errno = EIO;
+						errno    = EIO;
 					} else {
 						char ebuf[256];
 						mbus_errorf("can not write ssl: %d", error);
