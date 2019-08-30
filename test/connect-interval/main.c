@@ -88,6 +88,8 @@ int main (int argc, char *argv[])
         }
 
         while (1) {
+                fprintf(stderr, "--> loop\n");
+
                 if (mbus_client == NULL) {
                         rc = mbus_client_options_default(&mbus_client_options);
                         if (rc != 0) {
@@ -114,6 +116,7 @@ int main (int argc, char *argv[])
                         }
                 }
 
+                fprintf(stderr, "  state: %d, %s\n", mbus_client_get_state(mbus_client), mbus_client_state_string(mbus_client_get_state(mbus_client)));
                 rc = mbus_client_run(mbus_client, 1000);
                 if (rc < 0) {
                         fprintf(stderr, "client run failed: %d\n", rc);
