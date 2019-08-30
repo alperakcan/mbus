@@ -51,7 +51,7 @@ static void mbus_client_callback_connect (struct mbus_client *client, void *cont
 {
         (void) client;
         (void) context;
-        fprintf(stderr, "connect status: %d, %s", status, mbus_client_connect_status_string(status));
+        fprintf(stderr, "connect status: %d, %s\n", status, mbus_client_connect_status_string(status));
 }
 
 int main (int argc, char *argv[])
