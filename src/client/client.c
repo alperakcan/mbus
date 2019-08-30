@@ -3015,41 +3015,41 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 	}
 	if (client->state == mbus_client_state_connecting) {
 		if (client->socket == NULL) {
-			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
-				timeout = MIN(timeout, client->options->connect_interval);
+			if (mbus_clock_before(current, client->connect_tsms + client->options->connect_interval)) {
+                                timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
 			} else {
-				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
+                                timeout = MIN(timeout, client->options->connect_interval);
 			}
 		} else if (client->socket_connected == 0) {
-			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_timeout)) {
-				timeout = MIN(timeout, client->options->connect_timeout);
+			if (mbus_clock_before(current, client->connect_tsms + client->options->connect_timeout)) {
+                                timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_timeout) - (current)));
 			} else {
-				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_timeout) - (current)));
+                                timeout = MIN(timeout, client->options->connect_timeout);
 			}
 		}
 	} else if (client->state == mbus_client_state_connected) {
 		if (client->ping_interval > 0) {
-			if (mbus_clock_after(current, client->ping_send_tsms + client->ping_interval)) {
-				timeout = 0;
+			if (mbus_clock_before(current, client->ping_send_tsms + client->ping_interval)) {
+                                timeout = MIN(timeout, (long long) ((client->ping_send_tsms + client->ping_interval) - (current)));
 			} else {
-				timeout = MIN(timeout, (long long) ((client->ping_send_tsms + client->ping_interval) - (current)));
+                                timeout = 0;
 			}
 		}
 		TAILQ_FOREACH(request, &client->requests, requests) {
 			if (request_get_timeout(request) >= 0) {
-				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
-					timeout = 0;
+				if (mbus_clock_before(current, request_get_created_at(request) + request_get_timeout(request))) {
+                                        timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
 				} else {
-					timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+                                        timeout = 0;
 				}
 			}
 		}
 		TAILQ_FOREACH(request, &client->pendings, requests) {
 			if (request_get_timeout(request) >= 0) {
-				if (mbus_clock_after(current, request_get_created_at(request) + request_get_timeout(request))) {
-					timeout = 0;
+				if (mbus_clock_before(current, request_get_created_at(request) + request_get_timeout(request))) {
+                                        timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
 				} else {
-					timeout = MIN(timeout, (long long) ((request_get_created_at(request) + request_get_timeout(request)) - (current)));
+                                        timeout = 0;
 				}
 			}
 		}
@@ -3057,10 +3057,10 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 		timeout = 0;
 	} else if (client->state == mbus_client_state_disconnected) {
 		if (client->options->connect_interval > 0) {
-			if (mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
-				timeout = 0;
+			if (mbus_clock_before(current, client->connect_tsms + client->options->connect_interval)) {
+                                timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
 			} else {
-				timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
+                                timeout = 0;
 			}
 		}
 	}
@@ -3142,7 +3142,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 		if (client->socket == NULL) {
 			current = mbus_clock_monotonic();
 			if (client->options->connect_interval <= 0 ||
-			    mbus_clock_after(current, client->connect_tsms + client->options->connect_interval)) {
+			    !mbus_clock_before(current, client->connect_tsms + client->options->connect_interval)) {
 				client->connect_tsms = mbus_clock_monotonic();
 				rc = mbus_client_run_connect(client);
 				if (rc != 0) {
@@ -3184,6 +3184,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 			pollfds[npollfds].events |= POLLIN;
 			if (
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
+			        (client->ssl.want_read == 0) &&
 			        (mbus_buffer_get_length(client->outgoing) > 0 || client->ssl.want_write != 0)
 #else
 			        (mbus_buffer_get_length(client->outgoing) > 0)
@@ -3202,6 +3203,8 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	}
 	events = mbus_client_get_connection_fd_events_unlocked(client);
 	mbus_client_unlock(client);
+	mbus_debugf("want_read: %d, want_write: %d, outgoing: %d", client->ssl.want_read, client->ssl.want_write, mbus_buffer_get_length(client->outgoing));
+	mbus_debugf("poll(%d, %d", ptimeout, timeout);
 	rc = poll(pollfds, npollfds, ptimeout);
 	mbus_client_lock(client);
 	if (rc == 0) {
@@ -3253,7 +3256,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 						if (error == SSL_ERROR_WANT_READ) {
                                                         read_rc = -1;
 							errno   = EAGAIN;
-							client->ssl.want_read = 1;
+							//client->ssl.want_read = 1;
 						} else if (error == SSL_ERROR_WANT_WRITE) {
                                                         read_rc = -1;
 							errno   = EAGAIN;
