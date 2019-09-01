@@ -66,6 +66,14 @@ enum client_status {
 	client_status_connected		= 0x00000002,
 };
 
+enum client_connection_close_code {
+        client_connection_close_code_unknown            = 0,
+        client_connection_close_code_close_comand       = 1,
+        client_connection_close_code_ping_threshold     = 2,
+        client_connection_close_code_connection_closed  = 3,
+        client_connection_close_code_internal_error     = 4
+};
+
 static const struct {
 	const char *name;
 	enum mbus_compress_method value;
@@ -83,6 +91,7 @@ struct client {
 	enum mbus_compress_method compression;
 	struct listener *listener;
 	struct connection *connection;
+	enum client_connection_close_code connection_close_code;
 	struct mbus_buffer *buffer_in;
 	struct mbus_buffer *buffer_out;
 	int ping_enabled;
@@ -266,6 +275,18 @@ static char * _strndup (const char *s, size_t n)
 	return (char *) memcpy(result, s, len);
 }
 
+static const char * client_connection_close_code_string (enum client_connection_close_code close_code)
+{
+        switch (close_code) {
+                case client_connection_close_code_unknown:              return "unknown";
+                case client_connection_close_code_close_comand:         return "close_command";
+                case client_connection_close_code_ping_threshold:       return "ping_threshold";
+                case client_connection_close_code_connection_closed:    return "connection_closed";
+                case client_connection_close_code_internal_error:       return "internal_error";
+        }
+        return "unknown";
+}
+
 static struct listener * client_get_listener (struct client *client)
 {
 	if (client == NULL) {
@@ -278,14 +299,23 @@ bail:	return NULL;
 
 static struct connection * client_get_connection (struct client *client)
 {
-	if (client == NULL) {
-		mbus_errorf("client is null");
-		return NULL;
-	}
-	return client->connection;
+        if (client == NULL) {
+                mbus_errorf("client is null");
+                return NULL;
+        }
+        return client->connection;
 }
 
-static int client_set_connection (struct client *client, struct connection *connection)
+static enum client_connection_close_code client_get_connection_close_code (struct client *client)
+{
+        if (client == NULL) {
+                mbus_errorf("client is null");
+                return client_connection_close_code_unknown;
+        }
+        return client->connection_close_code;
+}
+
+static int client_set_connection (struct client *client, struct connection *connection, enum client_connection_close_code close_code)
 {
 	int rc;
 	if (client == NULL) {
@@ -308,6 +338,7 @@ static int client_set_connection (struct client *client, struct connection *conn
 		}
 		client->connection = connection;
 	}
+	client->connection_close_code = close_code;
 	return 0;
 bail:	return -1;
 }
@@ -952,7 +983,7 @@ bail:	if (payload != NULL) {
 	return -1;
 }
 
-static int server_send_event_disconnected (struct mbus_server *server, const char *source)
+static int server_send_event_disconnected (struct mbus_server *server, const char *source, enum client_connection_close_code close_code)
 {
 	int rc;
 	struct mbus_json *payload;
@@ -971,6 +1002,7 @@ static int server_send_event_disconnected (struct mbus_server *server, const cha
 		goto bail;
 	}
 	mbus_json_add_string_to_object_cs(payload, "source", source);
+	mbus_json_add_string_to_object_cs(payload, "reason", client_connection_close_code_string(close_code));
 	rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_DISCONNECTED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
@@ -1211,7 +1243,7 @@ static int server_listener_ws_callback_connection_closed (void *context, struct 
 	if (client == NULL) {
 		return -1;
 	}
-	return client_set_connection(client, NULL);
+	return client_set_connection(client, NULL, client_connection_close_code_connection_closed);
 }
 
 static int server_listener_ws_callback_poll_add (void *context, struct listener *listener, int fd, unsigned int events)
@@ -1778,7 +1810,7 @@ static int server_handle_command_close (struct mbus_server *server, struct metho
 			if (strcmp(client_get_identifier(client), source) != 0) {
 				continue;
 			}
-			client_set_connection(client, NULL);
+			client_set_connection(client, NULL, client_connection_close_code_close_comand);
 			break;
 		}
 		if (client == NULL) {
@@ -2067,7 +2099,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		}
 		if (client->ping_missed_count > client->ping_threshold) {
 			mbus_errorf("%s missed too many pings, %d > %d. closing connection", client_get_identifier(client), client->ping_missed_count, client->ping_threshold);
-			client_set_connection(client, NULL);
+			client_set_connection(client, NULL, client_connection_close_code_ping_threshold);
 		}
 	}
 	mbus_debugf("  prepare out buffer");
@@ -2284,7 +2316,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
 				mbus_debugf("can not read data from client");
 				mbus_infof("client: '%s' connection reset by peer", client_get_identifier(client));
-				client_set_connection(client, NULL);
+				client_set_connection(client, NULL, client_connection_close_code_connection_closed);
 				continue;
 			}
 		}
@@ -2298,13 +2330,13 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 			    ((errno != EINTR) && (errno != EAGAIN) && (errno != EWOULDBLOCK))) {
 				mbus_debugf("can not write string to client");
 				mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-				client_set_connection(client, NULL);
+				client_set_connection(client, NULL, client_connection_close_code_connection_closed);
 				continue;
 			}
 		}
 		if (server->pollfds.pollfds[c].revents & (POLLERR | POLLHUP | POLLNVAL)) {
 			mbus_infof("client: '%s' connection reset by server", client_get_identifier(client));
-			client_set_connection(client, NULL);
+			client_set_connection(client, NULL, client_connection_close_code_connection_closed);
 			continue;
 		}
 	}
@@ -2366,13 +2398,13 @@ out:
 			string = _strndup((char *) data, uncompressed);
 			if (string == NULL) {
 				mbus_errorf("can not allocate memory, closing client: '%s' connection", client_get_identifier(client));
-				client_set_connection(client, NULL);
+				client_set_connection(client, NULL, client_connection_close_code_internal_error);
 				goto bail;
 			}
 			rc = server_handle_method(server, client, string);
 			if (rc != 0) {
 				mbus_errorf("can not handle request, closing client: '%s' connection", client_get_identifier(client));
-				client_set_connection(client, NULL);
+				client_set_connection(client, NULL, client_connection_close_code_internal_error);
 				free(string);
 				if (data != ptr) {
 					free(data);
@@ -2382,7 +2414,7 @@ out:
 			rc = mbus_buffer_shift(client->buffer_in, sizeof(uint32_t) + expected);
 			if (rc != 0) {
 				mbus_errorf("can not shift in, closing client: '%s' connection", client_get_identifier(client));
-				client_set_connection(client, NULL);
+				client_set_connection(client, NULL, client_connection_close_code_internal_error);
 				free(string);
 				if (data != ptr) {
 					free(data);
@@ -2458,7 +2490,7 @@ out:
 			}
 		}
 		if ((client_get_status(client) & client_status_connected) != 0) {
-			rc = server_send_event_disconnected(server, client_get_identifier(client));
+			rc = server_send_event_disconnected(server, client_get_identifier(client), client_get_connection_close_code(client));
 			if (rc != 0) {
 				mbus_errorf("can not send disconnected event");
 				goto bail;

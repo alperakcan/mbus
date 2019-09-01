@@ -311,7 +311,14 @@
  *
  * {
  *   "source": "application name"
+ *   "reason": "reason"
  * }
+ *
+ * reasons:
+ *   CLOSE_COMMAND
+ *   PING_THRESHOLD
+ *   CONNECTION_CLOSED
+ *   INTERNAL_ERROR
  */
 #define MBUS_SERVER_EVENT_DISCONNECTED		"org.mbus.server.event.disconnected"
 
