@@ -31,6 +31,7 @@ install: app src test
 	install -m 0755 dist/bin/mbus-test-execute-command ${DESTDIR}/usr/local/bin/mbus-test-execute-command
 	install -m 0755 dist/bin/mbus-test-logger-publish ${DESTDIR}/usr/local/bin/mbus-test-logger-publish
 	install -m 0755 dist/bin/mbus-test-logger-subscribe ${DESTDIR}/usr/local/bin/mbus-test-logger-subscribe
+	install -m 0755 dist/bin/mbus-test-connect-interval ${DESTDIR}/usr/local/bin/mbus-test-connect-interval
 	
 	install -d ${DESTDIR}/usr/local/include/mbus
 	install -m 0644 dist/include/mbus/buffer.h ${DESTDIR}/usr/local/include/mbus/buffer.h
@@ -144,6 +145,7 @@ uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-test-file-transfer
 	rm -f ${DESTDIR}/usr/local/bin/mbus-test-logger-publish
 	rm -f ${DESTDIR}/usr/local/bin/mbus-test-logger-subscribe
+	rm -f ${DESTDIR}/usr/local/bin/mbus-test-connect-interval
 	
 	rm -f ${DESTDIR}/var/www/html/mbus/MBusClient.js
 	rm -f ${DESTDIR}/var/www/html/mbus/mbus-subscribe.html
