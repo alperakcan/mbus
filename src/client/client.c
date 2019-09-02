@@ -3203,7 +3203,6 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	}
 	events = mbus_client_get_connection_fd_events_unlocked(client);
 	mbus_client_unlock(client);
-	mbus_debugf("want_read: %d, want_write: %d, outgoing: %d", client->ssl.want_read, client->ssl.want_write, mbus_buffer_get_length(client->outgoing));
 	mbus_debugf("poll(%d, %d", ptimeout, timeout);
 	rc = poll(pollfds, npollfds, ptimeout);
 	mbus_client_lock(client);
