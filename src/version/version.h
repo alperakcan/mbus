@@ -26,5 +26,5 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-const char * mbus_git_commit (void);
-const char * mbus_git_revision (void);
+const char * mbus_version_git_commit (void);
+const char * mbus_version_git_revision (void);

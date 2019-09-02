@@ -34,12 +34,12 @@
 #define GIT_REVISION "unknown"
 #endif
 
-const char * mbus_git_commit (void)
+const char * mbus_version_git_commit (void)
 {
 	return GIT_COMMIT;
 }
 
-const char * mbus_git_revision (void)
+const char * mbus_version_git_revision (void)
 {
 	return GIT_REVISION;
 }

@@ -2801,7 +2801,7 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 	}
 
 	mbus_infof("creating server");
-	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_revision());
+	mbus_infof("using mbus version '%s, %s'", mbus_version_git_commit(), mbus_version_git_revision());
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 #endif

@@ -1710,7 +1710,7 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	}
 
 	mbus_infof("creating client: '%s'", options.identifier);
-	mbus_infof("using mbus version '%s, %s'", mbus_git_commit(), mbus_git_revision());
+	mbus_infof("using mbus version '%s, %s'", mbus_version_git_commit(), mbus_version_git_revision());
 
 	client = malloc(sizeof(struct mbus_client));
 	if (client == NULL) {
