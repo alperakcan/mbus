@@ -44,6 +44,10 @@
 #include <openssl/err.h>
 #endif
 
+#if !defined(MAX)
+#define MAX(a, b)       (((a) > (b)) ? (a) : (b))
+#endif
+
 #define MBUS_DEBUG_NAME	"mbus-server"
 
 #include "mbus/debug.h"
@@ -951,17 +955,14 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 bail:	return -1;
 }
 
-static int server_send_event_connected (struct mbus_server *server, const char *source)
+static int server_send_event_connected (struct mbus_server *server, struct client *client)
 {
 	int rc;
+        char address[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)];
 	struct mbus_json *payload;
 	payload = NULL;
 	if (server == NULL) {
 		mbus_errorf("server is null");
-		goto bail;
-	}
-	if (source == NULL) {
-		mbus_errorf("source is null");
 		goto bail;
 	}
 	payload = mbus_json_create_object();
@@ -969,7 +970,8 @@ static int server_send_event_connected (struct mbus_server *server, const char *
 		mbus_errorf("can not create payload");
 		goto bail;
 	}
-	mbus_json_add_string_to_object_cs(payload, "source", source);
+	mbus_json_add_string_to_object_cs(payload, "source", client_get_identifier(client));
+        mbus_json_add_string_to_object_cs(payload, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
 	rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_CONNECTED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
@@ -1678,7 +1680,7 @@ bail:	if (clients != NULL) {
 
 static int server_handle_command_client (struct mbus_server *server, struct method *method)
 {
-	char address[1024];
+	char address[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)];
 	struct mbus_json *result;
 	struct mbus_json *object;
 	struct mbus_json *commands;
@@ -2457,7 +2459,7 @@ out:
 		}
 		client_set_status(client, client_get_status(client) | client_status_connected);
 		mbus_infof("client: '%s' connected to server", client_get_identifier(client));
-		rc = server_send_event_connected(server, client_get_identifier(client));
+		rc = server_send_event_connected(server, client);
 		if (rc != 0) {
 			mbus_errorf("can not send connected event");
 			goto bail;

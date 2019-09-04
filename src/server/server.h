@@ -251,6 +251,7 @@
  * output:
  * {
  *   "source": "application name",
+ *   "address": "address",
  *   "subscriptions": [
  *     {
  *       "source": "application name",
@@ -302,7 +303,8 @@
 /* event connected
  *
  * {
- *   "source": "application name"
+ *   "source": "application name",
+ *   "address": "address"
  * }
  */
 #define MBUS_SERVER_EVENT_CONNECTED		"org.mbus.server.event.connected"
