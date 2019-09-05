@@ -611,14 +611,17 @@ static const char *parse_string(mbus_cJSON *item, const char *str, const char **
                             /* 10xxxxxx */
                             *--ptr2 = ((uc | 0x80) & 0xBF);
                             uc >>= 6;
+                            /* fallthrough */
                         case 3:
                             /* 10xxxxxx */
                             *--ptr2 = ((uc | 0x80) & 0xBF);
                             uc >>= 6;
+                            /* fallthrough */
                         case 2:
                             /* 10xxxxxx */
                             *--ptr2 = ((uc | 0x80) & 0xBF);
                             uc >>= 6;
+                            /* fallthrough */
                         case 1:
                             /* depending on the length in bytes this determines the
                              * encoding ofthe first UTF8 byte */

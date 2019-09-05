@@ -10,9 +10,6 @@ target.so-${SHARED_ENABLE} = \
 libmbus-json-cJSON.so_files-y = \
 	cJSON.c
 
-libmbus-json-cJSON.so_cflags-y = \
-	-Wno-implicit-fallthrough
-
 libmbus-json-cJSON.so_ldflags-y = \
 	-lm
 
