@@ -159,7 +159,7 @@ struct mbus_client {
 	pthread_mutex_t mutex;
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	struct {
-		const SSL_METHOD *method;
+		SSL_METHOD *method;
 		SSL_CTX *context;
 		SSL *ssl;
 		int want_read;
@@ -1160,7 +1160,7 @@ static int mbus_client_run_connect (struct mbus_client *client)
 				mbus_errorf("ssl client method is invalid");
 				goto bail;
 			}
-			client->ssl.context = SSL_CTX_new(client->ssl.method);
+			client->ssl.context = (SSL_METHOD *) SSL_CTX_new(client->ssl.method);
 			if (client->ssl.context == NULL) {
 				mbus_errorf("can not create ssl");
 				goto bail;
