@@ -525,8 +525,8 @@ struct listener * mbus_server_listener_tcp_create (const struct listener_tcp_opt
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	if (options->certificate != NULL ||
 	    options->privatekey != NULL) {
-		const SSL_METHOD *method;
-		method = SSLv23_server_method();
+		SSL_METHOD *method;
+		method = (SSL_METHOD *) SSLv23_server_method();
 		if (method == NULL) {
 			mbus_errorf("can not get server method");
 			goto bail;
