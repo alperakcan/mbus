@@ -1155,12 +1155,12 @@ static int mbus_client_run_connect (struct mbus_client *client)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 		if (strcmp(client->options->server_protocol, MBUS_SERVER_TCPS_PROTOCOL) == 0 ||
 		    strcmp(client->options->server_protocol, MBUS_SERVER_UDSS_PROTOCOL) == 0) {
-			client->ssl.method = SSLv23_method();
+			client->ssl.method = (SSL_METHOD *) SSLv23_method();
 			if (client->ssl.method == NULL) {
 				mbus_errorf("ssl client method is invalid");
 				goto bail;
 			}
-			client->ssl.context = (SSL_METHOD *) SSL_CTX_new(client->ssl.method);
+			client->ssl.context = SSL_CTX_new(client->ssl.method);
 			if (client->ssl.context == NULL) {
 				mbus_errorf("can not create ssl");
 				goto bail;
