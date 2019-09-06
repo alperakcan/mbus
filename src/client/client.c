@@ -3311,7 +3311,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 				if (strcmp(client->options->server_protocol, MBUS_SERVER_TCPS_PROTOCOL) == 0 ||
 				    strcmp(client->options->server_protocol, MBUS_SERVER_UDSS_PROTOCOL) == 0) {
-					client->ssl.method = SSLv23_method();
+					client->ssl.method = (SSL_METHOD *) SSLv23_method();
 					if (client->ssl.method == NULL) {
 						mbus_errorf("ssl client method is invalid");
 						goto bail;
