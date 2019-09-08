@@ -536,7 +536,7 @@ struct listener * mbus_server_listener_tcp_create (const struct listener_tcp_opt
 			mbus_errorf("can not create ssl context");
 			goto bail;
 		}
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && (OPENSSL_API_COMPAT >= 0x10100000L)
 		SSL_CTX_set_ecdh_auto(listener_tcp->ssl, 1);
 #endif
 		rc = SSL_CTX_use_certificate_file(listener_tcp->ssl, options->certificate, SSL_FILETYPE_PEM);
@@ -1018,7 +1018,7 @@ struct listener * mbus_server_listener_uds_create (const struct listener_uds_opt
 			mbus_errorf("can not create ssl context");
 			goto bail;
 		}
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && (OPENSSL_API_COMPAT >= 0x10100000L)
 		SSL_CTX_set_ecdh_auto(listener_uds->ssl, 1);
 #endif
 		rc = SSL_CTX_use_certificate_file(listener_uds->ssl, options->certificate, SSL_FILETYPE_PEM);
