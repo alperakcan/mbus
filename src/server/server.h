@@ -401,6 +401,7 @@ struct mbus_server_options {
 		const char *certificate;
 		const char *privatekey;
 	} wss;
+	char *password;
 };
 
 void mbus_server_usage (void);

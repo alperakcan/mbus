@@ -66,23 +66,31 @@
 
 #define OPTION_HELP			0x100
 #define OPTION_DEBUG_LEVEL		0x101
-#define OPTION_IDENTIFIER		0x201
-#define OPTION_SERVER_PROTOCOL		0x202
-#define OPTION_SERVER_ADDRESS		0x203
-#define OPTION_SERVER_PORT		0x204
-#define OPTION_CONNECT_TIMEOUT		0x205
-#define OPTION_CONNECT_INTERVAL		0x206
-#define OPTION_SUBSCRIBE_TIMEOUT	0x207
-#define OPTION_REGISTER_TIMEOUT		0x208
-#define OPTION_COMMAND_TIMEOUT		0x210
-#define OPTION_PUBLISH_TIMEOUT		0x211
-#define OPTION_PING_INTERVAL		0x212
-#define OPTION_PING_TIMEOUT		0x213
-#define OPTION_PING_THRESHOLD		0x214
+
+#define OPTION_IDENTIFIER               0x200
+#define OPTION_PASSWORD                 0x201
+
+#define OPTION_SERVER_PROTOCOL		0x300
+#define OPTION_SERVER_ADDRESS		0x301
+#define OPTION_SERVER_PORT		0x302
+
+#define OPTION_CONNECT_TIMEOUT		0x400
+#define OPTION_CONNECT_INTERVAL		0x401
+
+#define OPTION_SUBSCRIBE_TIMEOUT	0x500
+#define OPTION_REGISTER_TIMEOUT		0x501
+#define OPTION_COMMAND_TIMEOUT		0x502
+#define OPTION_PUBLISH_TIMEOUT		0x503
+
+#define OPTION_PING_INTERVAL		0x600
+#define OPTION_PING_TIMEOUT		0x601
+#define OPTION_PING_THRESHOLD		0x602
+
 static struct option longopts[] = {
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
 	{ "mbus-debug-level",			required_argument,	NULL,	OPTION_DEBUG_LEVEL },
-	{ "mbus-client-identifier",		required_argument,	NULL,	OPTION_IDENTIFIER },
+        { "mbus-client-identifier",             required_argument,      NULL,   OPTION_IDENTIFIER },
+        { "mbus-client-password",               required_argument,      NULL,   OPTION_PASSWORD },
 	{ "mbus-client-server-protocol",	required_argument,	NULL,	OPTION_SERVER_PROTOCOL },
 	{ "mbus-client-server-address"	,	required_argument,	NULL,	OPTION_SERVER_ADDRESS },
 	{ "mbus-client-server-port",		required_argument,	NULL,	OPTION_SERVER_PORT },
@@ -983,13 +991,20 @@ static int mbus_client_command_create_request (struct mbus_client *client)
 		goto bail;
 	}
 
-	if (client->options->identifier != NULL) {
-		rc = mbus_json_add_string_to_object_cs(payload, "identifier", client->options->identifier);
-		if (rc != 0) {
-			mbus_errorf("can not add string to json object");
-			goto bail;
-		}
-	}
+        if (client->options->identifier != NULL) {
+                rc = mbus_json_add_string_to_object_cs(payload, "identifier", client->options->identifier);
+                if (rc != 0) {
+                        mbus_errorf("can not add string to json object");
+                        goto bail;
+                }
+        }
+        if (client->options->password != NULL) {
+                rc = mbus_json_add_string_to_object_cs(payload, "password", client->options->password);
+                if (rc != 0) {
+                        mbus_errorf("can not add string to json object");
+                        goto bail;
+                }
+        }
 
 	if (client->options->ping_interval > 0) {
 		payload_ping = mbus_json_create_object();
@@ -1434,9 +1449,12 @@ static void mbus_client_options_destroy (struct mbus_client_options *options)
 	if (options->server_address != NULL) {
 		free(options->server_address);
 	}
-	if (options->identifier != NULL) {
-		free(options->identifier);
-	}
+        if (options->identifier != NULL) {
+                free(options->identifier);
+        }
+        if (options->password != NULL) {
+                free(options->password);
+        }
 	free(options);
 }
 
@@ -1473,13 +1491,20 @@ static struct mbus_client_options * mbus_client_options_duplicate (const struct 
 		}
 		duplicate->server_port = options->server_port;
 
-		if (options->identifier != NULL) {
-			duplicate->identifier = strdup(options->identifier);
-			if (duplicate->identifier == NULL) {
-				mbus_errorf("can not allocate memory");
-				goto bail;
-			}
-		}
+                if (options->identifier != NULL) {
+                        duplicate->identifier = strdup(options->identifier);
+                        if (duplicate->identifier == NULL) {
+                                mbus_errorf("can not allocate memory");
+                                goto bail;
+                        }
+                }
+                if (options->password != NULL) {
+                        duplicate->password = strdup(options->password);
+                        if (duplicate->password == NULL) {
+                                mbus_errorf("can not allocate memory");
+                                goto bail;
+                        }
+                }
 		duplicate->connect_timeout = options->connect_timeout;
 		duplicate->connect_interval = options->connect_interval;
 		duplicate->subscribe_timeout = options->subscribe_timeout;
@@ -1512,7 +1537,8 @@ void mbus_client_usage (void)
 {
 	fprintf(stdout, "mbus client arguments:\n");
 	fprintf(stdout, "  --mbus-debug-level             : debug level (default: %s)\n", mbus_debug_level_to_string(mbus_debug_level));
-	fprintf(stdout, "  --mbus-client-identifier       : client identifier\n");
+        fprintf(stdout, "  --mbus-client-identifier       : client identifier (default: %s)\n", "(null)");
+        fprintf(stdout, "  --mbus-client-password         : client identifier (default: %s)\n", "(null)");
 	fprintf(stdout, "  --mbus-client-server-protocol  : server protocol (default: %s)\n", MBUS_SERVER_PROTOCOL);
 	fprintf(stdout, "  --mbus-client-server-address   : server address (default: %s)\n", MBUS_SERVER_ADDRESS);
 	fprintf(stdout, "  --mbus-client-server-port      : server port (default: %d)\n", MBUS_SERVER_PORT);
@@ -1566,9 +1592,12 @@ int mbus_client_options_from_argv (struct mbus_client_options *options, int argc
 			case OPTION_DEBUG_LEVEL:
 				mbus_debug_level = mbus_debug_level_from_string(optarg);
 				break;
-			case OPTION_IDENTIFIER:
-				options->identifier = optarg;
-				break;
+                        case OPTION_IDENTIFIER:
+                                options->identifier = optarg;
+                                break;
+                        case OPTION_PASSWORD:
+                                options->password = optarg;
+                                break;
 			case OPTION_SERVER_PROTOCOL:
 				options->server_protocol = optarg;
 				break;
@@ -1637,9 +1666,12 @@ struct mbus_client * mbus_client_create (const struct mbus_client_options *_opti
 	SSL_load_error_strings();
 #endif
 
-	if (options.identifier == NULL) {
-		options.identifier = "";
-	}
+        if (options.identifier == NULL) {
+                options.identifier = "";
+        }
+        if (options.password == NULL) {
+                options.password = "";
+        }
 	if (options.connect_timeout <= 0) {
 		options.connect_timeout = MBUS_CLIENT_DEFAULT_CONNECT_TIMEOUT;
 	}

@@ -130,6 +130,7 @@ struct mbus_server {
 		unsigned int size;
 		struct pollfd *pollfds;
 	} ws_pollfds;
+	char *password;
 	int running;
 };
 
@@ -168,6 +169,8 @@ static struct mbus_server *g_server;
 #define OPTION_SERVER_WSS_PORT			0x703
 #define OPTION_SERVER_WSS_CERTIFICATE		0x704
 #define OPTION_SERVER_WSS_PRIVATEKEY		0x705
+
+#define OPTION_SERVER_PASSWORD                  0x801
 
 static struct option longopts[] = {
 	{ "mbus-help",				no_argument,		NULL,	OPTION_HELP },
@@ -208,6 +211,8 @@ static struct option longopts[] = {
 	{ "mbus-server-wss-privatekey",		required_argument,	NULL,	OPTION_SERVER_WSS_PRIVATEKEY },
 #endif
 #endif
+
+	{ "mbus-server-password",               required_argument,      NULL,   OPTION_SERVER_PASSWORD },
 
 	{ NULL,					0,			NULL,	0 },
 };
@@ -253,6 +258,7 @@ __attribute__ ((__visibility__("default"))) void mbus_server_usage (void)
 #endif
 #endif
 
+	fprintf(stdout, "  --mbus-server-password        : server password (default: %s)\n", "(null)");
 	fprintf(stdout, "  --mbus-help                   : this text\n");
 }
 
@@ -1327,6 +1333,7 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 	int rc;
 	char ridentifier[64];
 	const char *identifier;
+	const char *password;
 	struct client *client;
 	if (server == NULL) {
 		mbus_errorf("server is null");
@@ -1374,6 +1381,18 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				goto bail;
 			}
 		}
+                {
+                        password = mbus_json_get_string_value(payload, "password", NULL);
+                        if (server->password == NULL) {
+                                mbus_infof("getting everyone in");
+                        } else if (password == NULL) {
+                                mbus_errorf("invalid password %s != %s", server->password, "(null)");
+                                goto bail;
+                        } else if (strcmp(server->password, password) != 0) {
+                                mbus_errorf("invalid password %s != %s", server->password, password);
+                                goto bail;
+                        }
+                }
 		{
 			struct mbus_json *ping;
 			ping = mbus_json_get_object(payload, "ping");
@@ -2556,6 +2575,9 @@ __attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbu
 	if (server->ws_pollfds.pollfds != NULL) {
 		free(server->ws_pollfds.pollfds);
 	}
+	if (server->password != NULL) {
+	        free(server->password);
+	}
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	EVP_cleanup();
 #endif
@@ -2569,6 +2591,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_options_default (str
 		goto bail;
 	}
 	memset(options, 0, sizeof(struct mbus_server_options));
+
 	options->tcp.enabled = MBUS_SERVER_TCP_ENABLE;
 	options->tcp.address = MBUS_SERVER_TCP_ADDRESS;
 	options->tcp.port = MBUS_SERVER_TCP_PORT;
@@ -2604,6 +2627,9 @@ __attribute__ ((__visibility__("default"))) int mbus_server_options_default (str
 	options->wss.privatekey = MBUS_SERVER_WSS_PRIVATEKEY;
 #endif
 #endif
+
+	options->password = NULL;
+
 	return 0;
 bail:	return -1;
 }
@@ -2713,6 +2739,9 @@ __attribute__ ((__visibility__("default"))) int mbus_server_options_from_argv (s
 				break;
 #endif
 #endif
+                        case OPTION_SERVER_PASSWORD:
+                                options->password = optarg;
+                                break;
 			case OPTION_HELP:
 				mbus_server_usage();
 				goto bail;
@@ -2807,6 +2836,16 @@ __attribute__ ((__visibility__("default"))) struct mbus_server * mbus_server_cre
 #if defined(SSL_ENABLE) && (SSL_ENABLE == 1)
 	mbus_infof("using openssl version '%s'", SSLeay_version(SSLEAY_VERSION));
 #endif
+
+	if (server->options.password != NULL) {
+	        server->password = strdup(server->options.password);
+	        if (server->password == NULL) {
+	                mbus_errorf("can not allocate memory");
+	                goto bail;
+	        }
+	} else {
+	        server->password = NULL;
+	}
 
 	if (server->options.tcp.enabled == 1) {
 		struct listener *listener;

@@ -183,6 +183,7 @@ struct mbus_client_command_options {
 
 struct mbus_client_options {
 	char *identifier;
+	char *password;
 	char *server_protocol;
 	char *server_address;
 	int server_port;
