@@ -303,8 +303,9 @@
 /* event connected
  *
  * {
- *   "source": "application name",
+ *   "source" : "application name",
  *   "address": "address"
+ *   "port"   : port
  * }
  */
 #define MBUS_SERVER_EVENT_CONNECTED		"org.mbus.server.event.connected"

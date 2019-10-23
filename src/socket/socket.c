@@ -566,9 +566,32 @@ char * mbus_socket_fd_get_address (int fd, char *buffer, int length)
 	return NULL;
 }
 
+int mbus_socket_fd_get_port (int fd)
+{
+        socklen_t addrlen;
+        struct sockaddr_storage addr;
+        memset(&addr, 0, sizeof(struct sockaddr_storage));
+        addrlen = sizeof(struct sockaddr_storage);
+        if (getpeername(fd, (struct sockaddr *) &addr, &addrlen) == 0) {
+                if (addr.ss_family == AF_INET) {
+                        return ntohs(((struct sockaddr_in *) &addr)->sin_port);
+                } else if (addr.ss_family == AF_INET6) {
+                        return ntohs(((struct sockaddr_in6 *) &addr)->sin6_port);
+                } else if (addr.ss_family == AF_UNIX) {
+                        return 0;
+                }
+        }
+        return -1;
+}
+
 char * mbus_socket_get_address (struct mbus_socket *socket, char *buffer, int length)
 {
 	return mbus_socket_fd_get_address(socket->fd, buffer, length);
+}
+
+int mbus_socket_get_port (struct mbus_socket *socket)
+{
+        return mbus_socket_fd_get_port(socket->fd);
 }
 
 int mbus_socket_read (struct mbus_socket *socket, void *vptr, int n)

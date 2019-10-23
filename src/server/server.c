@@ -978,6 +978,7 @@ static int server_send_event_connected (struct mbus_server *server, struct clien
 	}
 	mbus_json_add_string_to_object_cs(payload, "source", client_get_identifier(client));
         mbus_json_add_string_to_object_cs(payload, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
+        mbus_json_add_number_to_object_cs(payload, "port", mbus_socket_fd_get_port(mbus_server_connection_get_fd(client_get_connection(client))));
 	rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS, MBUS_SERVER_EVENT_CONNECTED, payload);
 	if (rc != 0) {
 		mbus_errorf("can not send event");
