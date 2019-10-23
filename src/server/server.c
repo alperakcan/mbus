@@ -1662,6 +1662,7 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 		mbus_json_add_item_to_array(clients, source);
 		mbus_json_add_string_to_object_cs(source, "source", client_get_identifier(client));
 		mbus_json_add_string_to_object_cs(source, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
+	        mbus_json_add_number_to_object_cs(source, "port", mbus_socket_fd_get_port(mbus_server_connection_get_fd(client_get_connection(client))));
 		subscribes = mbus_json_create_array();
 		if (subscribes == NULL) {
 			goto bail;
@@ -1734,6 +1735,7 @@ static int server_handle_command_client (struct mbus_server *server, struct meth
 	}
 	mbus_json_add_string_to_object_cs(result, "source", client_get_identifier(client));
 	mbus_json_add_string_to_object_cs(result, "address", mbus_socket_fd_get_address(mbus_server_connection_get_fd(client_get_connection(client)), address, sizeof(address)));
+        mbus_json_add_number_to_object_cs(result, "port", mbus_socket_fd_get_port(mbus_server_connection_get_fd(client_get_connection(client))));
 	subscribes = mbus_json_create_array();
 	if (subscribes == NULL) {
 		goto bail;
