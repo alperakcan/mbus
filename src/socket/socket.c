@@ -102,7 +102,7 @@ struct mbus_socket * mbus_socket_create (enum mbus_socket_domain domain, enum mb
 	}
 	s->fd = socket(s->domain, s->type, s->protocol);
 	if (s->fd < 0) {
-		mbus_errorf("can not open socket");
+		mbus_errorf("can not open socket: %d, %s", errno, strerror(errno));
 		goto bail;
 	}
 	return s;

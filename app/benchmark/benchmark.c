@@ -90,7 +90,7 @@ struct client {
         struct client_publishs publishs;
 	int connected;
 	int disconnected;
-	unsigned long long processed_time;
+	unsigned long long processed_at;
 };
 
 #define OPTION_HELP                     'h'
@@ -179,6 +179,15 @@ static void mbus_client_callback_message (struct mbus_client *mbus_client, void 
 	(void) message;
 }
 
+static void mbus_client_callback_publish (struct mbus_client *mbus_client, void *context, struct mbus_client_message_event *message, enum mbus_client_publish_status status)
+{
+        struct client *client = context;
+        (void) mbus_client;
+        (void) client;
+        (void) message;
+        (void) status;
+}
+
 static int mbus_client_callback_routine (struct mbus_client *mbus_client, void *context, struct mbus_client_message_routine *message)
 {
         struct client *client = context;
@@ -193,18 +202,22 @@ static int client_process (struct client *client)
         int rc;
         unsigned long long diff_time;
         unsigned long long current_time;
+
         struct client_publish *client_publish;
+
         if (client == NULL) {
                 fprintf(stderr, "client is invalid\n");
                 goto bail;
         }
+
         current_time = mbus_clock_monotonic();
-        if (current_time > client->processed_time) {
-                diff_time = current_time - client->processed_time;
+        if (current_time > client->processed_at) {
+                diff_time = current_time - client->processed_at;
         } else {
                 diff_time = 0;
         }
-        client->processed_time = current_time;
+        client->processed_at = current_time;
+
         if (client->connected == 0 &&
             client->disconnected == 0) {
                 rc = mbus_client_connect(client->client);
@@ -217,8 +230,18 @@ static int client_process (struct client *client)
                 TAILQ_FOREACH(client_publish, &client->publishs, list) {
                         client_publish->timeout -= diff_time;
                         client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
+
                         if (client_publish->timeout <= 0) {
-                                rc = mbus_client_publish(client->client, client_publish->publish->event, client_publish->publish->payload_json);
+                                struct mbus_client_publish_options publish_options;
+
+                                rc = mbus_client_publish_options_default(&publish_options);
+                                if (rc != 0) {
+                                        fprintf(stderr, "can not get default publish options\n");
+                                        goto bail;
+                                }
+                                publish_options.event    = client_publish->publish->event;
+                                publish_options.payload  = client_publish->publish->payload_json;
+                                rc = mbus_client_publish_with_options(client->client, &publish_options);
                                 if (rc != 0) {
                                         fprintf(stderr, "can not publish event\n");
                                         goto bail;
@@ -263,6 +286,7 @@ static struct client * client_create (struct mbus_client_options *options, struc
 	options->callbacks.connect    = mbus_client_callback_connect;
 	options->callbacks.disconnect = mbus_client_callback_disconnect;
 	options->callbacks.message    = mbus_client_callback_message;
+        options->callbacks.publish    = mbus_client_callback_publish;
         options->callbacks.routine    = mbus_client_callback_routine;
 	options->callbacks.context    = client;
 	client->client = mbus_client_create(options);
