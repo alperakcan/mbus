@@ -156,7 +156,7 @@ static void mbus_client_callback_connect (struct mbus_client *mbus_client, void 
 	} else {
 		fprintf(stderr, "connect: %s\n", mbus_client_connect_status_string(status));
 		if (mbus_client_get_options(client->client)->connect_interval <= 0) {
-			client->connected = -1;
+			client->connected = 0;
 		}
 	}
 
