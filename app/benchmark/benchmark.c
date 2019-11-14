@@ -88,6 +88,7 @@ struct client {
 	struct subscriptions *subscriptions;
         struct commands *commands;
         struct client_publishs publishs;
+        int keepalive;
 	int connected;
 	int disconnected;
 	unsigned long long processed_at;
@@ -98,12 +99,14 @@ struct client {
 #define OPTION_SUBSCRIBE                's'
 #define OPTION_PUBLISH                  'p'
 #define OPTION_REGISTER                 'r'
+#define OPTION_KEEPALIVE                'k'
 static struct option longopts[] = {
         { "help",       no_argument,            NULL,   OPTION_HELP },
         { "clients",    required_argument,      NULL,   OPTION_CLIENTS },
         { "subscribe",  required_argument,      NULL,   OPTION_SUBSCRIBE },
         { "publish",    required_argument,      NULL,   OPTION_PUBLISH },
         { "register",   required_argument,      NULL,   OPTION_REGISTER },
+        { "keepalive",  required_argument,      NULL,   OPTION_KEEPALIVE },
         { NULL,         0,                      NULL,   0 },
 };
 
@@ -218,36 +221,88 @@ static int client_process (struct client *client)
         }
         client->processed_at = current_time;
 
-        if (client->connected == 0 &&
-            client->disconnected == 0) {
-                rc = mbus_client_connect(client->client);
-                if (rc != 0) {
-                        fprintf(stderr, "client connect failed\n");
-                        goto bail;
-                }
-        } else if (client->connected == 1 &&
-                   client->disconnected == 0) {
-                TAILQ_FOREACH(client_publish, &client->publishs, list) {
-                        client_publish->timeout -= diff_time;
-                        client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
-
-                        if (client_publish->timeout <= 0) {
-                                struct mbus_client_publish_options publish_options;
-
-                                rc = mbus_client_publish_options_default(&publish_options);
-                                if (rc != 0) {
-                                        fprintf(stderr, "can not get default publish options\n");
-                                        goto bail;
-                                }
-                                publish_options.event    = client_publish->publish->event;
-                                publish_options.payload  = client_publish->publish->payload_json;
-                                rc = mbus_client_publish_with_options(client->client, &publish_options);
-                                if (rc != 0) {
-                                        fprintf(stderr, "can not publish event\n");
-                                        goto bail;
-                                }
-                                client_publish->timeout = client_publish->publish->interval;
+        if (client->keepalive) {
+                if (client->connected == 0 &&
+                    client->disconnected == 0) {
+                        rc = mbus_client_connect(client->client);
+                        if (rc != 0) {
+                                fprintf(stderr, "client connect failed\n");
+                                goto bail;
                         }
+                } else if (client->connected == 1 &&
+                           client->disconnected == 0) {
+                        TAILQ_FOREACH(client_publish, &client->publishs, list) {
+                                client_publish->timeout -= diff_time;
+                                client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
+
+                                if (client_publish->timeout <= 0) {
+                                        struct mbus_client_publish_options publish_options;
+
+                                        rc = mbus_client_publish_options_default(&publish_options);
+                                        if (rc != 0) {
+                                                fprintf(stderr, "can not get default publish options\n");
+                                                goto bail;
+                                        }
+                                        publish_options.event    = client_publish->publish->event;
+                                        publish_options.payload  = client_publish->publish->payload_json;
+                                        rc = mbus_client_publish_with_options(client->client, &publish_options);
+                                        if (rc != 0) {
+                                                fprintf(stderr, "can not publish event\n");
+                                                goto bail;
+                                        }
+                                        client_publish->timeout = client_publish->publish->interval;
+                                }
+                        }
+                }
+        } else {
+                if (client->connected == 0 &&
+                    client->disconnected == 0) {
+                        TAILQ_FOREACH(client_publish, &client->publishs, list) {
+                                client_publish->timeout -= diff_time;
+                                client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
+
+                                if (client_publish->timeout <= 0) {
+                                        rc = mbus_client_connect(client->client);
+                                        if (rc != 0) {
+                                                fprintf(stderr, "client connect failed\n");
+                                                goto bail;
+                                        }
+                                }
+                        }
+                } else if (client->connected == 1 &&
+                           client->disconnected == 0) {
+                        if (mbus_client_get_state(client->client) == mbus_client_state_connected) {
+                                TAILQ_FOREACH(client_publish, &client->publishs, list) {
+                                        client_publish->timeout -= diff_time;
+                                        client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
+
+                                        if (client_publish->timeout <= 0) {
+                                                struct mbus_client_publish_options publish_options;
+
+                                                rc = mbus_client_publish_options_default(&publish_options);
+                                                if (rc != 0) {
+                                                        fprintf(stderr, "can not get default publish options\n");
+                                                        goto bail;
+                                                }
+                                                publish_options.event    = client_publish->publish->event;
+                                                publish_options.payload  = client_publish->publish->payload_json;
+                                                rc = mbus_client_publish_with_options(client->client, &publish_options);
+                                                if (rc != 0) {
+                                                        fprintf(stderr, "can not publish event\n");
+                                                        goto bail;
+                                                }
+                                                client_publish->timeout = client_publish->publish->interval;
+                                        }
+                                }
+                                if (mbus_client_has_pending(client->client) == 0)  {
+                                        mbus_client_disconnect(client->client);
+                                }
+                        }
+                } else if (client->connected == 1 &&
+                           client->disconnected == 1) {
+                        client->connected    = 0;
+                        client->disconnected = 0;
+
                 }
         }
         return 0;
@@ -271,7 +326,7 @@ static void client_destroy (struct client *client)
 	free(client);
 }
 
-static struct client * client_create (struct mbus_client_options *options, struct subscriptions *subscriptions, struct publishs *publishs, struct commands *commands)
+static struct client * client_create (struct mbus_client_options *options, int keepalive, struct subscriptions *subscriptions, struct publishs *publishs, struct commands *commands)
 {
 	struct client *client;
 	struct client_publish *client_publish;
@@ -307,6 +362,7 @@ static struct client * client_create (struct mbus_client_options *options, struc
                 client_publish->timeout = publish->interval;
                 TAILQ_INSERT_TAIL(&client->publishs, client_publish, list);
         }
+        client->keepalive = keepalive;
 	return client;
 bail:	if (client != NULL) {
 		client_destroy(client);
@@ -528,6 +584,10 @@ static void usage (void)
         fprintf(stdout, "  -p, --publish   : event identifier to publish (default: none)\n");
         fprintf(stdout, "                    interval:event:payload = %s:%s:%s\n", "interval", "event", "payload");
         fprintf(stdout, "  -r, --register  : command identifier to register (default: none)\n");
+        fprintf(stdout, "  -k, --keepalive : keep connection (defualt: -1)\n");
+        fprintf(stdout, "                    -1 : all of clients\n");
+        fprintf(stdout, "                    0  : none of clients\n");
+        fprintf(stdout, "                    > 0: n of clients\n");
 	fprintf(stdout, "  -h, --help      : this text\n");
 	fprintf(stdout, "  --mbus-help     : mbus help text\n");
 	mbus_client_usage();
@@ -561,13 +621,13 @@ int main (int argc, char *argv[])
 
 	int i;
 	int nclients;
+	int keepalive;
 	int timeout;
 	struct pollfd *pollfds;
 
-	int all_connected;
-
-	pollfds = NULL;
-	nclients = 1;
+	pollfds   = NULL;
+	nclients  = 1;
+	keepalive = -1;
 	TAILQ_INIT(&clients);
         TAILQ_INIT(&commands);
         TAILQ_INIT(&publishs);
@@ -591,7 +651,7 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":c:s:p:r:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":c:s:p:r:k:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_CLIENTS:
 				nclients = atoi(optarg);
@@ -602,7 +662,6 @@ int main (int argc, char *argv[])
                                         fprintf(stderr, "can not create subscription\n");
                                         goto bail;
                                 }
-                                fprintf(stderr, "subscription source: '%s', event: '%s'\n", subscription->source, subscription->event);
                                 TAILQ_INSERT_TAIL(&subscriptions, subscription, list);
                                 break;
                         case OPTION_PUBLISH:
@@ -611,7 +670,6 @@ int main (int argc, char *argv[])
                                         fprintf(stderr, "can not create publish\n");
                                         goto bail;
                                 }
-                                fprintf(stderr, "publish interval: %d, event: '%s', payload: '%s'\n", publish->interval, publish->event, publish->payload);
                                 TAILQ_INSERT_TAIL(&publishs, publish, list);
                                 break;
                         case OPTION_REGISTER:
@@ -620,8 +678,10 @@ int main (int argc, char *argv[])
                                         fprintf(stderr, "can not create command\n");
                                         goto bail;
                                 }
-                                fprintf(stderr, "register command: '%s'\n", command->command);
                                 TAILQ_INSERT_TAIL(&commands, command, list);
+                                break;
+                        case OPTION_KEEPALIVE:
+                                keepalive = atoi(optarg);
                                 break;
 			case OPTION_HELP:
 				usage();
@@ -632,6 +692,26 @@ int main (int argc, char *argv[])
 	optind = _optind;
 
 	srand(time(NULL));
+
+        if (keepalive < 0) {
+                keepalive = nclients;
+        } else if (keepalive > nclients) {
+                keepalive = nclients;
+        }
+        fprintf(stdout, "clients      : %d\n", nclients);
+        fprintf(stdout, "keepalive    : %d\n", keepalive);
+        fprintf(stdout, "publishs     :\n");
+        TAILQ_FOREACH(publish, &publishs, list) {
+                fprintf(stderr, "  interval: %d, event: '%s', payload: '%s'\n", publish->interval, publish->event, publish->payload);
+        }
+        fprintf(stdout, "subscriptions:\n");
+        TAILQ_FOREACH(subscription, &subscriptions, list) {
+                fprintf(stderr, "  source: '%s', event: '%s'\n", subscription->source, subscription->event);
+        }
+        fprintf(stdout, "registers    :\n");
+        TAILQ_FOREACH(command, &commands, list) {
+                fprintf(stderr, "  command: '%s'\n", command->command);
+        }
 
 	rc = mbus_client_options_default(&mbus_client_options);
 	if (rc != 0) {
@@ -644,7 +724,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 	for (i = 0; i < nclients; i++) {
-		client = client_create(&mbus_client_options, &subscriptions, &publishs, &commands);
+		client = client_create(&mbus_client_options, (i < keepalive), &subscriptions, &publishs, &commands);
 		if (client == NULL) {
 			fprintf(stderr, "can not create client\n");
 			goto bail;
@@ -658,20 +738,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 
-	all_connected = 0;
 	while (1) {
-		if (all_connected == 0) {
-	                TAILQ_FOREACH(client, &clients, list) {
-				if (client->connected <= 0) {
-					break;
-				}
-			}
-			if (client == NULL) {
-				fprintf(stderr, "clients: all connected\n");
-				all_connected = 1;
-			}
-		}
-
 		i = 0;
 		timeout = 1000;
                 TAILQ_FOREACH(client, &clients, list) {
