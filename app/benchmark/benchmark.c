@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <signal.h>
+#include <time.h>
 #include <poll.h>
 
 #define MBUS_DEBUG_NAME	"app-benchmark"
@@ -89,6 +90,7 @@ struct client {
         struct client_publishs publishs;
 	int connected;
 	int disconnected;
+	unsigned long long processed_time;
 };
 
 #define OPTION_HELP                     'h'
@@ -184,6 +186,49 @@ static int mbus_client_callback_routine (struct mbus_client *mbus_client, void *
         (void) client;
         (void) message;
         return 0;
+}
+
+static int client_process (struct client *client)
+{
+        int rc;
+        unsigned long long diff_time;
+        unsigned long long current_time;
+        struct client_publish *client_publish;
+        if (client == NULL) {
+                fprintf(stderr, "client is invalid\n");
+                goto bail;
+        }
+        current_time = mbus_clock_monotonic();
+        if (current_time > client->processed_time) {
+                diff_time = current_time - client->processed_time;
+        } else {
+                diff_time = 0;
+        }
+        client->processed_time = current_time;
+        if (client->connected == 0 &&
+            client->disconnected == 0) {
+                rc = mbus_client_connect(client->client);
+                if (rc != 0) {
+                        fprintf(stderr, "client connect failed\n");
+                        goto bail;
+                }
+        } else if (client->connected == 1 &&
+                   client->disconnected == 0) {
+                TAILQ_FOREACH(client_publish, &client->publishs, list) {
+                        client_publish->timeout -= diff_time;
+                        client_publish->timeout -= (rand() % client_publish->publish->interval) / 100;
+                        if (client_publish->timeout <= 0) {
+                                rc = mbus_client_publish(client->client, client_publish->publish->event, client_publish->publish->payload_json);
+                                if (rc != 0) {
+                                        fprintf(stderr, "can not publish event\n");
+                                        goto bail;
+                                }
+                                client_publish->timeout = client_publish->publish->interval;
+                        }
+                }
+        }
+        return 0;
+bail:   return -1;
 }
 
 static void client_destroy (struct client *client)
@@ -485,8 +530,6 @@ int main (int argc, char *argv[])
         struct subscription *nsubscription;
         struct subscriptions subscriptions;
 
-        struct client_publish *client_publish;
-
 	struct client *client;
 	struct client *nclient;
 	struct clients clients;
@@ -498,10 +541,6 @@ int main (int argc, char *argv[])
 	struct pollfd *pollfds;
 
 	int all_connected;
-
-        unsigned long long previous_time;
-        unsigned long long current_time;
-        unsigned long long diff_time;
 
 	pollfds = NULL;
 	nclients = 1;
@@ -568,6 +607,8 @@ int main (int argc, char *argv[])
 
 	optind = _optind;
 
+	srand(time(NULL));
+
 	rc = mbus_client_options_default(&mbus_client_options);
 	if (rc != 0) {
 		fprintf(stderr, "can not get default options\n");
@@ -593,16 +634,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 
-	TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
-		rc = mbus_client_connect(client->client);
-		if (rc != 0) {
-			fprintf(stderr, "client connect failed\n");
-			goto bail;
-		}
-	}
-
 	all_connected = 0;
-	current_time  = mbus_clock_monotonic();
 	while (1) {
 		if (all_connected == 0) {
 	                TAILQ_FOREACH(client, &clients, list) {
@@ -616,30 +648,13 @@ int main (int argc, char *argv[])
 			}
 		}
 
-		previous_time = current_time;
-	        current_time  = mbus_clock_monotonic();
-	        if (current_time > previous_time) {
-	                diff_time = current_time - previous_time;
-	        } else {
-	                diff_time = 0;
-	        }
-
 		i = 0;
 		timeout = 1000;
                 TAILQ_FOREACH(client, &clients, list) {
-                        if (client->connected == 1 &&
-                            client->disconnected == 0) {
-                                TAILQ_FOREACH(client_publish, &client->publishs, list) {
-                                        client_publish->timeout -= diff_time;
-                                        if (client_publish->timeout <= 0) {
-                                                rc = mbus_client_publish(client->client, client_publish->publish->event, client_publish->publish->payload_json);
-                                                if (rc != 0) {
-                                                        fprintf(stderr, "can not publish event\n");
-                                                        goto bail;
-                                                }
-                                                client_publish->timeout = client_publish->publish->interval;
-                                        }
-                                }
+                        rc = client_process(client);
+                        if (rc != 0) {
+                                fprintf(stderr, "client process failed\n");
+                                goto bail;
                         }
 
                         pollfds[i + 0].fd = mbus_client_get_wakeup_fd(client->client);
