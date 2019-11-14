@@ -38,6 +38,7 @@
 
 #include "mbus/debug.h"
 #include "mbus/json.h"
+#include "mbus/clock.h"
 #include "mbus/method.h"
 #include "mbus/tailq.h"
 #include "mbus/client.h"
@@ -52,25 +53,67 @@
 
 TAILQ_HEAD(subscriptions, subscription);
 struct subscription {
-	TAILQ_ENTRY(subscription) subscriptions;
-	char *source;
-	char *event;
+        TAILQ_ENTRY(subscription) list;
+        char *source;
+        char *event;
+};
+
+TAILQ_HEAD(publishs, publish);
+struct publish {
+        TAILQ_ENTRY(publish) list;
+        int interval;
+        char *event;
+        char *payload;
+        struct mbus_json *payload_json;
+};
+
+TAILQ_HEAD(commands, command);
+struct command {
+        TAILQ_ENTRY(command) list;
+        char *command;
+};
+
+TAILQ_HEAD(client_publishs, client_publish);
+struct client_publish {
+        TAILQ_ENTRY(client_publish) list;
+        struct publish *publish;
+        int timeout;
 };
 
 TAILQ_HEAD(clients, client);
 struct client {
-	TAILQ_ENTRY(client) clients;
+	TAILQ_ENTRY(client) list;
 	struct mbus_client *client;
 	struct subscriptions *subscriptions;
+        struct commands *commands;
+        struct client_publishs publishs;
 	int connected;
 	int disconnected;
 };
+
+#define OPTION_HELP                     'h'
+#define OPTION_CLIENTS                  'c'
+#define OPTION_SUBSCRIBE                's'
+#define OPTION_PUBLISH                  'p'
+#define OPTION_REGISTER                 'r'
+static struct option longopts[] = {
+        { "help",       no_argument,            NULL,   OPTION_HELP },
+        { "clients",    required_argument,      NULL,   OPTION_CLIENTS },
+        { "subscribe",  required_argument,      NULL,   OPTION_SUBSCRIBE },
+        { "publish",    required_argument,      NULL,   OPTION_PUBLISH },
+        { "register",   required_argument,      NULL,   OPTION_REGISTER },
+        { NULL,         0,                      NULL,   0 },
+};
+
+static volatile int g_running;
 
 static void mbus_client_callback_connect (struct mbus_client *mbus_client, void *context, enum mbus_client_connect_status status)
 {
 	int rc;
 	struct subscription *subscription;
 	struct mbus_client_subscribe_options subscribe_options;
+        struct command *command;
+        struct mbus_client_register_options register_options;
 
 	struct client *client = context;
 
@@ -78,20 +121,33 @@ static void mbus_client_callback_connect (struct mbus_client *mbus_client, void 
 
 	if (status == mbus_client_connect_status_success) {
 		client->connected = 1;
-		TAILQ_FOREACH(subscription, client->subscriptions, subscriptions) {
-			rc = mbus_client_subscribe_options_default(&subscribe_options);
-			if (rc != 0) {
-				fprintf(stderr, "can not get default subscribe options\n");
-				goto bail;
-			}
-			subscribe_options.source = subscription->source;
-			subscribe_options.event = subscription->event;
-			rc = mbus_client_subscribe_with_options(client->client, &subscribe_options);
-			if (rc != 0) {
-				fprintf(stderr, "can not subscribe to event\n");
-				goto bail;
-			}
-		}
+                TAILQ_FOREACH(subscription, client->subscriptions, list) {
+                        rc = mbus_client_subscribe_options_default(&subscribe_options);
+                        if (rc != 0) {
+                                fprintf(stderr, "can not get default subscribe options\n");
+                                goto bail;
+                        }
+                        subscribe_options.source = subscription->source;
+                        subscribe_options.event = subscription->event;
+                        rc = mbus_client_subscribe_with_options(client->client, &subscribe_options);
+                        if (rc != 0) {
+                                fprintf(stderr, "can not subscribe to event\n");
+                                goto bail;
+                        }
+                }
+                TAILQ_FOREACH(command, client->commands, list) {
+                        rc = mbus_client_register_options_default(&register_options);
+                        if (rc != 0) {
+                                fprintf(stderr, "can not get default register options\n");
+                                goto bail;
+                        }
+                        register_options.command = command->command;
+                        rc = mbus_client_register_with_options(client->client, &register_options);
+                        if (rc != 0) {
+                                fprintf(stderr, "can not register command\n");
+                                goto bail;
+                        }
+                }
 	} else {
 		fprintf(stderr, "connect: %s\n", mbus_client_connect_status_string(status));
 		if (mbus_client_get_options(client->client)->connect_interval <= 0) {
@@ -121,36 +177,67 @@ static void mbus_client_callback_message (struct mbus_client *mbus_client, void 
 	(void) message;
 }
 
+static int mbus_client_callback_routine (struct mbus_client *mbus_client, void *context, struct mbus_client_message_routine *message)
+{
+        struct client *client = context;
+        (void) mbus_client;
+        (void) client;
+        (void) message;
+        return 0;
+}
+
 static void client_destroy (struct client *client)
 {
+        struct client_publish *client_publish;
+        struct client_publish *nclient_publish;
 	if (client == NULL) {
 		return;
 	}
 	if (client->client != NULL) {
 		mbus_client_destroy(client->client);
 	}
+	TAILQ_FOREACH_SAFE(client_publish, &client->publishs, list, nclient_publish) {
+	        TAILQ_REMOVE(&client->publishs, client_publish, list);
+	        free(client_publish);
+	}
 	free(client);
 }
 
-static struct client * client_create (struct mbus_client_options *options, struct subscriptions *subscriptions)
+static struct client * client_create (struct mbus_client_options *options, struct subscriptions *subscriptions, struct publishs *publishs, struct commands *commands)
 {
 	struct client *client;
+	struct client_publish *client_publish;
+	struct publish *publish;
 	client = malloc(sizeof(struct client));
 	if (client == NULL) {
 		fprintf(stderr, "can not allocate memory\n");
 		goto bail;
 	}
 	memset(client, 0, sizeof(struct client));
+	TAILQ_INIT(&client->publishs);
 	options->callbacks.connect    = mbus_client_callback_connect;
 	options->callbacks.disconnect = mbus_client_callback_disconnect;
 	options->callbacks.message    = mbus_client_callback_message;
+        options->callbacks.routine    = mbus_client_callback_routine;
 	options->callbacks.context    = client;
 	client->client = mbus_client_create(options);
 	if (client->client == NULL) {
 		fprintf(stderr, "can not client mbus client\n");
 		goto bail;
 	}
-	client->subscriptions = subscriptions;
+        client->subscriptions = subscriptions;
+        client->commands = commands;
+        TAILQ_FOREACH(publish, publishs, list) {
+                client_publish = malloc(sizeof(struct client_publish));
+                if (client_publish == NULL) {
+                        fprintf(stderr, "can not allocate memory\n");
+                        goto bail;
+                }
+                memset(client_publish, 0, sizeof(struct client_publish));
+                client_publish->publish = publish;
+                client_publish->timeout = publish->interval;
+                TAILQ_INSERT_TAIL(&client->publishs, client_publish, list);
+        }
 	return client;
 bail:	if (client != NULL) {
 		client_destroy(client);
@@ -160,60 +247,199 @@ bail:	if (client != NULL) {
 
 static void subscription_destroy (struct subscription *subscription)
 {
-	if (subscription == NULL) {
-		return;
-	}
-	if (subscription->source != NULL) {
-		free(subscription->source);
-	}
-	if (subscription->event != NULL) {
-		free(subscription->event);
-	}
-	free(subscription);
+        if (subscription == NULL) {
+                return;
+        }
+        if (subscription->source != NULL) {
+                free(subscription->source);
+        }
+        if (subscription->event != NULL) {
+                free(subscription->event);
+        }
+        free(subscription);
 }
 
 static struct subscription * subscription_create (const char *topic)
 {
-	struct subscription *subscription;
-	subscription = NULL;
-	if (topic == NULL) {
-		fprintf(stderr, "topic is invalid\n");
-		goto bail;
-	}
-	subscription = malloc(sizeof(struct subscription));
-	if (subscription == NULL) {
-		fprintf(stderr, "can not allocate memory\n");
-		goto bail;
-	}
-	memset(subscription, 0, sizeof(struct subscription));
-	subscription->source = strdup(MBUS_METHOD_EVENT_SOURCE_ALL);
-	if (subscription->source == NULL) {
-		fprintf(stderr, "can not allocate memory\n");
-		goto bail;
-	}
-	subscription->event = strdup(topic);
-	if (subscription->event == NULL) {
-		fprintf(stderr, "can not allocate memory\n");
-		goto bail;
-	}
-	return subscription;
-bail:	if (subscription != NULL) {
-		subscription_destroy(subscription);
-	}
-	return NULL;
+        const char *mark;
+        struct subscription *subscription;
+        subscription = NULL;
+        if (topic == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        subscription = malloc(sizeof(struct subscription));
+        if (subscription == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        memset(subscription, 0, sizeof(struct subscription));
+        mark = strchr(topic, ':');
+        if (mark == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        if (topic == mark) {
+                subscription->source = strdup(MBUS_METHOD_EVENT_SOURCE_ALL);
+        } else {
+                subscription->source = strndup(topic, mark - topic);
+        }
+        if (subscription->source == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        if (strlen(mark) == 1) {
+                subscription->event = strdup(MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+        } else {
+                subscription->event = strdup(mark + 1);
+        }
+        if (subscription->event == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        return subscription;
+bail:   if (subscription != NULL) {
+                subscription_destroy(subscription);
+        }
+        return NULL;
 }
 
-#define OPTION_HELP		'h'
-#define OPTION_CLIENTS		'c'
-#define OPTION_SUBSCRIBE	's'
-static struct option longopts[] = {
-	{ "help",			no_argument,		NULL,	OPTION_HELP },
-	{ "clients",			required_argument,	NULL,	OPTION_CLIENTS },
-	{ "subscribe",			required_argument,	NULL,	OPTION_SUBSCRIBE },
-	{ NULL,				0,			NULL,	0 },
-};
+static void publish_destroy (struct publish *publish)
+{
+        if (publish == NULL) {
+                return;
+        }
+        if (publish->event != NULL) {
+                free(publish->event);
+        }
+        if (publish->payload != NULL) {
+                free(publish->payload);
+        }
+        if (publish->payload_json != NULL) {
+                mbus_json_delete(publish->payload_json);
+        }
+        free(publish);
+}
 
-static volatile int g_running;
+static struct publish * publish_create (const char *topic)
+{
+        char *tmp;
+        char *mark;
+        char *interval;
+        char *event;
+        char *payload;
+        struct publish *publish;
+        tmp = NULL;
+        publish = NULL;
+        if (topic == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        publish = malloc(sizeof(struct publish));
+        if (publish == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        memset(publish, 0, sizeof(struct publish));
+        tmp = strdup(topic);
+        if (tmp == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        interval = tmp;
+        mark = strchr(interval, ':');
+        if (mark == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        *mark = '\0';
+        event = mark + 1;
+        mark = strchr(event, ':');
+        if (mark == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        *mark = '\0';
+        payload = mark + 1;
+        if (strlen(interval) == 0) {
+                fprintf(stderr, "interval is invalid\n");
+                goto bail;
+        }
+        publish->interval = atoi(interval);
+        if (publish->interval == 0) {
+                fprintf(stderr, "interval is invalid\n");
+                goto bail;
+        }
+        if (strlen(event) == 0) {
+                fprintf(stderr, "event is invalid\n");
+                goto bail;
+        }
+        publish->event = strdup(event);
+        if (publish->event == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        if (strlen(payload) == 0) {
+                fprintf(stderr, "payload is invalid\n");
+                goto bail;
+        }
+        publish->payload = strdup(payload);
+        if (publish->payload == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        publish->payload_json = mbus_json_parse(payload);
+        if (publish->payload == NULL) {
+                fprintf(stderr, "can not parse payload\n");
+                goto bail;
+        }
+        free(tmp);
+        return publish;
+bail:   if (publish != NULL) {
+                publish_destroy(publish);
+        }
+        if (tmp != NULL) {
+                free(tmp);
+        }
+        return NULL;
+}
+
+static void command_destroy (struct command *command)
+{
+        if (command == NULL) {
+                return;
+        }
+        if (command->command != NULL) {
+                free(command->command);
+        }
+        free(command);
+}
+
+static struct command * command_create (const char *topic)
+{
+        struct command *command;
+        command = NULL;
+        if (topic == NULL) {
+                fprintf(stderr, "topic is invalid\n");
+                goto bail;
+        }
+        command = malloc(sizeof(struct command));
+        if (command == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        memset(command, 0, sizeof(struct command));
+        command->command = strdup(topic);
+        if (command->command == NULL) {
+                fprintf(stderr, "can not allocate memory\n");
+                goto bail;
+        }
+        return command;
+bail:   if (command != NULL) {
+                command_destroy(command);
+        }
+        return NULL;
+}
 
 static void signal_handler (int signal)
 {
@@ -225,7 +451,14 @@ static void usage (void)
 {
 	fprintf(stdout, "mbus benchmark arguments:\n");
 	fprintf(stdout, "  -c, --clients   : number of clients (default: 1)\n");
-	fprintf(stdout, "  -s, --subscribe : event identifier to subscribe (default: all)\n");
+        fprintf(stdout, "  -s, --subscribe : event identifier to subscribe (default: none)\n");
+        fprintf(stdout, "                    source:event = %s:%s\n", "source", "event");
+        fprintf(stdout, "                    source:      = %s:%s\n", "source", MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+        fprintf(stdout, "                    :event       = %s:%s\n", MBUS_METHOD_EVENT_SOURCE_ALL, "event");
+        fprintf(stdout, "                    :            = %s:%s\n", MBUS_METHOD_EVENT_SOURCE_ALL, MBUS_METHOD_EVENT_IDENTIFIER_ALL);
+        fprintf(stdout, "  -p, --publish   : event identifier to publish (default: none)\n");
+        fprintf(stdout, "                    interval:event:payload = %s:%s:%s\n", "interval", "event", "payload");
+        fprintf(stdout, "  -r, --register  : command identifier to register (default: none)\n");
 	fprintf(stdout, "  -h, --help      : this text\n");
 	fprintf(stdout, "  --mbus-help     : mbus help text\n");
 	mbus_client_usage();
@@ -240,9 +473,19 @@ int main (int argc, char *argv[])
 	char **_argv;
 	int _optind;
 
-	struct subscription *subscription;
-	struct subscription *nsubscription;
-	struct subscriptions subscriptions;
+        struct command *command;
+        struct command *ncommand;
+        struct commands commands;
+
+        struct publish *publish;
+        struct publish *npublish;
+        struct publishs publishs;
+
+        struct subscription *subscription;
+        struct subscription *nsubscription;
+        struct subscriptions subscriptions;
+
+        struct client_publish *client_publish;
 
 	struct client *client;
 	struct client *nclient;
@@ -256,10 +499,16 @@ int main (int argc, char *argv[])
 
 	int all_connected;
 
+        unsigned long long previous_time;
+        unsigned long long current_time;
+        unsigned long long diff_time;
+
 	pollfds = NULL;
 	nclients = 1;
 	TAILQ_INIT(&clients);
-	TAILQ_INIT(&subscriptions);
+        TAILQ_INIT(&commands);
+        TAILQ_INIT(&publishs);
+        TAILQ_INIT(&subscriptions);
 
 	_argc = 0;
 	_argv = NULL;
@@ -279,19 +528,38 @@ int main (int argc, char *argv[])
 		_argv[_argc] = argv[_argc];
 	}
 
-	while ((c = getopt_long(_argc, _argv, ":c:s:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(_argc, _argv, ":c:s:p:r:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case OPTION_CLIENTS:
 				nclients = atoi(optarg);
 				break;
-			case OPTION_SUBSCRIBE:
-				subscription = subscription_create(optarg);
-				if (subscription == NULL) {
-					fprintf(stderr, "can not create subscription\n");
-					goto bail;
-				}
-				TAILQ_INSERT_TAIL(&subscriptions, subscription, subscriptions);
-				break;
+                        case OPTION_SUBSCRIBE:
+                                subscription = subscription_create(optarg);
+                                if (subscription == NULL) {
+                                        fprintf(stderr, "can not create subscription\n");
+                                        goto bail;
+                                }
+                                fprintf(stderr, "subscription source: '%s', event: '%s'\n", subscription->source, subscription->event);
+                                TAILQ_INSERT_TAIL(&subscriptions, subscription, list);
+                                break;
+                        case OPTION_PUBLISH:
+                                publish = publish_create(optarg);
+                                if (publish == NULL) {
+                                        fprintf(stderr, "can not create publish\n");
+                                        goto bail;
+                                }
+                                fprintf(stderr, "publish interval: %d, event: '%s', payload: '%s'\n", publish->interval, publish->event, publish->payload);
+                                TAILQ_INSERT_TAIL(&publishs, publish, list);
+                                break;
+                        case OPTION_REGISTER:
+                                command = command_create(optarg);
+                                if (command == NULL) {
+                                        fprintf(stderr, "can not create command\n");
+                                        goto bail;
+                                }
+                                fprintf(stderr, "register command: '%s'\n", command->command);
+                                TAILQ_INSERT_TAIL(&commands, command, list);
+                                break;
 			case OPTION_HELP:
 				usage();
 				goto bail;
@@ -310,22 +578,13 @@ int main (int argc, char *argv[])
 		fprintf(stderr, "can not parse options\n");
 		goto bail;
 	}
-
-	if (subscriptions.count == 0) {
-		subscription = subscription_create(MBUS_METHOD_EVENT_IDENTIFIER_ALL);
-		if (subscription == NULL) {
-			fprintf(stderr, "can not create subscription\n");
-			goto bail;
-		}
-		TAILQ_INSERT_TAIL(&subscriptions, subscription, subscriptions);
-	}
 	for (i = 0; i < nclients; i++) {
-		client = client_create(&mbus_client_options, &subscriptions);
+		client = client_create(&mbus_client_options, &subscriptions, &publishs, &commands);
 		if (client == NULL) {
 			fprintf(stderr, "can not create client\n");
 			goto bail;
 		}
-		TAILQ_INSERT_TAIL(&clients, client, clients);
+		TAILQ_INSERT_TAIL(&clients, client, list);
 	}
 
 	pollfds = malloc(sizeof(struct pollfd) * (clients.count * 2));
@@ -334,7 +593,7 @@ int main (int argc, char *argv[])
 		goto bail;
 	}
 
-	TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
+	TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
 		rc = mbus_client_connect(client->client);
 		if (rc != 0) {
 			fprintf(stderr, "client connect failed\n");
@@ -343,9 +602,10 @@ int main (int argc, char *argv[])
 	}
 
 	all_connected = 0;
+	current_time  = mbus_clock_monotonic();
 	while (1) {
 		if (all_connected == 0) {
-			TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
+	                TAILQ_FOREACH(client, &clients, list) {
 				if (client->connected <= 0) {
 					break;
 				}
@@ -356,10 +616,33 @@ int main (int argc, char *argv[])
 			}
 		}
 
+		previous_time = current_time;
+	        current_time  = mbus_clock_monotonic();
+	        if (current_time > previous_time) {
+	                diff_time = current_time - previous_time;
+	        } else {
+	                diff_time = 0;
+	        }
+
 		i = 0;
 		timeout = 1000;
-		TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
-			pollfds[i + 0].fd = mbus_client_get_wakeup_fd(client->client);
+                TAILQ_FOREACH(client, &clients, list) {
+                        if (client->connected == 1 &&
+                            client->disconnected == 0) {
+                                TAILQ_FOREACH(client_publish, &client->publishs, list) {
+                                        client_publish->timeout -= diff_time;
+                                        if (client_publish->timeout <= 0) {
+                                                rc = mbus_client_publish(client->client, client_publish->publish->event, client_publish->publish->payload_json);
+                                                if (rc != 0) {
+                                                        fprintf(stderr, "can not publish event\n");
+                                                        goto bail;
+                                                }
+                                                client_publish->timeout = client_publish->publish->interval;
+                                        }
+                                }
+                        }
+
+                        pollfds[i + 0].fd = mbus_client_get_wakeup_fd(client->client);
 			pollfds[i + 0].events = mbus_client_get_wakeup_fd_events(client->client);
 			pollfds[i + 0].revents = 0;
 
@@ -377,7 +660,7 @@ int main (int argc, char *argv[])
 			goto bail;
 		}
 
-		TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
+		TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
 			rc = mbus_client_run(client->client, 0);
 			if (rc != 0) {
 				fprintf(stderr, "client run failed\n");
@@ -386,23 +669,39 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	TAILQ_FOREACH_SAFE(subscription, &subscriptions, subscriptions, nsubscription) {
-		TAILQ_REMOVE(&subscriptions, subscription, subscriptions);
-		subscription_destroy(subscription);
-	}
-	TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
-		TAILQ_REMOVE(&clients, client, clients);
+        TAILQ_FOREACH_SAFE(command, &commands, list, ncommand) {
+                TAILQ_REMOVE(&commands, command, list);
+                command_destroy(command);
+        }
+        TAILQ_FOREACH_SAFE(publish, &publishs, list, npublish) {
+                TAILQ_REMOVE(&publishs, publish, list);
+                publish_destroy(publish);
+        }
+        TAILQ_FOREACH_SAFE(subscription, &subscriptions, list, nsubscription) {
+                TAILQ_REMOVE(&subscriptions, subscription, list);
+                subscription_destroy(subscription);
+        }
+	TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
+		TAILQ_REMOVE(&clients, client, list);
 		client_destroy(client);
 	}
 	free(pollfds);
 	free(_argv);
 	return 0;
-bail:	TAILQ_FOREACH_SAFE(subscription, &subscriptions, subscriptions, nsubscription) {
-		TAILQ_REMOVE(&subscriptions, subscription, subscriptions);
-		subscription_destroy(subscription);
-	}
-	TAILQ_FOREACH_SAFE(client, &clients, clients, nclient) {
-		TAILQ_REMOVE(&clients, client, clients);
+bail:	TAILQ_FOREACH_SAFE(command, &commands, list, ncommand) {
+                TAILQ_REMOVE(&commands, command, list);
+                command_destroy(command);
+        }
+        TAILQ_FOREACH_SAFE(publish, &publishs, list, npublish) {
+                TAILQ_REMOVE(&publishs, publish, list);
+                publish_destroy(publish);
+        }
+        TAILQ_FOREACH_SAFE(subscription, &subscriptions, list, nsubscription) {
+                TAILQ_REMOVE(&subscriptions, subscription, list);
+                subscription_destroy(subscription);
+        }
+	TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
+		TAILQ_REMOVE(&clients, client, list);
 		client_destroy(client);
 	}
 	if (_argv != NULL) {

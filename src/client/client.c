@@ -1333,6 +1333,7 @@ bail:	return -1;
 static int mbus_client_handle_command (struct mbus_client *client, const struct mbus_json *json)
 {
 	int rc;
+	int status;
 	const char *source;
 	const char *identifier;
 	struct routine *routine;
@@ -1380,7 +1381,7 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 			message.request = json;
 			message.response = NULL;
 			mbus_client_unlock(client);
-			rc = callback(client, callback_context, &message);
+			status = callback(client, callback_context, &message);
 			mbus_client_lock(client);
 			result_payload = mbus_json_create_object();
 			if (result_payload == NULL) {
@@ -1402,7 +1403,7 @@ static int mbus_client_handle_command (struct mbus_client *client, const struct 
 				mbus_errorf("can not add sequence to payload");
 				goto bail;
 			}
-			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_STATUS, rc);
+			rc = mbus_json_add_number_to_object_cs(result_payload, MBUS_METHOD_TAG_STATUS, status);
 			if (rc != 0) {
 				mbus_errorf("can not add return to payload");
 				goto bail;
