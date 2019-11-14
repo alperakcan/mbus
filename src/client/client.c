@@ -2048,7 +2048,8 @@ int mbus_client_connect (struct mbus_client *client)
 		goto bail;
 	}
 	mbus_client_lock(client);
-	if (client->state != mbus_client_state_connected) {
+	if (client->state != mbus_client_state_connected &&
+	    client->state != mbus_client_state_connecting) {
 		client->state = mbus_client_state_connecting;
 		rc = mbus_client_wakeup(client, wakeup_reason_connect);
 		if (rc != 0) {
@@ -3092,8 +3093,6 @@ int mbus_client_get_run_timeout_unlocked (struct mbus_client *client)
 		if (client->options->connect_interval > 0) {
 			if (mbus_clock_before(current, client->connect_tsms + client->options->connect_interval)) {
                                 timeout = MIN(timeout, (long long) ((client->connect_tsms + client->options->connect_interval) - (current)));
-			} else {
-                                timeout = 0;
 			}
 		}
 	}
@@ -3236,7 +3235,7 @@ int mbus_client_run (struct mbus_client *client, int timeout)
 	}
 	events = mbus_client_get_connection_fd_events_unlocked(client);
 	mbus_client_unlock(client);
-	mbus_debugf("poll(%d, %d", ptimeout, timeout);
+	mbus_debugf("poll(%d, %d)", ptimeout, timeout);
 	rc = poll(pollfds, npollfds, ptimeout);
 	mbus_client_lock(client);
 	if (rc == 0) {

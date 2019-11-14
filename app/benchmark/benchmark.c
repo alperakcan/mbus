@@ -767,11 +767,13 @@ int main (int argc, char *argv[])
 		}
 
 		TAILQ_FOREACH_SAFE(client, &clients, list, nclient) {
-			rc = mbus_client_run(client->client, 0);
-			if (rc != 0) {
-				fprintf(stderr, "client run failed\n");
-				goto bail;
-			}
+		        if (mbus_client_get_state(client->client) != mbus_client_state_disconnected) {
+                                rc = mbus_client_run(client->client, 0);
+                                if (rc != 0) {
+                                        fprintf(stderr, "client run failed\n");
+                                        goto bail;
+                                }
+		        }
 		}
 	}
 
