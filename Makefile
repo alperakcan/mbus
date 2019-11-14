@@ -15,6 +15,7 @@ include Makefile.lib
 install: app src test
 	install -d ${DESTDIR}/usr/local/bin
 	install -m 0755 dist/bin/mbus-version ${DESTDIR}/usr/local/bin/mbus-version
+	install -m 0755 dist/bin/mbus-benchmark ${DESTDIR}/usr/local/bin/mbus-benchmark
 	install -m 0755 dist/bin/mbus-broker ${DESTDIR}/usr/local/bin/mbus-broker
 	if [ -f dist/bin/mbus-client ]; then install -m 0755 dist/bin/mbus-client ${DESTDIR}/usr/local/bin/mbus-client; fi
 	install -m 0755 dist/bin/mbus-command ${DESTDIR}/usr/local/bin/mbus-command
@@ -86,6 +87,7 @@ install: app src test
 
 uninstall:
 	rm -f ${DESTDIR}/usr/local/bin/mbus-version
+	rm -f ${DESTDIR}/usr/local/bin/mbus-benchmark
 	rm -f ${DESTDIR}/usr/local/bin/mbus-broker
 	rm -f ${DESTDIR}/usr/local/bin/mbus-client
 	rm -f ${DESTDIR}/usr/local/bin/mbus-command
