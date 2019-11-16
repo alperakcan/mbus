@@ -55,6 +55,7 @@
 #include "mbus/buffer.h"
 #include "mbus/clock.h"
 #include "mbus/tailq.h"
+#include "mbus/uthash.h"
 #include "mbus/json.h"
 #include "mbus/method.h"
 #include "mbus/socket.h"
@@ -89,10 +90,14 @@ static const struct {
 };
 
 struct client {
-	TAILQ_ENTRY(client) clients;
+	TAILQ_ENTRY(client) list;
+	UT_hash_handle hash_id;
+	UT_hash_handle hash_fd;
+	int fd;
 	char *identifier;
 	enum client_status status;
 	enum mbus_compress_method compression;
+	struct mbus_server *server;
 	struct listener *listener;
 	struct connection *connection;
 	enum client_connection_close_code connection_close_code;
@@ -119,6 +124,8 @@ struct mbus_server {
 	struct mbus_server_options options;
 	struct listeners listeners;
 	struct clients clients;
+        struct client *clients_idh;
+        struct client *clients_fdh;
 	struct methods methods;
 	struct {
 		unsigned int length;
@@ -339,6 +346,8 @@ static int client_set_connection (struct client *client, struct connection *conn
 				mbus_errorf("can not close connection");
 				goto bail;
 			}
+                        HASH_DELETE(hash_fd, client->server->clients_fdh, client);
+                        client->fd = -1;
 			client->connection = NULL;
 		}
 	} else {
@@ -409,6 +418,7 @@ static int client_set_identifier (struct client *client, const char *identifier)
 		mbus_errorf("can not allocate memory");
 		goto bail;
 	}
+        HASH_ADD_KEYPTR(hash_id, client->server->clients_idh, client->identifier, strlen(client->identifier), client);
 	return 0;
 bail:	return -1;
 }
@@ -688,11 +698,13 @@ static void client_destroy (struct client *client)
 		return;
 	}
 	if (client->connection != NULL) {
+                HASH_DELETE(hash_fd, client->server->clients_fdh, client);
 		mbus_server_connection_close(client_get_connection(client));
 	}
-	if (client->identifier != NULL) {
-		free(client->identifier);
-	}
+        if (client->identifier != NULL) {
+                HASH_DELETE(hash_id, client->server->clients_idh, client);
+                free(client->identifier);
+        }
 	while (client->commands.tqh_first != NULL) {
 		command = client->commands.tqh_first;
 		TAILQ_REMOVE(&client->commands, client->commands.tqh_first, commands);
@@ -732,7 +744,7 @@ static void client_destroy (struct client *client)
 	free(client);
 }
 
-static struct client * client_create (struct listener *listener, struct connection *connection)
+static struct client * client_create (struct mbus_server *server, struct listener *listener, struct connection *connection)
 {
 	struct client *client;
 	client = NULL;
@@ -756,12 +768,13 @@ static struct client * client_create (struct listener *listener, struct connecti
 	TAILQ_INIT(&client->results);
 	TAILQ_INIT(&client->events);
 	TAILQ_INIT(&client->waits);
-	client->status = 0;
-	client->listener = listener;
+	client->status     = 0;
+	client->server     = server;
+	client->listener   = listener;
 	client->connection = connection;
-	client->ssequence = MBUS_METHOD_SEQUENCE_START;
-	client->esequence = MBUS_METHOD_SEQUENCE_START;
-	client->buffer_in = mbus_buffer_create();
+	client->ssequence  = MBUS_METHOD_SEQUENCE_START;
+	client->esequence  = MBUS_METHOD_SEQUENCE_START;
+	client->buffer_in  = mbus_buffer_create();
 	if (client->buffer_in == NULL) {
 		mbus_errorf("can not create buffer");
 		goto bail;
@@ -771,6 +784,12 @@ static struct client * client_create (struct listener *listener, struct connecti
 		mbus_errorf("can not create buffer");
 		goto bail;
 	}
+	client->fd = mbus_server_connection_get_fd(connection);
+	if (client->fd < 0) {
+	        mbus_errorf("connection is invalid");
+	        goto bail;
+	}
+	HASH_ADD_KEYPTR(hash_fd, client->server->clients_fdh, &client->fd, sizeof(client->fd), client);
 	return client;
 bail:	client_destroy(client);
 	return NULL;
@@ -783,42 +802,19 @@ static struct client * server_find_client_by_identifier (struct mbus_server *ser
 		mbus_errorf("identifier is null");
 		return NULL;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_identifier(client) == NULL) {
-			continue;
-		}
-		if (strcmp(client_get_identifier(client), identifier) == 0) {
-			return client;
-		}
-	}
-	return NULL;
+	HASH_FIND(hash_id, server->clients_idh, identifier, strlen(identifier), client);
+	return client;
 }
 
 static struct client * server_find_client_by_fd (struct mbus_server *server, int fd)
 {
-	int cfd;
 	struct client *client;
 	if (fd < 0) {
 		mbus_errorf("fd is invalid");
 		return NULL;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
-		if (client_get_listener(client) == NULL) {
-			continue;
-		}
-		if (client_get_connection(client) == NULL) {
-			continue;
-		}
-		cfd = mbus_server_connection_get_fd(client_get_connection(client));
-		if (cfd < 0) {
-			mbus_errorf("connection fd is invalid");
-			continue;
-		}
-		if (cfd == fd) {
-			return client;
-		}
-	}
-	return NULL;
+        HASH_FIND(hash_fd, server->clients_fdh, &fd, sizeof(fd), client);
+        return client;
 }
 
 static __attribute__ ((__unused__)) struct client * server_find_client_by_connection (struct mbus_server *server, struct connection *connection)
@@ -828,7 +824,7 @@ static __attribute__ ((__unused__)) struct client * server_find_client_by_connec
 		mbus_errorf("connection is null");
 		return NULL;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_connection(client) == connection) {
 			return client;
 		}
@@ -867,6 +863,9 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 	if (strcmp(destination, MBUS_SERVER_IDENTIFIER) == 0) {
 		if (strcmp(identifier, MBUS_SERVER_EVENT_PING) == 0) {
 			client = server_find_client_by_identifier(server, source);
+			if (client == NULL) {
+                                mbus_errorf("can not find client: %s", source);
+			}
 			if (client != NULL) {
 				client->ping_recv_tsms = mbus_clock_monotonic();
 			}
@@ -877,7 +876,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			}
 		}
 	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_ALL) == 0) {
-		TAILQ_FOREACH(client, &server->clients, clients) {
+		TAILQ_FOREACH(client, &server->clients, list) {
 			if (client_get_identifier(client) == NULL) {
 				continue;
 			}
@@ -901,7 +900,7 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			}
 		}
 	} else if (strcmp(destination, MBUS_METHOD_EVENT_DESTINATION_SUBSCRIBERS) == 0) {
-		TAILQ_FOREACH(client, &server->clients, clients) {
+		TAILQ_FOREACH(client, &server->clients, list) {
 			TAILQ_FOREACH(subscription, &client->subscriptions, subscriptions) {
 				if (strcmp(mbus_server_subscription_get_source(subscription), MBUS_METHOD_EVENT_SOURCE_ALL) != 0) {
 					if (strcmp(mbus_server_subscription_get_source(subscription), source) != 0) {
@@ -932,13 +931,8 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			}
 		}
 	} else {
-		TAILQ_FOREACH(client, &server->clients, clients) {
-			if (client_get_identifier(client) == NULL) {
-				continue;
-			}
-			if (strcmp(client_get_identifier(client), destination) != 0) {
-				continue;
-			}
+	        client = server_find_client_by_identifier(server, destination);
+	        if (client != NULL) {
 			method = mbus_server_method_create_response(MBUS_METHOD_TYPE_EVENT, source, identifier, client->esequence, payload);
 			if (method == NULL) {
 				mbus_errorf("can not create method");
@@ -954,7 +948,6 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 				mbus_server_method_destroy(method);
 				goto bail;
 			}
-			break;
 		}
 	}
 	return 0;
@@ -1199,12 +1192,12 @@ static int server_client_connection_establish (struct mbus_server *server, struc
 		mbus_errorf("connection is invalid");
 		goto bail;
 	}
-	client = client_create(listener, connection);
+	client = client_create(server, listener, connection);
 	if (client == NULL) {
 		mbus_errorf("can not create client");
 		goto bail;
 	}
-	TAILQ_INSERT_TAIL(&server->clients, client, clients);
+	TAILQ_INSERT_TAIL(&server->clients, client, list);
 	return 0;
 bail:	if (client != NULL) {
 		client_destroy(client);
@@ -1344,7 +1337,12 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	identifier = client_get_identifier(mbus_server_method_get_source(method));
+	client = mbus_server_method_get_source(method);
+	if (client == NULL) {
+	        mbus_errorf("method source is invalid");
+	        goto bail;
+	}
+	identifier = client_get_identifier(client);
 	if (identifier != NULL) {
 		mbus_errorf("invalid client state");
 		goto bail;
@@ -1359,25 +1357,22 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 				mbus_infof("empty identifier, creating a random identifier for client");
 				while (1) {
 					snprintf(ridentifier, sizeof(ridentifier), "%s%08x", MBUS_SERVER_CLIENT_IDENTIFIER_PREFIX, rand());
-					client = server_find_client_by_identifier(server, ridentifier);
-					if (client == NULL) {
+					if (server_find_client_by_identifier(server, ridentifier) == NULL) {
 						break;
 					}
 				}
 				identifier = ridentifier;
 			}
-			client = server_find_client_by_identifier(server, identifier);
-			if (client != NULL) {
+			if (server_find_client_by_identifier(server, identifier) != NULL) {
 				mbus_errorf("client with identifier: %s already exists", identifier);
 				goto bail;
 			}
-			rc = client_set_identifier(mbus_server_method_get_source(method), identifier);
+			rc = client_set_identifier(client, identifier);
 			if (rc != 0) {
 				mbus_errorf("can not set client identifier");
 				goto bail;
 			}
-			client = server_find_client_by_identifier(server, identifier);
-			if (client == NULL) {
+			if (server_find_client_by_identifier(server, identifier) != client) {
 				mbus_errorf("client identifier logic error");
 				goto bail;
 			}
@@ -1437,16 +1432,16 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 			}
 			if (i < (int) (sizeof(compression_methods) / sizeof(compression_methods[0]))) {
 				mbus_debugf("compression: %s", compression_methods[i].name);
-				client_set_compression(mbus_server_method_get_source(method), compression_methods[i].value);
+				client_set_compression(client, compression_methods[i].value);
 			} else {
 				mbus_debugf("compression: %s", "none");
-				client_set_compression(mbus_server_method_get_source(method), mbus_compress_method_none);
+				client_set_compression(client, mbus_compress_method_none);
 			}
 		}
 	}
 	mbus_infof("client created");
-	mbus_infof("  identifier : %s", client_get_identifier(mbus_server_method_get_source(method)));
-	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
+	mbus_infof("  identifier : %s", client_get_identifier(client));
+	mbus_infof("  compression: %s", mbus_compress_method_string(client_get_compression(client)));
 	mbus_infof("  ping");
 	mbus_infof("    enabled  : %d", client->ping_enabled);
 	mbus_infof("    interval : %d", client->ping_interval);
@@ -1456,8 +1451,8 @@ static int server_handle_command_create (struct mbus_server *server, struct meth
 		struct mbus_json *payload;
 		struct mbus_json *ping;
 		payload = mbus_json_create_object();
-		mbus_json_add_string_to_object_cs(payload, "identifier", client_get_identifier(mbus_server_method_get_source(method)));
-		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(mbus_server_method_get_source(method))));
+		mbus_json_add_string_to_object_cs(payload, "identifier", client_get_identifier(client));
+		mbus_json_add_string_to_object_cs(payload, "compression", mbus_compress_method_string(client_get_compression(client)));
 		ping = mbus_json_create_object();
 		mbus_json_add_number_to_object_cs(ping, "interval", client->ping_interval);
 		mbus_json_add_number_to_object_cs(ping, "timeout", client->ping_timeout);
@@ -1654,7 +1649,7 @@ static int server_handle_command_status (struct mbus_server *server, struct meth
 	if (clients == NULL) {
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		source = mbus_json_create_object();
 		if (source == NULL) {
 			goto bail;
@@ -1789,7 +1784,7 @@ static int server_handle_command_clients (struct mbus_server *server, struct met
 	if (clients == NULL) {
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_identifier(client) == NULL) {
 			continue;
 		}
@@ -1827,7 +1822,7 @@ static int server_handle_command_close (struct mbus_server *server, struct metho
 	if (strcmp(source, MBUS_SERVER_IDENTIFIER) == 0) {
 		server->running = 0;
 	} else {
-		TAILQ_FOREACH(client, &server->clients, clients) {
+		TAILQ_FOREACH(client, &server->clients, list) {
 			if (client_get_identifier(client) == NULL) {
 				continue;
 			}
@@ -1859,7 +1854,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_identifier(client) == NULL) {
 			continue;
 		}
@@ -1923,7 +1918,7 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 		goto bail;
 	}
 	rc = mbus_json_get_int_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_STATUS, -1);
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_identifier(client) == NULL) {
 			continue;
 		}
@@ -1965,7 +1960,14 @@ static int server_handle_methods (struct mbus_server *server)
 	TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 		mbus_debugf("handle method: %s, %s, %s", mbus_server_method_get_request_type(method), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_destination(method));
 		TAILQ_REMOVE(&server->methods, method, methods);
-		if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
+		if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
+		        mbus_debugf("  push to trash");
+		        rc = server_send_event_to(server, client_get_identifier(mbus_server_method_get_source(method)), mbus_server_method_get_request_destination(method), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_payload(method));
+		        if (rc != 0) {
+		                mbus_errorf("can not send event: %s", mbus_server_method_get_source(method));
+		        }
+		        mbus_server_method_destroy(method);
+		} else if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_COMMAND) == 0) {
 			if (strcmp(mbus_server_method_get_request_destination(method), MBUS_SERVER_IDENTIFIER) == 0) {
 				response = 1;
 				if (strcmp(mbus_server_method_get_request_identifier(method), MBUS_SERVER_COMMAND_CREATE) == 0) {
@@ -2011,14 +2013,6 @@ static int server_handle_methods (struct mbus_server *server)
 				mbus_debugf("  push to wait");
 				client_push_wait(mbus_server_method_get_source(method), method);
 			}
-		}
-		if (strcmp(mbus_server_method_get_request_type(method), MBUS_METHOD_TYPE_EVENT) == 0) {
-			mbus_debugf("  push to trash");
-			rc = server_send_event_to(server, client_get_identifier(mbus_server_method_get_source(method)), mbus_server_method_get_request_destination(method), mbus_server_method_get_request_identifier(method), mbus_server_method_get_request_payload(method));
-			if (rc != 0) {
-				mbus_errorf("can not send event: %s", mbus_server_method_get_source(method));
-			}
-			mbus_server_method_destroy(method);
 		}
 	}
 	return 0;
@@ -2099,7 +2093,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		milliseconds = MBUS_SERVER_DEFAULT_TIMEOUT;
 	}
 	mbus_debugf("  check ping timeout");
-	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+	TAILQ_FOREACH_SAFE(client, &server->clients, list, nclient) {
 		if (client_get_connection(client) == NULL) {
 			continue;
 		}
@@ -2127,7 +2121,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 		}
 	}
 	mbus_debugf("  prepare out buffer");
-	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+	TAILQ_FOREACH_SAFE(client, &server->clients, list, nclient) {
 		enum mbus_compress_method compression;
 		mbus_debugf("    client: %s", client_get_identifier(client));
 		connection = client_get_connection(client);
@@ -2218,7 +2212,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 	}
 	mbus_debugf("  prepare pollfds (fill clients)");
 	{
-		TAILQ_FOREACH(client, &server->clients, clients) {
+		TAILQ_FOREACH(client, &server->clients, list) {
 			listener = client_get_listener(client);
 			if (listener == NULL) {
 				continue;
@@ -2283,7 +2277,7 @@ __attribute__ ((__visibility__("default"))) int mbus_server_run_timeout (struct 
 					mbus_debugf("      listener: %s", mbus_server_listener_get_name(listener));
 				}
 			}
-			TAILQ_FOREACH(client, &server->clients, clients) {
+			TAILQ_FOREACH(client, &server->clients, list) {
 				listener = client_get_listener(client);
 				if (listener == NULL) {
 					continue;
@@ -2372,7 +2366,7 @@ out:
 			}
 		}
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		uint8_t *ptr;
 		uint8_t *end;
 		uint8_t *data;
@@ -2456,7 +2450,7 @@ out:
 		mbus_errorf("can not handle methods");
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_connection(client) == NULL) {
 			continue;
 		}
@@ -2466,7 +2460,7 @@ out:
 		client_set_status(client, client_get_status(client) | client_status_accepted);
 		mbus_infof("client: '%s' accepted to server", client_get_identifier(client));
 	}
-	TAILQ_FOREACH(client, &server->clients, clients) {
+	TAILQ_FOREACH(client, &server->clients, list) {
 		if (client_get_connection(client) == NULL) {
 			continue;
 		}
@@ -2487,12 +2481,12 @@ out:
 			goto bail;
 		}
 	}
-	TAILQ_FOREACH_SAFE(client, &server->clients, clients, nclient) {
+	TAILQ_FOREACH_SAFE(client, &server->clients, list, nclient) {
 		if (client_get_connection(client) != NULL) {
 			continue;
 		}
 		mbus_infof("client: '%s' disconnected from server", client_get_identifier(client));
-		TAILQ_REMOVE(&server->clients, client, clients);
+		TAILQ_REMOVE(&server->clients, client, list);
 		TAILQ_FOREACH_SAFE(method, &server->methods, methods, nmethod) {
 			if (mbus_server_method_get_source(method) != client) {
 				continue;
@@ -2503,7 +2497,7 @@ out:
 			TAILQ_REMOVE(&server->methods, method, methods);
 			mbus_server_method_destroy(method);
 		}
-		TAILQ_FOREACH_SAFE(wclient, &server->clients, clients, nwclient) {
+		TAILQ_FOREACH_SAFE(wclient, &server->clients, list, nwclient) {
 			TAILQ_FOREACH_SAFE(method, &wclient->waits, methods, nmethod) {
 				if (client_get_identifier(client) != NULL &&
 				    strcmp(mbus_server_method_get_request_destination(method), client_get_identifier(client)) == 0) {
@@ -2569,7 +2563,7 @@ __attribute__ ((__visibility__("default"))) void mbus_server_destroy (struct mbu
 	}
 	while (server->clients.tqh_first != NULL) {
 		client = server->clients.tqh_first;
-		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, clients);
+		TAILQ_REMOVE(&server->clients, server->clients.tqh_first, list);
 		client_destroy(client);
 	}
 	if (server->pollfds.pollfds != NULL) {

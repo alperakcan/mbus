@@ -10,6 +10,7 @@ subdir-y = \
 	server \
 	socket \
 	queue \
+	uthash \
 	version
 
 buffer_depends-y = \
@@ -43,6 +44,7 @@ server_depends-y = \
 	method \
 	socket \
 	queue \
+	uthash \
 	version
 
 socket_depends-y = \
