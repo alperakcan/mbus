@@ -42,23 +42,33 @@ enum mbus_debug_level {
 extern enum mbus_debug_level mbus_debug_level;
 
 #define mbus_debugf(a...) { \
-	mbus_debug_printf(mbus_debug_level_debug, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        if (mbus_debug_level_debug >= mbus_debug_level) { \
+                mbus_debug_printf(mbus_debug_level_debug, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        } \
 }
 
 #define mbus_warningf(a...) { \
-	mbus_debug_printf(mbus_debug_level_warning, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        if (mbus_debug_level_warning >= mbus_debug_level) { \
+                mbus_debug_printf(mbus_debug_level_warning, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        } \
 }
 
 #define mbus_noticef(a...) { \
-	mbus_debug_printf(mbus_debug_level_notice, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        if (mbus_debug_level_notice >= mbus_debug_level) { \
+                mbus_debug_printf(mbus_debug_level_notice, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        } \
 }
 
 #define mbus_infof(a...) { \
-	mbus_debug_printf(mbus_debug_level_info, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        if (mbus_debug_level_info >= mbus_debug_level) { \
+                mbus_debug_printf(mbus_debug_level_info, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        } \
 }
 
 #define mbus_errorf(a...) { \
-	mbus_debug_printf(mbus_debug_level_error, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        if (mbus_debug_level_error >= mbus_debug_level) { \
+                mbus_debug_printf(mbus_debug_level_error, MBUS_DEBUG_NAME, __FUNCTION__, __FILE__, __LINE__, a); \
+        } \
 }
 
 const char * mbus_debug_level_to_string (enum mbus_debug_level level);

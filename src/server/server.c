@@ -865,10 +865,9 @@ static int server_send_event_to (struct mbus_server *server, const char *source,
 			client = server_find_client_by_identifier(server, source);
 			if (client == NULL) {
                                 mbus_errorf("can not find client: %s", source);
+                                goto bail;
 			}
-			if (client != NULL) {
-				client->ping_recv_tsms = mbus_clock_monotonic();
-			}
+			client->ping_recv_tsms = mbus_clock_monotonic();
 			rc = server_send_event_to(server, MBUS_SERVER_IDENTIFIER, source, MBUS_SERVER_EVENT_PONG, NULL);
 			if (rc != 0) {
 				mbus_errorf("can not send pong to: %s", source);
@@ -1822,20 +1821,12 @@ static int server_handle_command_close (struct mbus_server *server, struct metho
 	if (strcmp(source, MBUS_SERVER_IDENTIFIER) == 0) {
 		server->running = 0;
 	} else {
-		TAILQ_FOREACH(client, &server->clients, list) {
-			if (client_get_identifier(client) == NULL) {
-				continue;
-			}
-			if (strcmp(client_get_identifier(client), source) != 0) {
-				continue;
-			}
-			client_set_connection(client, NULL, client_connection_close_code_close_comand);
-			break;
-		}
+	        client = server_find_client_by_identifier(server, source);
 		if (client == NULL) {
 			mbus_errorf("could not find requested source: %s", source);
 			goto bail;
 		}
+                client_set_connection(client, NULL, client_connection_close_code_close_comand);
 	}
 	return 0;
 bail:	return -1;
@@ -1854,15 +1845,7 @@ static int server_handle_command_call (struct mbus_server *server, struct method
 		mbus_errorf("method is null");
 		goto bail;
 	}
-	TAILQ_FOREACH(client, &server->clients, list) {
-		if (client_get_identifier(client) == NULL) {
-			continue;
-		}
-		if (strcmp(mbus_server_method_get_request_destination(method), client_get_identifier(client)) != 0) {
-			continue;
-		}
-		break;
-	}
+        client = server_find_client_by_identifier(server, mbus_server_method_get_request_destination(method));
 	if (client == NULL) {
 		mbus_errorf("client %s does not exists", mbus_server_method_get_request_destination(method));
 		goto bail;
@@ -1918,13 +1901,8 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 		goto bail;
 	}
 	rc = mbus_json_get_int_value(mbus_server_method_get_request_payload(method), MBUS_METHOD_TAG_STATUS, -1);
-	TAILQ_FOREACH(client, &server->clients, list) {
-		if (client_get_identifier(client) == NULL) {
-			continue;
-		}
-		if (strcmp(client_get_identifier(client), destination) != 0) {
-			continue;
-		}
+        client = server_find_client_by_identifier(server, destination);
+        if (client != NULL) {
 		TAILQ_FOREACH_SAFE(wait, &client->waits, methods, nwait) {
 			if (sequence != mbus_server_method_get_request_sequence(wait)) {
 				continue;
@@ -1941,7 +1919,6 @@ static int server_handle_command_result (struct mbus_server *server, struct meth
 			client_push_result(client, wait);
 			break;
 		}
-		break;
 	}
 	return 0;
 bail:	return -1;

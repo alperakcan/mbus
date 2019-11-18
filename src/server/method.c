@@ -41,6 +41,11 @@ struct private {
 	struct method method;
 	struct {
 		struct mbus_json *json;
+		const char *type;
+		const char *destination;
+		const char *identifier;
+		int sequence;
+		struct mbus_json *payload;
 		char *string;
 	} request;
 	struct {
@@ -57,7 +62,7 @@ const char * mbus_server_method_get_request_type (struct method *method)
 		return NULL;
 	}
 	private = (struct private *) method;
-	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_TYPE, NULL);
+	return private->request.type;
 }
 
 const char * mbus_server_method_get_request_destination (struct method *method)
@@ -67,7 +72,7 @@ const char * mbus_server_method_get_request_destination (struct method *method)
 		return NULL;
 	}
 	private = (struct private *) method;
-	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_DESTINATION, NULL);
+	return private->request.destination;
 }
 
 const char * mbus_server_method_get_request_identifier (struct method *method)
@@ -77,7 +82,7 @@ const char * mbus_server_method_get_request_identifier (struct method *method)
 		return NULL;
 	}
 	private = (struct private *) method;
-	return mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
+	return private->request.identifier;
 }
 
 int mbus_server_method_get_request_sequence (struct method *method)
@@ -87,7 +92,7 @@ int mbus_server_method_get_request_sequence (struct method *method)
 		return -1;
 	}
 	private = (struct private *) method;
-	return mbus_json_get_int_value(private->request.json, MBUS_METHOD_TAG_SEQUENCE, -1);
+	return private->request.sequence;
 }
 
 struct mbus_json * mbus_server_method_get_request_payload (struct method *method)
@@ -97,7 +102,7 @@ struct mbus_json * mbus_server_method_get_request_payload (struct method *method
 		return NULL;
 	}
 	private = (struct private *) method;
-	return mbus_json_get_object(private->request.json, MBUS_METHOD_TAG_PAYLOAD);
+	return private->request.payload;
 }
 
 char * mbus_server_method_get_request_string (struct method *method)
@@ -205,23 +210,28 @@ struct method * mbus_server_method_create_request (struct client *source, const 
 		mbus_errorf("can not parse method");
 		goto bail;
 	}
-	if (mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_TYPE, NULL) == NULL) {
+	private->request.type = mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_TYPE, NULL);
+	if (private->request.type == NULL) {
 		mbus_errorf("invalid method type: '%s'", string);
 		goto bail;
 	}
-	if (mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_DESTINATION, NULL) == NULL) {
+	private->request.destination = mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_DESTINATION, NULL);
+	if (private->request.destination == NULL) {
 		mbus_errorf("invalid method destination: '%s'", string);
 		goto bail;
 	}
-	if (mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL) == NULL) {
+	private->request.identifier = mbus_json_get_string_value(private->request.json, MBUS_METHOD_TAG_IDENTIFIER, NULL);
+	if (private->request.identifier == NULL) {
 		mbus_errorf("invalid method identifier: '%s'", string);
 		goto bail;
 	}
-	if (mbus_json_get_int_value(private->request.json, MBUS_METHOD_TAG_SEQUENCE, -1) == -1) {
+	private->request.sequence = mbus_json_get_int_value(private->request.json, MBUS_METHOD_TAG_SEQUENCE, -1);
+	if (private->request.sequence == -1) {
 		mbus_errorf("invalid method sequence: '%s'", string);
 		goto bail;
 	}
-	if (mbus_json_get_object(private->request.json, MBUS_METHOD_TAG_PAYLOAD) == NULL) {
+	private->request.payload = mbus_json_get_object(private->request.json, MBUS_METHOD_TAG_PAYLOAD);
+	if (private->request.payload == NULL) {
 		mbus_errorf("invalid method payload: '%s'", string);
 		goto bail;
 	}
