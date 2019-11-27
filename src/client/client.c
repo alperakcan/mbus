@@ -1900,6 +1900,39 @@ bail:	if (client != NULL) {
 	return NULL;
 }
 
+int mbus_client_get_connect_interval (struct mbus_client *client)
+{
+        int connect_interval;
+        if (client == NULL) {
+                mbus_errorf("client is invalid");
+                goto bail;
+        }
+        mbus_client_lock(client);
+        connect_interval = client->options->connect_interval;
+        mbus_client_unlock(client);
+        return connect_interval;
+bail:   if (client != NULL) {
+                mbus_client_unlock(client);
+        }
+        return 0;
+}
+
+int mbus_client_set_connect_interval (struct mbus_client *client, int connect_interval)
+{
+        if (client == NULL) {
+                mbus_errorf("client is invalid");
+                goto bail;
+        }
+        mbus_client_lock(client);
+        client->options->connect_interval = connect_interval;
+        mbus_client_unlock(client);
+        return 0;
+bail:   if (client != NULL) {
+                mbus_client_unlock(client);
+        }
+        return -1;
+}
+
 int mbus_client_get_wakeup_fd (struct mbus_client *client)
 {
 	int rc;
