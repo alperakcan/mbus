@@ -534,7 +534,7 @@ struct mbus_socket * mbus_socket_accept (struct mbus_socket *socket)
 	socklen = sizeof(struct sockaddr_in);
 	s->fd = accept(socket->fd, (struct sockaddr *) &sockaddr_in, &socklen);
 	if (s->fd < 0) {
-		mbus_errorf("can not accept socket");
+		mbus_errorf("can not accept socket, errno: %d, %s", errno, strerror(errno));
 		goto bail;
 	}
 	return s;
